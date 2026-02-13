@@ -1,22 +1,35 @@
 // src/app/layout.tsx
 import "./globals.css";
 import localFont from "next/font/local";
+import { Inter, Sora } from "next/font/google";
 import TopBanner from "./components/TopBanner";
 import EmployerConfirmGate from "./components/EmployerConfirmGate";
 
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+});
 
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-heading",
+  display: "swap",
+});
+
+// Keep Coldsmith available (optional)
 const coldsmith = localFont({
   src: "./fonts/Coldsmith.otf",
   variable: "--font-coldsmith",
+  display: "swap",
 });
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={coldsmith.variable}>
+    <html
+      lang="en"
+      className={`${inter.variable} ${sora.variable} ${coldsmith.variable}`}
+    >
       <body
         style={{
           margin: 0,
@@ -35,7 +48,9 @@ export default function RootLayout({
         </a>
 
         <main id="main-content" style={{ padding: 0 }}>
+          {/* If you’re using this gate, wrap children with it */}
           {children}
+
         </main>
 
         <footer

@@ -17,16 +17,18 @@ type Job = {
   role_category: string | null;
 };
 
+type SearchParamsShape = { [key: string]: string | string[] | undefined };
+
 export default async function JobsPage({
   searchParams,
 }: {
   // ✅ In your Next.js version, searchParams can be a Promise
-  searchParams?: Promise<{ [key: string]: string | string[] | undefined }> | { [key: string]: string | string[] | undefined };
+  searchParams?: Promise<SearchParamsShape> | SearchParamsShape;
 }) {
-  // ✅ unwrap it safely
+  // ✅ unwrap safely
   const resolvedSearchParams = await Promise.resolve(searchParams);
 
-  // ✅ /jobs?role=Line&role=Prep  -> ["Line","Prep"]
+  // ✅ /jobs?role=Line&role=Prep -> ["Line", "Prep"]
   const raw = resolvedSearchParams?.role;
 
   const rolesArray: string[] = Array.isArray(raw)
@@ -34,11 +36,6 @@ export default async function JobsPage({
     : raw
     ? [decodeURIComponent(String(raw))]
     : [];
-
-  // ✅ DEBUG (optional — safe here)
-  console.log("DEBUG resolvedSearchParams:", resolvedSearchParams);
-  console.log("DEBUG raw role param:", raw);
-  console.log("DEBUG rolesArray:", rolesArray);
 
   // ✅ Build query
   let query = supabase
@@ -56,52 +53,29 @@ export default async function JobsPage({
   const activeJobs: Job[] = (jobs ?? []) as Job[];
 
   return (
-    <main style={{ backgroundColor: "#000", minHeight: "100vh" }}>
-      {/* HERO (FIXED) */}
-      <section
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "100vw",
-          height: 350,
-          zIndex: 50,
-          backgroundImage: "url('/hero.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center right",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(90deg, rgba(0,0,0,.75) 0%, rgba(0,0,0,.55) 25%, rgba(0,0,0,.15) 45%, rgba(0,0,0,0) 70%)",
-          }}
-        />
-
-        <div
-          style={{
-            position: "relative",
-            height: "100%",
-            maxWidth: 1200,
-            margin: "0 auto",
-            padding: "42px 18px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-          }}
-        >
+    <main
+      style={{
+        backgroundColor: "#eae7e2",
+        minHeight: "100vh",
+        // ✅ TopBanner is fixed height 50, give a little breathing room
+        paddingTop: 70,
+        paddingBottom: 64,
+      }}
+    >
+      {/* PAGE HEADER (no hero image) */}
+      <section style={{ width: "100vw", padding: "18px 0 14px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
           <h1
             style={{
               margin: 0,
-              fontSize: 65,
+              fontSize: 54,
               fontWeight: 900,
-              color: "#fff",
+              color: "#35806e",
               lineHeight: 1.05,
               fontFamily: "var(--font-coldsmith)",
               letterSpacing: 1,
-              textShadow: "0px 4px 12px rgba(0,0,0,0.65)",
+              textTransform: "uppercase",
+              textShadow: "0px 4px 12px rgba(0, 0, 0, 0.29)",
             }}
           >
             {rolesArray.length
@@ -113,8 +87,8 @@ export default async function JobsPage({
             style={{
               marginTop: 10,
               marginBottom: 0,
-              maxWidth: 700,
-              color: "rgba(255,255,255,.9)",
+              maxWidth: 760,
+              color: "#000000ff",
               lineHeight: 1.6,
               fontSize: 16,
             }}
@@ -124,20 +98,21 @@ export default async function JobsPage({
               : "Filter by location, position, or search keywords. Click a job to view details."}
           </p>
 
-          <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
+          <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
             <Link
               href="/post-job"
               className="hero-button"
               style={{
-                backgroundColor: "#000000",
-                border: "2px solid #000000",
-                color: "#ffffff",
+                backgroundColor: "#35806e",
+                color: "#fef5ea",
                 padding: "10px 20px",
                 fontWeight: 800,
-                borderRadius: 6,
+                borderRadius: 2,
                 textDecoration: "none",
-                fontSize: 20,
+                fontSize: 18,
                 fontFamily: "var(--font-coldsmith)",
+                letterSpacing: 1,
+                textTransform: "uppercase",
               }}
             >
               POST A JOB
@@ -147,15 +122,16 @@ export default async function JobsPage({
               href="/"
               className="hero-button"
               style={{
-                backgroundColor: "#000000",
-                border: "2px solid #000000",
-                color: "#ffffff",
+                backgroundColor: "#35806e",
+                color: "#fef5ea",
                 padding: "10px 20px",
                 fontWeight: 800,
-                borderRadius: 6,
+                borderRadius: 2,
                 textDecoration: "none",
-                fontSize: 20,
+                fontSize: 18,
                 fontFamily: "var(--font-coldsmith)",
+                letterSpacing: 1,
+                textTransform: "uppercase",
               }}
             >
               HOMEPAGE
@@ -166,15 +142,17 @@ export default async function JobsPage({
                 href="/jobs"
                 className="hero-button"
                 style={{
-                  backgroundColor: "#000000",
+                  backgroundColor: "#35806e",
                   border: "2px solid #000000",
-                  color: "#ffffff",
+                  color: "#fef5ea",
                   padding: "10px 20px",
                   fontWeight: 800,
                   borderRadius: 6,
                   textDecoration: "none",
-                  fontSize: 20,
+                  fontSize: 18,
                   fontFamily: "var(--font-coldsmith)",
+                  letterSpacing: 1,
+                  textTransform: "uppercase",
                 }}
               >
                 VIEW ALL JOBS
@@ -184,41 +162,27 @@ export default async function JobsPage({
         </div>
       </section>
 
-      <div style={{ height: 350 }} />
-
-      {/* BACKGROUND */}
-      <div
-        style={{
-          backgroundImage: "url('/background.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          width: "100%",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ backgroundColor: "rgba(0, 0, 0, 0)", width: "100%" }}>
-          <section style={{ width: "100vw", padding: "34px 0 64px" }}>
-            <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
-              {error ? (
-                <div
-                  style={{
-                    backgroundColor: "#ffffffc0",
-                    borderRadius: 10,
-                    padding: 18,
-                    fontWeight: 800,
-                    color: "rgba(0,0,0,.75)",
-                  }}
-                >
-                  Could not load jobs yet: {error.message}
-                </div>
-              ) : (
-                <JobsFilterPanel jobs={activeJobs} initialRoleCategories={rolesArray} />
-              )}
+      {/* CONTENT */}
+      <section style={{ width: "100vw", padding: "18px 0 0" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
+          {error ? (
+            <div
+              style={{
+                backgroundColor: "#fef5ea",
+                borderRadius: 10,
+                padding: 18,
+                fontWeight: 800,
+                color: "rgba(0,0,0,.75)",
+                border: "1px solid rgba(0,0,0,.12)",
+              }}
+            >
+              Could not load jobs yet: {error.message}
             </div>
-          </section>
+          ) : (
+            <JobsFilterPanel jobs={activeJobs} initialRoleCategories={rolesArray} />
+          )}
         </div>
-      </div>
+      </section>
     </main>
   );
 }

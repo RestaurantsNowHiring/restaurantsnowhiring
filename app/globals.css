@@ -266,4 +266,12 @@ a:focus-visible {
     grid-template-columns: 1fr !important;
   }
 }
+body {
+  font-family: var(--font-body);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
 
