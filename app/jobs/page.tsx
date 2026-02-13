@@ -15,6 +15,10 @@ type Job = {
   created_at: string;
   active: boolean;
   role_category: string | null;
+
+  // ✅ Added for quick info chips
+  pay_range: string | null;
+  employment_type: string | null;
 };
 
 type SearchParamsShape = { [key: string]: string | string[] | undefined };
@@ -22,13 +26,10 @@ type SearchParamsShape = { [key: string]: string | string[] | undefined };
 export default async function JobsPage({
   searchParams,
 }: {
-  // ✅ In your Next.js version, searchParams can be a Promise
   searchParams?: Promise<SearchParamsShape> | SearchParamsShape;
 }) {
-  // ✅ unwrap safely
   const resolvedSearchParams = await Promise.resolve(searchParams);
 
-  // ✅ /jobs?role=Line&role=Prep -> ["Line", "Prep"]
   const raw = resolvedSearchParams?.role;
 
   const rolesArray: string[] = Array.isArray(raw)
@@ -37,14 +38,15 @@ export default async function JobsPage({
     ? [decodeURIComponent(String(raw))]
     : [];
 
-  // ✅ Build query
+  // ✅ Build query (added pay_range + employment_type)
   let query = supabase
     .from("jobs")
-    .select("id,title,restaurant_name,city,state,created_at,active,role_category")
+    .select(
+      "id,title,restaurant_name,city,state,created_at,active,role_category,pay_range,employment_type"
+    )
     .eq("active", true)
     .order("created_at", { ascending: false });
 
-  // ✅ Filter in the DB by role_category
   if (rolesArray.length > 0) {
     query = query.in("role_category", rolesArray);
   }
@@ -55,32 +57,29 @@ export default async function JobsPage({
   return (
     <main
       style={{
-        backgroundColor: "#eae7e2",
+        backgroundColor: "#ffffffff",
         minHeight: "100vh",
-        // ✅ TopBanner is fixed height 50, give a little breathing room
         paddingTop: 70,
         paddingBottom: 64,
       }}
     >
-      {/* PAGE HEADER (no hero image) */}
-      <section style={{ width: "100vw", padding: "18px 0 14px" }}>
+      <section style={{ width: "100%", padding: "18px 0 14px" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
           <h1
             style={{
               margin: 0,
               fontSize: 54,
-              fontWeight: 900,
+              fontWeight: 600,
               color: "#35806e",
               lineHeight: 1.05,
-              fontFamily: "var(--font-coldsmith)",
-              letterSpacing: 1,
-              textTransform: "uppercase",
-              textShadow: "0px 4px 12px rgba(0, 0, 0, 0.29)",
+              fontFamily: "var(--font-heading)",
+              letterSpacing: 0,
+              textShadow: "0px 4px 12px rgba(0, 0, 0, 0.24)",
             }}
           >
             {rolesArray.length
               ? `${rolesArray.join(" / ").toUpperCase()} JOBS`
-              : "BROWSE JOBS"}
+              : "Browse Jobs"}
           </h1>
 
           <p
@@ -106,16 +105,15 @@ export default async function JobsPage({
                 backgroundColor: "#35806e",
                 color: "#fef5ea",
                 padding: "10px 20px",
-                fontWeight: 800,
-                borderRadius: 2,
+                fontWeight: 600,
+                borderRadius: 4,
                 textDecoration: "none",
-                fontSize: 18,
-                fontFamily: "var(--font-coldsmith)",
-                letterSpacing: 1,
-                textTransform: "uppercase",
+                fontSize: 16,
+                fontFamily: "var(--font-body)",
+                letterSpacing: 0,
               }}
             >
-              POST A JOB
+              Post a Job
             </Link>
 
             <Link
@@ -125,16 +123,15 @@ export default async function JobsPage({
                 backgroundColor: "#35806e",
                 color: "#fef5ea",
                 padding: "10px 20px",
-                fontWeight: 800,
-                borderRadius: 2,
+                fontWeight: 600,
+                borderRadius: 4,
                 textDecoration: "none",
-                fontSize: 18,
-                fontFamily: "var(--font-coldsmith)",
-                letterSpacing: 1,
-                textTransform: "uppercase",
+                fontSize: 16,
+                fontFamily: "var(--font-body)",
+                letterSpacing: 0,
               }}
             >
-              HOMEPAGE
+              Home
             </Link>
 
             {rolesArray.length > 0 && (
@@ -143,27 +140,24 @@ export default async function JobsPage({
                 className="hero-button"
                 style={{
                   backgroundColor: "#35806e",
-                  border: "2px solid #000000",
                   color: "#fef5ea",
                   padding: "10px 20px",
-                  fontWeight: 800,
-                  borderRadius: 6,
+                  fontWeight: 600,
+                  borderRadius: 2,
                   textDecoration: "none",
-                  fontSize: 18,
-                  fontFamily: "var(--font-coldsmith)",
-                  letterSpacing: 1,
-                  textTransform: "uppercase",
+                  fontSize: 16,
+                  fontFamily: "var(--font-body)",
+                  letterSpacing: 0,
                 }}
               >
-                VIEW ALL JOBS
+                View all Jobs
               </Link>
             )}
           </div>
         </div>
       </section>
 
-      {/* CONTENT */}
-      <section style={{ width: "100vw", padding: "18px 0 0" }}>
+      <section style={{ width: "100%", padding: "18px 0 0" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
           {error ? (
             <div

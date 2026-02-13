@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 
 type Job = {
   id: string;
@@ -10,16 +10,18 @@ type Job = {
   city: string;
   state: string;
   created_at: string;
+
+  // optional if you ever decide to pass them through
+  role_category?: string | null;
+  pay_range?: string | null;
+  employment_type?: string | null;
 };
 
 export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
-  const [location, setLocation] = useState("");
-  const [position, setPosition] = useState("");
+  // Match JobsFilterPanel UX: text search + location text, plus optional dropdown
   const [search, setSearch] = useState("");
-
-  const locationOptions = useMemo(() => {
-    return Array.from(new Set(jobs.map((j) => `${j.city}, ${j.state}`))).sort();
-  }, [jobs]);
+  const [locationText, setLocationText] = useState("");
+  const [position, setPosition] = useState("");
 
   const positionOptions = useMemo(() => {
     return Array.from(new Set(jobs.map((j) => j.title))).sort();
@@ -27,10 +29,17 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
 
   const filteredJobs = useMemo(() => {
     const s = search.trim().toLowerCase();
+    const loc = locationText.trim().toLowerCase();
 
     return jobs.filter((j) => {
-      const loc = `${j.city}, ${j.state}`;
-      const matchesLocation = !location || loc === location;
+      const cityState = `${j.city}, ${j.state}`.toLowerCase();
+
+      const matchesLocation =
+        !loc ||
+        cityState.includes(loc) ||
+        j.city.toLowerCase().includes(loc) ||
+        j.state.toLowerCase().includes(loc);
+
       const matchesPosition = !position || j.title === position;
 
       const matchesSearch =
@@ -42,17 +51,46 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
 
       return matchesLocation && matchesPosition && matchesSearch;
     });
-  }, [jobs, location, position, search]);
+  }, [jobs, search, locationText, position]);
+
+  const clearFilters = () => {
+    setSearch("");
+    setLocationText("");
+    setPosition("");
+  };
+
+  // ---- Shared styles (copied to match JobsFilterPanel exactly) ----
+  const inputStyle: React.CSSProperties = {
+    height: 46,
+    borderRadius: 10,
+    border: "1px solid rgba(0,0,0,.18)",
+    backgroundColor: "#fff",
+    color: "#111",
+    padding: "0 14px",
+    outline: "none",
+    fontWeight: 600,
+    fontFamily: "var(--font-body)",
+    boxShadow: "0 6px 14px rgba(0,0,0,.12)",
+    width: "100%",
+  };
+
+  // (Used for the Position dropdown so it matches)
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    appearance: "none",
+    WebkitAppearance: "none",
+    MozAppearance: "none",
+    paddingRight: 38,
+  };
 
   return (
     <div
       style={{
-        backgroundColor: "#fffffffe",
-        border: "1px solid rgba(255,255,255,.10)",
-        borderRadius: 10,
-        padding: "24px 22px 18px",
-        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.89)",
-        backdropFilter: "blur(2px)",
+        backgroundColor: "#ece9e48f",
+        border: "1px solid rgba(0,0,0,0.08)",
+        borderRadius: 12,
+        padding: "22px 22px 26px",
+        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.16)",
       }}
     >
       {/* Title */}
@@ -61,127 +99,131 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          gap: 14,
+          gap: 18,
           marginBottom: 16,
+          flexWrap: "wrap",
         }}
       >
-        <div style={{ height: 1, width: 140, background: "rgba(0, 0, 0, 0.89)" }} />
+        <div style={{ height: 1, width: 140, background: "rgba(0,0,0,.35)" }} />
         <div
           style={{
-            fontSize: 45,
-            fontWeight: 900,
-            letterSpacing: 1.2,
-            color: "rgba(0, 0, 0, 0.89)",
-            fontFamily: "var(--font-coldsmith)",
+            fontSize: 30,
+            fontWeight: 800,
+            color: "#35806e",
+            fontFamily: "var(--font-heading)",
+            whiteSpace: "nowrap",
           }}
         >
-          NEWEST JOB LISTINGS
+          Newest Job Listings
         </div>
-        <div style={{ height: 1, width: 140, background: "rgba(0, 0, 0, 0.89)" }} />
+        <div style={{ height: 1, width: 140, background: "rgba(0,0,0,.35)" }} />
       </div>
 
-      {/* Filters */}
+      {/* Search row (match JobsFilterPanel grid + button style) */}
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "1fr 1fr 1.2fr",
+          gridTemplateColumns: "1.6fr 1fr auto",
           gap: 12,
-          marginBottom: 16,
+          alignItems: "center",
+          marginBottom: 12,
         }}
       >
-        <select
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Job title, keywords, or company"
+          style={inputStyle}
+          aria-label="Search jobs"
+        />
+
+        <input
+          value={locationText}
+          onChange={(e) => setLocationText(e.target.value)}
+          placeholder="City or State (ex: Baltimore, MD)"
+          style={inputStyle}
+          aria-label="Filter by city or state"
+        />
+
+        <button
+          type="button"
+          onClick={clearFilters}
           style={{
-            height: 44,
-            borderRadius: 8,
-            border: "1px solid rgba(255,255,255,.18)",
-            backgroundColor: "rgba(0, 0, 0, 0.35)",
-            color: "rgba(0, 0, 0, 0.9)",
-            padding: "0 12px",
-            outline: "none",
+            height: 46,
+            padding: "0 16px",
+            borderRadius: 12,
+            border: "1px solid rgba(0,0,0,.16)",
+            backgroundColor: "rgba(0,0,0,0.05)",
+            color: "rgba(0,0,0,0.75)",
+            fontWeight: 900,
+            cursor: "pointer",
+            whiteSpace: "nowrap",
+            fontFamily: "var(--font-body)",
           }}
         >
-          <option value="">Location</option>
-          {locationOptions.map((loc) => (
-            <option key={loc} value={loc}>
-              {loc}
-            </option>
-          ))}
-        </select>
+          Clear
+        </button>
+      </div>
 
-        <select
-          value={position}
-          onChange={(e) => setPosition(e.target.value)}
-          style={{
-            height: 44,
-            borderRadius: 8,
-            border: "1px solid rgba(255,255,255,.18)",
-            backgroundColor: "rgba(0,0,0,.35)",
-            color: "rgba(0, 0, 0, 0.9)",
-            padding: "0 12px",
-            outline: "none",
-          }}
-        >
-          <option value="">Position</option>
-          {positionOptions.map((pos) => (
-            <option key={pos} value={pos}>
-              {pos}
-            </option>
-          ))}
-        </select>
+      {/* Second row: Position dropdown (optional but helpful on homepage) */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr",
+          gap: 12,
+          marginBottom: 14,
+        }}
+      >
+        <div style={{ position: "relative" }}>
+          <select
+            value={position}
+            onChange={(e) => setPosition(e.target.value)}
+            style={selectStyle}
+            aria-label="Filter by position"
+          >
+            <option value="">Position (optional)</option>
+            {positionOptions.map((pos) => (
+              <option key={pos} value={pos}>
+                {pos}
+              </option>
+            ))}
+          </select>
 
-        <div style={{ display: "flex", gap: 10 }}>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search"
+          {/* caret */}
+          <div
             style={{
-              flex: 1,
-              height: 44,
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,.18)",
-              backgroundColor: "rgba(0,0,0,.35)",
-              color: "rgba(0, 0, 0, 0.9)",
-              padding: "0 12px",
-              outline: "none",
-            }}
-          />
-          <button
-            onClick={() => {
-              setLocation("");
-              setPosition("");
-              setSearch("");
-            }}
-            style={{
-              height: 44,
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "0 14px",
-              borderRadius: 8,
-              border: "1px solid rgba(255,255,255,.18)",
-              backgroundColor: "rgba(0,0,0,.35)",
-              color: "rgba(0, 0, 0, 0.85)",
-              fontWeight: 800,
-              cursor: "pointer",
+              position: "absolute",
+              right: 14,
+              top: "50%",
+              transform: "translateY(-50%)",
+              pointerEvents: "none",
+              opacity: 0.6,
+              fontWeight: 900,
             }}
           >
-            Clear
-          </button>
+            ▾
+          </div>
         </div>
       </div>
 
-      {/* Jobs list */}
+      {/* Count (match JobsFilterPanel) */}
+      <div style={{ marginBottom: 12, color: "#35806e", fontWeight: 800, fontFamily: "var(--font-body)" }}>
+        Showing {filteredJobs.length} job{filteredJobs.length === 1 ? "" : "s"}
+      </div>
+
+      {/* Jobs list (match JobsFilterPanel container + row styling) */}
       <div
         style={{
-          border: "1px solid rgba(255,255,255,.12)",
+          border: "1px solid rgba(0,0,0,.12)",
           borderRadius: 10,
-          overflow: "hidden",
+          maxHeight: "min(460px, 55vh)",
+          overflowY: "auto",
+          overflowX: "hidden",
+          backgroundColor: "rgba(255,255,255,0.06)",
         }}
       >
         {filteredJobs.length === 0 ? (
-          <div style={{ padding: 16, color: "rgba(0,0,0,.75)", fontWeight: 700 }}>
+          <div style={{ padding: 16, color: "rgba(0, 0, 0, 0.75)", fontWeight: 800, fontFamily: "var(--font-body)" }}>
             No jobs match your filters.
           </div>
         ) : (
@@ -194,15 +236,28 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
                 gap: 12,
                 alignItems: "center",
                 padding: "14px 14px",
-                backgroundColor: idx % 2 === 0 ? "rgba(0,0,0,.08)" : "rgba(0,0,0,.05)",
-                borderTop: idx === 0 ? "none" : "1px solid rgba(0,0,0,.10)",
+                backgroundColor:
+                  idx % 2 === 0 ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.05)",
+                borderTop: idx === 0 ? "none" : "1px solid rgba(0, 0, 0, 0.18)",
               }}
             >
-              <div>
-                <div style={{ fontWeight: 900, color: "#111", fontSize: 16 }}>
+              <div style={{ minWidth: 0 }}>
+                <Link
+                  href={`/jobs/${job.id}`}
+                  style={{
+                    display: "inline-block",
+                    fontWeight: 900,
+                    color: "#111",
+                    fontSize: 18,
+                    textDecoration: "underline",
+                    textUnderlineOffset: 3,
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
                   {job.title}
-                </div>
-                <div style={{ opacity: 0.85, color: "rgba(0,0,0,.75)", marginTop: 4 }}>
+                </Link>
+
+                <div style={{ opacity: 0.85, color: "rgba(0,0,0,.75)", marginTop: 4, fontFamily: "var(--font-body)" }}>
                   {job.restaurant_name} — {job.city}, {job.state}
                 </div>
               </div>
@@ -210,40 +265,49 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
               <Link
                 href={`/jobs/${job.id}`}
                 style={{
-                  backgroundColor: "#ff7b00fa",
-                  color: "#111",
-                  padding: "10px 14px",
-                  borderRadius: 8,
-                  fontWeight: 900,
+                  backgroundColor: "#35806e",
+                  color: "#fef5ea",
+                  padding: "10px 18px",
+                  borderRadius: 10,
+                  fontWeight: 800,
                   textDecoration: "none",
-                  boxShadow: "0 8px 18px rgba(0,0,0,.25)",
+                  boxShadow: "0 10px 22px rgba(0,0,0,.16)",
                   whiteSpace: "nowrap",
-                  
-                  fontSize: 12,
+                  fontFamily: "var(--font-body)",
                 }}
               >
-                View Job →
+                View →
               </Link>
             </div>
           ))
         )}
       </div>
 
-      {/* bottom CTA */}
+      {/* Bottom CTA (same style direction as your site) */}
       <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
         <Link
           href="/jobs"
           style={{
-            color: "rgba(0,0,0,.85)",
+            color: "rgba(0,0,0,.75)",
             textDecoration: "none",
-            fontWeight: 800,
-            borderBottom: "1px solid rgba(0,0,0,.35)",
+            fontWeight: 900,
+            fontFamily: "var(--font-body)",
+            borderBottom: "1px solid rgba(0,0,0,.25)",
             paddingBottom: 2,
           }}
         >
           View all jobs
         </Link>
       </div>
+
+      {/* Responsive: stack the search row on smaller screens (same approach) */}
+      <style jsx>{`
+        @media (max-width: 860px) {
+          div[style*="grid-template-columns: 1.6fr 1fr auto"] {
+            grid-template-columns: 1fr !important;
+          }
+        }
+      `}</style>
     </div>
   );
 }

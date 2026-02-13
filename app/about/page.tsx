@@ -4,258 +4,301 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default function AboutPage() {
-  const HERO_HEIGHT = 320;
-  const BANNER_HEIGHT = 50; // your fixed TopBanner height
+  // ✅ Theme tokens (match your newer pages)
+  const GREEN = "#35806e";
+  const BG = "#ffffff";
+  const CARD = "#f6f5f3";
+  const BORDER = "rgba(0,0,0,.10)";
+  const TEXT = "rgba(0,0,0,.85)";
+
+  const pageWrap: React.CSSProperties = {
+    backgroundColor: BG,
+    minHeight: "100vh",
+    paddingTop: 90, // breathing room under TopBanner
+    paddingBottom: 70,
+  };
+
+  const container: React.CSSProperties = {
+    maxWidth: 1100,
+    margin: "0 auto",
+    padding: "0 18px",
+  };
+
+  const headerRow: React.CSSProperties = {
+    display: "flex",
+    gap: 14,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    flexWrap: "wrap",
+    marginBottom: 18,
+  };
+
+  const titleStyle: React.CSSProperties = {
+    margin: 0,
+    fontSize: 56,
+    lineHeight: 1.02,
+    fontWeight: 700,
+    letterSpacing: 0,
+    color: GREEN,
+    fontFamily: "var(--font-heading)",
+  };
+
+  const subtitleStyle: React.CSSProperties = {
+    marginTop: 10,
+    marginBottom: 0,
+    maxWidth: 780,
+    color: "rgba(0,0,0,.70)",
+    lineHeight: 1.6,
+    fontSize: 16,
+    fontFamily: "var(--font-body)",
+    fontWeight: 600,
+  };
+
+  const topButtons: React.CSSProperties = {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    marginTop: 6,
+    flexWrap: "wrap",
+  };
+
+  const buttonBase: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "12px 18px",
+    borderRadius: 14,
+    textDecoration: "none",
+    fontWeight: 800,
+    fontFamily: "var(--font-body)",
+    whiteSpace: "nowrap",
+    border: `1px solid ${BORDER}`,
+    boxShadow: "0 10px 22px rgba(0,0,0,.10)",
+  };
+
+  const primaryBtn: React.CSSProperties = {
+    ...buttonBase,
+    backgroundColor: GREEN,
+    color: "#fff",
+    border: `1px solid rgba(0,0,0,.08)`,
+  };
+
+  const secondaryBtn: React.CSSProperties = {
+    ...buttonBase,
+    backgroundColor: "#ffffff",
+    color: "rgba(0,0,0,.75)",
+  };
+
+  const cardStyle: React.CSSProperties = {
+    backgroundColor: CARD,
+    border: `1px solid ${BORDER}`,
+    borderRadius: 18,
+    padding: "22px 22px 26px",
+    boxShadow: "0 18px 40px rgba(0,0,0,.12)",
+  };
+
+  const sectionTitleRow: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+    marginBottom: 18,
+    marginTop: 6,
+  };
+
+  const sectionLine: React.CSSProperties = {
+    height: 1,
+    width: 180,
+    background: "rgba(0,0,0,.20)",
+  };
+
+  const sectionTitle: React.CSSProperties = {
+    fontSize: 28,
+    fontWeight: 800,
+    color: TEXT,
+    fontFamily: "var(--font-heading)",
+    letterSpacing: 0,
+    textAlign: "center",
+  };
+
+  const smallNote: React.CSSProperties = {
+    marginTop: 10,
+    color: "rgba(0,0,0,.55)",
+    fontSize: 12,
+    fontWeight: 700,
+    fontFamily: "var(--font-body)",
+    lineHeight: 1.6,
+  };
 
   return (
-    <main style={{ backgroundColor: "#000", minHeight: "100vh" }}>
-      {/* HERO (fixed under banner) */}
-      <section
-        style={{
-          position: "fixed",
-          top: BANNER_HEIGHT,
-          left: 0,
-          width: "100vw",
-          height: HERO_HEIGHT,
-          zIndex: 900,
-          backgroundImage: "url('/hero.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center right",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(90deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,.55) 25%, rgba(0,0,0,.18) 45%, rgba(0,0,0,0) 70%)",
-          }}
-        />
+    <main style={pageWrap}>
+      <div style={container}>
+        {/* Header */}
+        <div style={headerRow}>
+          <div style={{ minWidth: 260 }}>
+            <h1 style={titleStyle}>About</h1>
+            <p style={subtitleStyle}>
+              Restaurants Now Hiring helps restaurants post open roles and helps job seekers
+              find restaurant jobs faster — by role, location, and real details.
+            </p>
+          </div>
 
-        <div
-          style={{
-            position: "relative",
-            height: "100%",
-            maxWidth: 1200,
-            margin: "0 auto",
-            padding: "42px 18px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-          }}
-        >
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 65,
-              fontWeight: 900,
-              color: "#fff",
-              lineHeight: 1.05,
-              fontFamily: "var(--font-coldsmith)",
-              letterSpacing: 1,
-              textShadow: "0px 4px 12px rgba(0,0,0,0.65)",
-              textTransform: "uppercase",
-            }}
-          >
-            About
-          </h1>
-
-          <p
-            style={{
-              marginTop: 10,
-              marginBottom: 0,
-              maxWidth: 760,
-              color: "rgba(255,255,255,.92)",
-              lineHeight: 1.6,
-              fontSize: 16,
-              fontFamily: "var(--font-coldsmith)",
-            }}
-          >
-            Restaurants Now Hiring helps restaurants post open roles and helps job seekers
-            find restaurant jobs faster — by role, location, and real details.
-          </p>
-
-          <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
-            <Link
-              href="/jobs"
-              className="hero-button"
-              style={{
-                backgroundColor: "#000000",
-                border: "2px solid #000000",
-                color: "#ffffff",
-                padding: "10px 20px",
-                fontWeight: 800,
-                borderRadius: 6,
-                textDecoration: "none",
-                fontSize: 20,
-                fontFamily: "var(--font-coldsmith)",
-                letterSpacing: 1,
-                textTransform: "uppercase",
-              }}
-            >
+          <div style={topButtons}>
+            <Link href="/jobs" style={primaryBtn}>
               Browse Jobs
             </Link>
-
-            <Link
-              href="/post-job"
-              className="hero-button"
-              style={{
-                backgroundColor: "#000000",
-                border: "2px solid #000000",
-                color: "#ffffff",
-                padding: "10px 20px",
-                fontWeight: 800,
-                borderRadius: 6,
-                textDecoration: "none",
-                fontSize: 20,
-                fontFamily: "var(--font-coldsmith)",
-                letterSpacing: 1,
-                textTransform: "uppercase",
-              }}
-            >
+            <Link href="/post-job" style={secondaryBtn}>
               Post a Job
+            </Link>
+            <Link href="/" style={secondaryBtn}>
+              Home
             </Link>
           </div>
         </div>
-      </section>
 
-      {/* Spacer so content starts below TopBanner + fixed hero */}
-      <div style={{ height: BANNER_HEIGHT + HERO_HEIGHT }} />
+        {/* Section: What We Do */}
+        <div style={cardStyle}>
+          <div style={sectionTitleRow}>
+            <div style={sectionLine} />
+            <div style={sectionTitle}>What We Do</div>
+            <div style={sectionLine} />
+          </div>
 
-      {/* WOOD BACKGROUND */}
-      <div
-        style={{
-          backgroundImage: "url('/background.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "repeat",
-          width: "100%",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ backgroundColor: "rgba(0,0,0,0.10)", width: "100%" }}>
-          <section style={{ width: "100vw", padding: "40px 0 80px" }}>
-            <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
-              <div
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: 14,
+            }}
+          >
+            <InfoCard
+              title="For Job Seekers"
+              body="Browse restaurant roles by category and location. Click any job to view details like pay, schedule, and how to apply."
+            />
+            <InfoCard
+              title="For Employers"
+              body="Create an employer account to submit jobs for review. Once approved, your listing is published publicly."
+            />
+            <InfoCard
+              title="Quality First"
+              body="We keep listings clean and easy to read — no clutter, no confusion, just the info people need to apply."
+            />
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <SectionCard title="How jobs get posted">
+              <ul
                 style={{
-                  backgroundColor: "rgba(255,255,255,.85)",
-                  borderRadius: 14,
-                  padding: "26px 24px",
-                  boxShadow: "0 16px 40px rgba(0,0,0,.35)",
-                  border: "1px solid rgba(0,0,0,.10)",
+                  margin: 0,
+                  paddingLeft: 18,
+                  lineHeight: 1.8,
+                  color: "rgba(0,0,0,.82)",
+                  fontWeight: 650,
+                  fontFamily: "var(--font-body)",
                 }}
               >
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 14,
-                    marginBottom: 18,
-                  }}
-                >
-                  <div style={{ height: 1, width: 180, background: "rgba(0,0,0,.35)" }} />
-                  <div
-                    style={{
-                      fontSize: 36,
-                      fontWeight: 900,
-                      letterSpacing: 1.2,
-                      color: "rgba(0,0,0,.85)",
-                      fontFamily: "var(--font-coldsmith)",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    What We Do
-                  </div>
-                  <div style={{ height: 1, width: 180, background: "rgba(0,0,0,.35)" }} />
-                </div>
+                <li>Employers submit a job listing.</li>
+                <li>Listings are reviewed before going live.</li>
+                <li>Approved jobs appear under Browse Jobs.</li>
+              </ul>
+            </SectionCard>
+          </div>
+        </div>
 
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 14 }}>
-                  <InfoCard
-                    title="For Job Seekers"
-                    body="Browse open restaurant roles by category and location. Click any job to view details like pay, schedule, and how to apply."
-                  />
-                  <InfoCard
-                    title="For Employers"
-                    body="Create an employer account to post jobs for review. Once approved, your listing is published to the public jobs page."
-                  />
-                  <InfoCard
-                    title="Quality First"
-                    body="We keep listings clean and easy to read — no clutter, no confusion, just the info people need to apply."
-                  />
-                </div>
+        {/* Section: Why Restaurants */}
+        <div style={{ ...cardStyle, marginTop: 16 }}>
+          <div style={sectionTitleRow}>
+            <div style={sectionLine} />
+            <div style={sectionTitle}>Why The Restaurant Industry</div>
+            <div style={sectionLine} />
+          </div>
 
-                <div style={{ marginTop: 18 }}>
-                  <SectionCard title="How jobs get posted">
-                    <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8, color: "rgba(0,0,0,.82)", fontWeight: 700 }}>
-                      <li>Employers submit a job listing.</li>
-                      <li>Listings are reviewed before going live.</li>
-                      <li>Approved jobs appear under Browse Jobs and Top Roles Hiring Now.</li>
-                    </ul>
-                  </SectionCard>
+          <div
+            style={{
+              color: "rgba(0,0,0,.82)",
+              lineHeight: 1.8,
+              fontWeight: 650,
+              fontFamily: "var(--font-body)",
+              fontSize: 15,
+              maxWidth: 980,
+              margin: "0 auto",
+            }}
+          >
+            Restaurants are one of the best places to build real, transferable skills fast —
+            communication, teamwork, leadership, and operations. For many people, it’s not
+            just a job… it’s a career path with momentum.
+          </div>
 
-                  <SectionCard title="Questions?">
-                    <div style={{ color: "rgba(0,0,0,.82)", lineHeight: 1.7, fontWeight: 700 }}>
-                      Visit the Contact page and send us a note. We’ll respond as soon as we can.
-                    </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+              gap: 14,
+              marginTop: 14,
+            }}
+          >
+            <InfoCard
+              title="Start Anywhere"
+              body="Many careers in restaurants start at entry-level and build quickly through consistent performance and training."
+            />
+            <InfoCard
+              title="Grow Fast"
+              body="With the right opportunity, people can move from hourly roles into leadership in a relatively short time."
+            />
+            <InfoCard
+              title="Real Career Upside"
+              body="It’s possible for strong performers to grow from minimum wage to six figures within about five years in some organizations."
+            />
+          </div>
 
-                    <div style={{ marginTop: 14, display: "flex", gap: 12 }}>
-                      <Link
-                        href="/contact"
-                        className="hero-button"
-                        style={{
-                          backgroundColor: "#000000",
-                          border: "2px solid #000000",
-                          color: "#ffffff",
-                          padding: "10px 20px",
-                          fontWeight: 800,
-                          borderRadius: 6,
-                          textDecoration: "none",
-                          fontSize: 18,
-                          fontFamily: "var(--font-coldsmith)",
-                          letterSpacing: 1,
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Contact
-                      </Link>
-                      <Link
-                        href="/"
-                        className="hero-button"
-                        style={{
-                          backgroundColor: "#000000",
-                          border: "2px solid #000000",
-                          color: "#ffffff",
-                          padding: "10px 20px",
-                          fontWeight: 800,
-                          borderRadius: 6,
-                          textDecoration: "none",
-                          fontSize: 18,
-                          fontFamily: "var(--font-coldsmith)",
-                          letterSpacing: 1,
-                          textTransform: "uppercase",
-                        }}
-                      >
-                        Home
-                      </Link>
-                    </div>
-                  </SectionCard>
-                </div>
-              </div>
+          <div style={smallNote}>
+            Note: Pay and timelines vary by company, role, market, and performance. We share this
+            to highlight the potential of the industry — not to promise specific earnings.
+          </div>
+        </div>
 
-              <div
-                style={{
-                  marginTop: 14,
-                  textAlign: "center",
-                  color: "rgba(255,255,255,.85)",
-                  fontSize: 13,
-                  fontFamily: "var(--font-coldsmith)",
-                }}
-              >
-                Restaurants Now Hiring
-              </div>
-            </div>
-          </section>
+        {/* Section: Questions */}
+        <div style={{ ...cardStyle, marginTop: 16 }}>
+          <div style={sectionTitleRow}>
+            <div style={sectionLine} />
+            <div style={sectionTitle}>Questions</div>
+            <div style={sectionLine} />
+          </div>
+
+          <div
+            style={{
+              color: "rgba(0,0,0,.82)",
+              lineHeight: 1.7,
+              fontWeight: 650,
+              fontFamily: "var(--font-body)",
+              maxWidth: 980,
+              margin: "0 auto",
+            }}
+          >
+            Need help or have feedback? Visit the Contact page and send us a note.
+          </div>
+
+          <div style={{ marginTop: 14, display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <Link href="/contact" style={primaryBtn}>
+              Contact
+            </Link>
+            <Link href="/jobs" style={secondaryBtn}>
+              Browse Jobs
+            </Link>
+          </div>
+        </div>
+
+        <div
+          style={{
+            marginTop: 14,
+            textAlign: "center",
+            color: "rgba(0,0,0,.55)",
+            fontSize: 13,
+            fontWeight: 700,
+            fontFamily: "var(--font-body)",
+          }}
+        >
+          Restaurants Now Hiring
         </div>
       </div>
     </main>
@@ -263,13 +306,16 @@ export default function AboutPage() {
 }
 
 function InfoCard({ title, body }: { title: string; body: string }) {
+  const BORDER = "rgba(0,0,0,.10)";
+
   return (
     <div
       style={{
-        backgroundColor: "rgba(255,255,255,.70)",
-        border: "1px solid rgba(0,0,0,.10)",
-        borderRadius: 10,
+        backgroundColor: "rgba(255,255,255,.72)",
+        border: `1px solid ${BORDER}`,
+        borderRadius: 14,
         padding: 16,
+        boxShadow: "0 12px 24px rgba(0,0,0,.08)",
       }}
     >
       <div
@@ -277,14 +323,23 @@ function InfoCard({ title, body }: { title: string; body: string }) {
           fontWeight: 900,
           color: "rgba(0,0,0,.90)",
           fontSize: 18,
-          fontFamily: "var(--font-coldsmith)",
-          textTransform: "uppercase",
-          letterSpacing: 0.8,
+          fontFamily: "var(--font-heading)",
+          letterSpacing: 0,
         }}
       >
         {title}
       </div>
-      <div style={{ marginTop: 10, color: "rgba(0,0,0,.82)", lineHeight: 1.7, fontWeight: 700 }}>
+
+      <div
+        style={{
+          marginTop: 10,
+          color: "rgba(0,0,0,.78)",
+          lineHeight: 1.7,
+          fontWeight: 650,
+          fontFamily: "var(--font-body)",
+          fontSize: 14,
+        }}
+      >
         {body}
       </div>
     </div>
@@ -292,24 +347,24 @@ function InfoCard({ title, body }: { title: string; body: string }) {
 }
 
 function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
+  const BORDER = "rgba(0,0,0,.10)";
+
   return (
     <div
       style={{
-        border: "1px solid rgba(0,0,0,.12)",
-        borderRadius: 10,
+        border: `1px solid ${BORDER}`,
+        borderRadius: 14,
         padding: 16,
-        backgroundColor: "rgba(255,255,255,.70)",
-        marginBottom: 14,
+        backgroundColor: "rgba(255,255,255,.72)",
+        boxShadow: "0 12px 24px rgba(0,0,0,.08)",
       }}
     >
       <div
         style={{
           fontWeight: 900,
           color: "rgba(0,0,0,.90)",
-          fontSize: 20,
-          fontFamily: "var(--font-coldsmith)",
-          textTransform: "uppercase",
-          letterSpacing: 0.9,
+          fontSize: 18,
+          fontFamily: "var(--font-heading)",
         }}
       >
         {title}

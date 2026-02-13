@@ -90,16 +90,16 @@ a.banner-link--login {
 
 /* LEFT NAV → ORANGE */
 a.banner-link:hover {
-  color: #ff7a00 !important; /* overrides inline style */
+  color: #fef5ea !important; /* overrides inline style */
   transform: scale(0.94);
-  text-shadow: 0 0 6px rgba(255, 122, 0, 0.55);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
 }
 
 /* EMPLOYER LOGIN → WHITE */
 a.banner-link--login:hover {
   color: #ffffff !important; /* overrides inline style */
   transform: scale(0.94);
-  text-shadow: 0 0 6px rgba(255, 255, 255, 0.55);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.55);
 }
 
 /* Remove browser hover outline */
@@ -109,7 +109,7 @@ a:hover {
 
 /* Keep keyboard focus visible (ADA) */
 a:focus-visible {
-  outline: 3px solid #ff7a00;
+  outline: 3px solid #eae7e2;
   outline-offset: 3px;
 }
 /* ===== Top Banner Link Styling ===== */
@@ -117,25 +117,25 @@ a:focus-visible {
 /* LEFT SIDE LINKS */
 .banner-link {
   display: inline-block;
-  color: #ffffff;
+  color: #fef5ea;
   transition: color 0.2s ease, transform 0.2s ease, text-shadow 0.2s ease;
 }
 
 .banner-link:hover {
-  color: #ff7a00;
+  color: #eae7e2;
   transform: scale(0.94);
-  text-shadow: 0 0 6px rgba(255, 122, 0, 0.55);
+  text-shadow: 0 0 6px rgba(9, 9, 9, 0.55);
 }
 
 /* EMPLOYER LOGIN */
 .banner-link--login {
   display: inline-block;
-  color: #ff7a00;
+  color: #eae7e2;
   transition: color 0.2s ease, transform 0.2s ease, text-shadow 0.2s ease;
 }
 
 .banner-link--login:hover {
-  color: #ff7a00;
+  color: #eae7e2;
   transform: scale(0.94);
   text-shadow: 0 0 6px rgba(255, 255, 255, 0.55);
 }
@@ -202,7 +202,7 @@ a:focus-visible {
 
   padding: 10px 20px;
 
-  font-family: var(--font-coldsmith);
+  font-family: var(--font-heading);
   font-size: 20px;
   font-weight: 800;
   letter-spacing: 1px;
@@ -273,5 +273,35 @@ body {
 h1, h2, h3 {
   font-family: var(--font-heading);
   font-weight: 700;
+}
+/* Scrollbar styling (optional) */
+.jobs-scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.jobs-scroll::-webkit-scrollbar-thumb {
+  background: rgba(16, 135, 108, 0.35);
+  border-radius: 999px;
+}
+.jobs-scroll::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+.rnhr-clickable-badge:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 12px 26px rgba(0, 0, 0, 0.14);
+  filter: brightness(0.99);
+}
+
+.rnhr-clickable-badge:active {
+  transform: translateY(0px);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.10);
+}
+
+.rnhr-clickable-badge:focus-visible {
+  outline: 3px solid rgba(53, 128, 110, 0.35);
+  outline-offset: 3px;
 }
 

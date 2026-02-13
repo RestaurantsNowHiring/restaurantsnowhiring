@@ -14,6 +14,12 @@ function buildJobsHref(roleFilters: string[]) {
 }
 
 export default function TopRolesSection() {
+  // ✅ Theme tokens (match newer pages)
+  const GREEN = "#35806e";
+  const BORDER = "rgba(0,0,0,.10)";
+  const TEXT = "rgba(0,0,0,.85)";
+  const MUTED = "rgba(0,0,0,.65)";
+
   const roles: RoleCard[] = [
     {
       title: "Line / Prep Cooks",
@@ -36,133 +42,123 @@ export default function TopRolesSection() {
   ];
 
   return (
-    <section style={{ width: "100vw", padding: "10px 0 26px", backgroundColor: "transparent" }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
-        <div
-          style={{
-            backgroundColor: "rgba(255, 255, 255, 0)",
-            borderRadius: 14,
-            padding: "22px 22px 26px",
-            boxShadow: "0 16px 40px rgba(0, 0, 0, 0)",
-            backdropFilter: "blur(2px)",
-            border: "1px solid rgba(0, 0, 0, 0)",
-          }}
-        >
-          {/* Title row */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 14,
-              marginBottom: 18,
-            }}
-          >
-            <div style={{ height: 1, width: 180, background: "rgba(0,0,0,.35)" }} />
+    <section style={{ padding: "6px 0 0", backgroundColor: "transparent" }}>
+      {/* NOTE: no maxWidth wrapper here.
+          This component should just render "content".
+          The PAGE decides the container/card layout. */}
+
+      <div
+        className="rn-roles-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+          gap: 14,
+        }}
+      >
+        {roles.map((r) => {
+          const href = buildJobsHref(r.roleFilters);
+
+          return (
             <div
+              key={r.title}
               style={{
-                fontSize: 45,
-                fontWeight: 900,
-                letterSpacing: 1.2,
-                color: "#ffffff",
-                fontFamily: "var(--font-coldsmith)",
-                textTransform: "uppercase",
-                textShadow: "0px 4px 12px rgba(0,0,0,0.65)",
+                borderRadius: 18,
+                overflow: "hidden",
+                border: `1px solid ${BORDER}`,
+                backgroundColor: "#ffffff",
+                boxShadow: "0 14px 30px rgba(0,0,0,.10)",
+                display: "flex",
+                flexDirection: "column",
+                minHeight: 320,
               }}
             >
-              TOP ROLES HIRING NOW
-            </div>
-            <div style={{ height: 1, width: 180, background: "rgba(0,0,0,.35)" }} />
-          </div>
-
-          {/* Cards */}
-          <div
-            className="roles-grid"
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-              gap: 18,
-            }}
-          >
-            {roles.map((r) => {
-              const href = buildJobsHref(r.roleFilters);
-
-              return (
-                <div
-                  key={r.title}
-                  className="role-card"
+              {/* Image */}
+              <div style={{ width: "100%", height: 170, overflow: "hidden" }}>
+                <img
+                  src={r.imageSrc}
+                  alt={r.title}
                   style={{
-                    borderRadius: 12,
-                    overflow: "hidden",
-                    border: "1px solid rgba(0,0,0,.12)",
-                    boxShadow: "0 10px 22px rgba(0,0,0,.20)",
-                    backgroundColor: "rgba(247, 236, 223, 0.85)",
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: r.objectPosition ?? "center",
+                    display: "block",
+                    transform: "scale(1.01)",
+                  }}
+                />
+              </div>
+
+              {/* Content */}
+              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+                <div
+                  style={{
+                    fontWeight: 900,
+                    fontSize: 18,
+                    color: TEXT,
+                    fontFamily: "var(--font-heading)",
+                    lineHeight: 1.15,
                   }}
                 >
-                  <div style={{ width: "100%", height: 210, overflow: "hidden" }}>
-                    <img
-                      src={r.imageSrc}
-                      alt={r.title}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        objectPosition: r.objectPosition ?? "center",
-                        display: "block",
-                      }}
-                    />
-                  </div>
-
-                  <div
-                    style={{
-                      backgroundColor: "#ffffff",
-                      padding: "14px 14px 16px",
-                      display: "flex",
-                      flexDirection: "column",
-                      alignItems: "center",
-                      gap: 10,
-                    }}
-                  >
-                    <div
-                      style={{
-                        color: "#000000",
-                        fontWeight: 900,
-                        fontSize: 26,
-                        letterSpacing: 1,
-                        fontFamily: "var(--font-coldsmith)",
-                        textTransform: "uppercase",
-                        textShadow: "0 2px 10px rgba(0,0,0,.55)",
-                      }}
-                    >
-                      {r.title}
-                    </div>
-
-                    <Link
-                      href={href}
-                      className="hero-button"
-                      style={{
-                        backgroundColor: "#000000",
-                        color: "#ffffff",
-                        padding: "8px 16px",
-                        borderRadius: 8,
-                        fontWeight: 900,
-                        textDecoration: "none",
-                        border: "2px solid #000000",
-                        fontFamily: "var(--font-coldsmith)",
-                        letterSpacing: 0.8,
-                        textTransform: "uppercase",
-                        boxShadow: "0 10px 18px rgba(0, 0, 0, 0.45)",
-                      }}
-                    >
-                      Explore Jobs →
-                    </Link>
-                  </div>
+                  {r.title}
                 </div>
-              );
-            })}
-          </div>
-        </div>
+
+                <div
+                  style={{
+                    color: MUTED,
+                    fontFamily: "var(--font-body)",
+                    fontWeight: 650,
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  Browse active openings in this category.
+                </div>
+
+                <div style={{ marginTop: "auto" }}>
+                  <Link
+                    href={href}
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "10px 14px",
+                      borderRadius: 14,
+                      backgroundColor: GREEN,
+                      color: "#fff",
+                      textDecoration: "none",
+                      fontFamily: "var(--font-body)",
+                      fontWeight: 900,
+                      border: "1px solid rgba(0,0,0,.08)",
+                      boxShadow: "0 12px 24px rgba(0,0,0,.14)",
+                      whiteSpace: "nowrap",
+                    }}
+                    aria-label={`Explore jobs for ${r.title}`}
+                    title={`Explore jobs for ${r.title}`}
+                  >
+                    Explore Jobs
+                    <span style={{ marginLeft: 8, fontWeight: 900 }}>→</span>
+                  </Link>
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
+
+      {/* Responsive (no client hooks; safe in server or client) */}
+      <style
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html: `
+            @media (max-width: 980px) {
+              .rn-roles-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            }
+            @media (max-width: 640px) {
+              .rn-roles-grid { grid-template-columns: 1fr; }
+            }
+          `,
+        }}
+      />
     </section>
   );
 }

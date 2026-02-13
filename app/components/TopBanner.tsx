@@ -47,9 +47,9 @@ export default function TopBanner() {
         width: "100vw",
         height: 50,
         zIndex: 1000,
-        backgroundColor: "#000",
-        borderTop: "1px solid #ff7a00",
-        borderBottom: "1px solid #ff7a00",
+        backgroundColor: "#35806e",
+        borderTop: "1px solid #eae7e2",
+        borderBottom: "1px solid #eae7e2",
       }}
     >
       <div
