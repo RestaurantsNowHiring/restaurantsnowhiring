@@ -5,6 +5,7 @@ type RoleCard = {
   imageSrc: string;
   roleFilters: string[]; // role_category values
   objectPosition?: string;
+  imageScale?: number; // ✅ allows "zoom" per image
 };
 
 function buildJobsHref(roleFilters: string[]) {
@@ -26,27 +27,27 @@ export default function TopRolesSection() {
       imageSrc: "/roles/line-cooks.jpg",
       roleFilters: ["Line", "Prep"],
       objectPosition: "center 20%",
+      imageScale: 1.03,
     },
     {
       title: "Cashier / Server",
       imageSrc: "/roles/servers.jpg",
       roleFilters: ["Cashier", "Server"],
-      objectPosition: "center center",
+      objectPosition: "center 25%",
+      imageScale: 1.03,
     },
     {
       title: "Managers",
       imageSrc: "/roles/managers.jpg",
       roleFilters: ["Manager"],
-      objectPosition: "center 19%",
+      // ✅ tweak these two until it feels perfect
+      objectPosition: "center center", // move “camera” up/down
+      imageScale: 1.8, // zoom in
     },
   ];
 
   return (
     <section style={{ padding: "6px 0 0", backgroundColor: "transparent" }}>
-      {/* NOTE: no maxWidth wrapper here.
-          This component should just render "content".
-          The PAGE decides the container/card layout. */}
-
       <div
         className="rn-roles-grid"
         style={{
@@ -83,13 +84,21 @@ export default function TopRolesSection() {
                     objectFit: "cover",
                     objectPosition: r.objectPosition ?? "center",
                     display: "block",
-                    transform: "scale(1.01)",
+                    transform: `scale(${r.imageScale ?? 1.01})`,
                   }}
                 />
               </div>
 
               {/* Content */}
-              <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+              <div
+                style={{
+                  padding: 16,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 10,
+                  flex: 1,
+                }}
+              >
                 <div
                   style={{
                     fontWeight: 900,
@@ -135,8 +144,7 @@ export default function TopRolesSection() {
                     aria-label={`Explore jobs for ${r.title}`}
                     title={`Explore jobs for ${r.title}`}
                   >
-                    Explore Jobs
-                    <span style={{ marginLeft: 8, fontWeight: 900 }}>→</span>
+                    Explore Jobs <span style={{ marginLeft: 8, fontWeight: 900 }}>→</span>
                   </Link>
                 </div>
               </div>
@@ -145,7 +153,7 @@ export default function TopRolesSection() {
         })}
       </div>
 
-      {/* Responsive (no client hooks; safe in server or client) */}
+      {/* Responsive */}
       <style
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{

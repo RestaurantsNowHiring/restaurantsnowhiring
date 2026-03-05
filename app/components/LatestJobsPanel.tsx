@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type Job = {
   id: string;
@@ -9,57 +9,101 @@ type Job = {
   restaurant_name: string;
   city: string;
   state: string;
-  created_at: string;
+  created_at?: string;
 
-  // optional if you ever decide to pass them through
-  role_category?: string | null;
+  // chips
   pay_range?: string | null;
   employment_type?: string | null;
+  role_category?: string | null;
 };
 
+type DatePostedOption = "" | "24h" | "3d" | "7d" | "14d" | "30d";
+
 export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
-  // Match JobsFilterPanel UX: text search + location text, plus optional dropdown
+  const GREEN = "#35806e";
+
+  // Search inputs (match Available Jobs)
   const [search, setSearch] = useState("");
   const [locationText, setLocationText] = useState("");
-  const [position, setPosition] = useState("");
+
+  // “Position” + “Date posted” pills (like your screenshot)
+  const [position, setPosition] = useState<string>("");
+  const [datePosted, setDatePosted] = useState<DatePostedOption>("");
+
+  // menu open/close
+  const [openMenu, setOpenMenu] = useState<null | "position" | "date">(null);
+  const menuWrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onDocMouseDown(e: MouseEvent) {
+      if (!menuWrapRef.current) return;
+      if (!menuWrapRef.current.contains(e.target as Node)) setOpenMenu(null);
+    }
+    document.addEventListener("mousedown", onDocMouseDown);
+    return () => document.removeEventListener("mousedown", onDocMouseDown);
+  }, []);
 
   const positionOptions = useMemo(() => {
-    return Array.from(new Set(jobs.map((j) => j.title))).sort();
+    return Array.from(new Set(jobs.map((j) => (j.title ?? "").trim()).filter(Boolean))).sort();
   }, [jobs]);
+
+  const daysForDatePosted = (opt: DatePostedOption) => {
+    switch (opt) {
+      case "24h":
+        return 1;
+      case "3d":
+        return 3;
+      case "7d":
+        return 7;
+      case "14d":
+        return 14;
+      case "30d":
+        return 30;
+      default:
+        return 0;
+    }
+  };
 
   const filteredJobs = useMemo(() => {
     const s = search.trim().toLowerCase();
     const loc = locationText.trim().toLowerCase();
 
+    const now = new Date();
+    const days = daysForDatePosted(datePosted);
+    const cutoff = days ? new Date(now.getTime() - days * 24 * 60 * 60 * 1000) : null;
+
     return jobs.filter((j) => {
-      const cityState = `${j.city}, ${j.state}`.toLowerCase();
-
-      const matchesLocation =
-        !loc ||
-        cityState.includes(loc) ||
-        j.city.toLowerCase().includes(loc) ||
-        j.state.toLowerCase().includes(loc);
-
       const matchesPosition = !position || j.title === position;
+
+      const cityState = `${j.city}, ${j.state}`.toLowerCase();
+      const matchesLocationText =
+        !loc || cityState.includes(loc) || j.city.toLowerCase().includes(loc) || j.state.toLowerCase().includes(loc);
 
       const matchesSearch =
         !s ||
         j.title.toLowerCase().includes(s) ||
         j.restaurant_name.toLowerCase().includes(s) ||
         j.city.toLowerCase().includes(s) ||
-        j.state.toLowerCase().includes(s);
+        j.state.toLowerCase().includes(s) ||
+        String(j.role_category ?? "").toLowerCase().includes(s) ||
+        String(j.employment_type ?? "").toLowerCase().includes(s);
 
-      return matchesLocation && matchesPosition && matchesSearch;
+      const matchesDate =
+        !cutoff || (j.created_at ? new Date(j.created_at) >= cutoff : true);
+
+      return matchesPosition && matchesLocationText && matchesSearch && matchesDate;
     });
-  }, [jobs, search, locationText, position]);
+  }, [jobs, search, locationText, position, datePosted]);
 
   const clearFilters = () => {
     setSearch("");
     setLocationText("");
     setPosition("");
+    setDatePosted("");
+    setOpenMenu(null);
   };
 
-  // ---- Shared styles (copied to match JobsFilterPanel exactly) ----
+  // shared styles (match Available Jobs)
   const inputStyle: React.CSSProperties = {
     height: 46,
     borderRadius: 10,
@@ -74,17 +118,99 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
     width: "100%",
   };
 
-  // (Used for the Position dropdown so it matches)
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle,
-    appearance: "none",
-    WebkitAppearance: "none",
-    MozAppearance: "none",
-    paddingRight: 38,
+  const pillButtonStyle: React.CSSProperties = {
+    height: 40,
+    borderRadius: 999,
+    border: "1px solid rgba(0,0,0,.14)",
+    backgroundColor: "rgba(0,0,0,0.05)",
+    padding: "0 14px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    cursor: "pointer",
+    fontFamily: "var(--font-body)",
+    fontWeight: 800,
+    color: "rgba(0,0,0,0.78)",
+    whiteSpace: "nowrap",
+  };
+
+  const menuStyle: React.CSSProperties = {
+    position: "absolute",
+    top: 44,
+    left: 0,
+    minWidth: 240,
+    background: "#fff",
+    border: "1px solid rgba(0,0,0,.14)",
+    borderRadius: 12,
+    boxShadow: "0 18px 40px rgba(0,0,0,.18)",
+    padding: 8,
+    zIndex: 50,
+  };
+
+  const menuItemStyle: React.CSSProperties = {
+    width: "100%",
+    textAlign: "left",
+    padding: "10px 10px",
+    borderRadius: 10,
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    fontFamily: "var(--font-body)",
+    fontWeight: 700,
+    color: "rgba(0,0,0,0.82)",
+  };
+
+  const chipStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    height: 26,
+    padding: "0 10px",
+    borderRadius: 999,
+    border: "1px solid rgba(0,0,0,.14)",
+    backgroundColor: "rgba(255,255,255,0.70)",
+    color: "rgba(0,0,0,.72)",
+    fontSize: 12,
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+  };
+
+  const PillMenu = ({
+    id,
+    label,
+    activeLabel,
+    children,
+    isActive,
+  }: {
+    id: "position" | "date";
+    label: string;
+    activeLabel?: string;
+    children: React.ReactNode;
+    isActive?: boolean;
+  }) => {
+    return (
+      <div style={{ position: "relative" }}>
+        <button
+          type="button"
+          onClick={() => setOpenMenu((prev) => (prev === id ? null : id))}
+          style={{
+            ...pillButtonStyle,
+            backgroundColor: isActive ? "rgba(53,128,110,0.14)" : pillButtonStyle.backgroundColor,
+            border: isActive ? "1px solid rgba(53,128,110,0.35)" : pillButtonStyle.border,
+            color: isActive ? "#2d6e5f" : pillButtonStyle.color,
+          }}
+        >
+          <span>{activeLabel ?? label}</span>
+          <span style={{ fontSize: 12, opacity: 0.8 }}>▾</span>
+        </button>
+
+        {openMenu === id && <div style={menuStyle}>{children}</div>}
+      </div>
+    );
   };
 
   return (
     <div
+      ref={menuWrapRef}
       style={{
         backgroundColor: "#ece9e48f",
         border: "1px solid rgba(0,0,0,0.08)",
@@ -93,7 +219,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
         boxShadow: "0 10px 30px rgba(0, 0, 0, 0.16)",
       }}
     >
-      {/* Title */}
+      {/* Title (keep this; remove “Latest Jobs” header from app/page.tsx) */}
       <div
         style={{
           display: "flex",
@@ -107,9 +233,9 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
         <div style={{ height: 1, width: 140, background: "rgba(0,0,0,.35)" }} />
         <div
           style={{
-            fontSize: 30,
+            fontSize: 36,
             fontWeight: 800,
-            color: "#35806e",
+            color: GREEN,
             fontFamily: "var(--font-heading)",
             whiteSpace: "nowrap",
           }}
@@ -119,7 +245,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
         <div style={{ height: 1, width: 140, background: "rgba(0,0,0,.35)" }} />
       </div>
 
-      {/* Search row (match JobsFilterPanel grid + button style) */}
+      {/* Search row */}
       <div
         style={{
           display: "grid",
@@ -158,60 +284,96 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
             fontWeight: 900,
             cursor: "pointer",
             whiteSpace: "nowrap",
-            fontFamily: "var(--font-body)",
           }}
         >
           Clear
         </button>
       </div>
 
-      {/* Second row: Position dropdown (optional but helpful on homepage) */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr",
-          gap: 12,
-          marginBottom: 14,
-        }}
-      >
-        <div style={{ position: "relative" }}>
-          <select
-            value={position}
-            onChange={(e) => setPosition(e.target.value)}
-            style={selectStyle}
-            aria-label="Filter by position"
-          >
-            <option value="">Position (optional)</option>
-            {positionOptions.map((pos) => (
-              <option key={pos} value={pos}>
-                {pos}
-              </option>
-            ))}
-          </select>
-
-          {/* caret */}
-          <div
-            style={{
-              position: "absolute",
-              right: 14,
-              top: "50%",
-              transform: "translateY(-50%)",
-              pointerEvents: "none",
-              opacity: 0.6,
-              fontWeight: 900,
+      {/* Pills row (Position + Date posted) */}
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+        <PillMenu
+          id="position"
+          label="Position"
+          activeLabel={position ? `Position: ${position}` : "Position"}
+          isActive={!!position}
+        >
+          <button
+            style={menuItemStyle}
+            onClick={() => {
+              setPosition("");
+              setOpenMenu(null);
             }}
           >
-            ▾
-          </div>
-        </div>
+            Any
+          </button>
+          {positionOptions.map((p) => (
+            <button
+              key={p}
+              style={menuItemStyle}
+              onClick={() => {
+                setPosition(p);
+                setOpenMenu(null);
+              }}
+            >
+              {p}
+            </button>
+          ))}
+        </PillMenu>
+
+        <PillMenu
+          id="date"
+          label="Date posted"
+          activeLabel={
+            datePosted
+              ? `Date: ${
+                  datePosted === "24h"
+                    ? "Last 24 hours"
+                    : datePosted === "3d"
+                    ? "Last 3 days"
+                    : datePosted === "7d"
+                    ? "Last 7 days"
+                    : datePosted === "14d"
+                    ? "Last 14 days"
+                    : "Last 30 days"
+                }`
+              : "Date posted"
+          }
+          isActive={!!datePosted}
+        >
+          <button
+            style={menuItemStyle}
+            onClick={() => {
+              setDatePosted("");
+              setOpenMenu(null);
+            }}
+          >
+            Any time
+          </button>
+          <button style={menuItemStyle} onClick={() => { setDatePosted("24h"); setOpenMenu(null); }}>
+            Last 24 hours
+          </button>
+          <button style={menuItemStyle} onClick={() => { setDatePosted("3d"); setOpenMenu(null); }}>
+            Last 3 days
+          </button>
+          <button style={menuItemStyle} onClick={() => { setDatePosted("7d"); setOpenMenu(null); }}>
+            Last 7 days
+          </button>
+          <button style={menuItemStyle} onClick={() => { setDatePosted("14d"); setOpenMenu(null); }}>
+            Last 14 days
+          </button>
+          <button style={menuItemStyle} onClick={() => { setDatePosted("30d"); setOpenMenu(null); }}>
+            Last 30 days
+          </button>
+        </PillMenu>
       </div>
 
-      {/* Count (match JobsFilterPanel) */}
-      <div style={{ marginBottom: 12, color: "#35806e", fontWeight: 800, fontFamily: "var(--font-body)" }}>
+      {/* Count */}
+      <div style={{ marginBottom: 12, color: GREEN, fontWeight: 800 }}>
         Showing {filteredJobs.length} job{filteredJobs.length === 1 ? "" : "s"}
       </div>
 
-      {/* Jobs list (match JobsFilterPanel container + row styling) */}
+      {/* Jobs list */}
       <div
         style={{
           border: "1px solid rgba(0,0,0,.12)",
@@ -223,76 +385,89 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
         }}
       >
         {filteredJobs.length === 0 ? (
-          <div style={{ padding: 16, color: "rgba(0, 0, 0, 0.75)", fontWeight: 800, fontFamily: "var(--font-body)" }}>
+          <div style={{ padding: 16, color: "rgba(0, 0, 0, 0.75)", fontWeight: 800 }}>
             No jobs match your filters.
           </div>
         ) : (
-          filteredJobs.map((job, idx) => (
-            <div
-              key={job.id}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr auto",
-                gap: 12,
-                alignItems: "center",
-                padding: "14px 14px",
-                backgroundColor:
-                  idx % 2 === 0 ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.05)",
-                borderTop: idx === 0 ? "none" : "1px solid rgba(0, 0, 0, 0.18)",
-              }}
-            >
-              <div style={{ minWidth: 0 }}>
+          filteredJobs.map((job, idx) => {
+            const pay = (job.pay_range ?? "").trim();
+            const type = (job.employment_type ?? "").trim();
+            const cat = (job.role_category ?? "").trim();
+
+            return (
+              <div
+                key={job.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto",
+                  gap: 12,
+                  alignItems: "center",
+                  padding: "14px 14px",
+                  backgroundColor:
+                    idx % 2 === 0 ? "rgba(255, 255, 255, 0.08)" : "rgba(255, 255, 255, 0.05)",
+                  borderTop: idx === 0 ? "none" : "1px solid rgba(0, 0, 0, 0.18)",
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <Link
+                    href={`/jobs/${job.id}`}
+                    style={{
+                      display: "inline-block",
+                      fontWeight: 900,
+                      color: "#111",
+                      fontSize: 18,
+                      textDecoration: "underline",
+                      textUnderlineOffset: 3,
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    {job.title}
+                  </Link>
+
+                  <div style={{ opacity: 0.85, color: "rgba(0,0,0,.75)", marginTop: 4 }}>
+                    {job.restaurant_name} — {job.city}, {job.state}
+                  </div>
+
+                  {/* ✅ Quick info chips (this is what you’re missing) */}
+                  {(pay || type || cat) && (
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
+                      {pay && <span style={chipStyle}>{pay}</span>}
+                      {type && <span style={chipStyle}>{type}</span>}
+                      {cat && <span style={chipStyle}>{cat}</span>}
+                    </div>
+                  )}
+                </div>
+
                 <Link
                   href={`/jobs/${job.id}`}
                   style={{
-                    display: "inline-block",
-                    fontWeight: 900,
-                    color: "#111",
-                    fontSize: 18,
-                    textDecoration: "underline",
-                    textUnderlineOffset: 3,
-                    fontFamily: "var(--font-body)",
+                    backgroundColor: GREEN,
+                    color: "#fef5ea",
+                    padding: "10px 18px",
+                    borderRadius: 10,
+                    fontWeight: 800,
+                    textDecoration: "none",
+                    boxShadow: "0 10px 22px rgba(0,0,0,.16)",
+                    whiteSpace: "nowrap",
                   }}
                 >
-                  {job.title}
+                  View →
                 </Link>
-
-                <div style={{ opacity: 0.85, color: "rgba(0,0,0,.75)", marginTop: 4, fontFamily: "var(--font-body)" }}>
-                  {job.restaurant_name} — {job.city}, {job.state}
-                </div>
               </div>
-
-              <Link
-                href={`/jobs/${job.id}`}
-                style={{
-                  backgroundColor: "#35806e",
-                  color: "#fef5ea",
-                  padding: "10px 18px",
-                  borderRadius: 10,
-                  fontWeight: 800,
-                  textDecoration: "none",
-                  boxShadow: "0 10px 22px rgba(0,0,0,.16)",
-                  whiteSpace: "nowrap",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                View →
-              </Link>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
-      {/* Bottom CTA (same style direction as your site) */}
+      {/* Bottom CTA */}
       <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
         <Link
           href="/jobs"
           style={{
-            color: "rgba(0,0,0,.75)",
+            color: "rgba(0,0,0,.85)",
             textDecoration: "none",
-            fontWeight: 900,
-            fontFamily: "var(--font-body)",
-            borderBottom: "1px solid rgba(0,0,0,.25)",
+            fontWeight: 800,
+            borderBottom: "1px solid rgba(0,0,0,.35)",
             paddingBottom: 2,
           }}
         >
@@ -300,7 +475,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
         </Link>
       </div>
 
-      {/* Responsive: stack the search row on smaller screens (same approach) */}
+      {/* Responsive: stack search row */}
       <style jsx>{`
         @media (max-width: 860px) {
           div[style*="grid-template-columns: 1.6fr 1fr auto"] {

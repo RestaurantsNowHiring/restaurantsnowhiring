@@ -50,7 +50,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main id="main-content" style={{ padding: 0 }}>
           {/* If you’re using this gate, wrap children with it */}
           {children}
-
         </main>
 
         <footer

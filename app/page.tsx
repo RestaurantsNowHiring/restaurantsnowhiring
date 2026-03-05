@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import LatestJobsPanel from "./components/LatestJobsPanel";
 import TopRolesSection from "./components/TopRolesSection";
+import { ClipboardList, Search, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -14,12 +15,19 @@ type Job = {
   state: string;
   active: boolean;
   created_at: string;
+
+  // optional (pulled for chips / future use)
+  pay_range?: string | null;
+  employment_type?: string | null;
+  role_category?: string | null;
 };
 
 export default async function HomePage() {
   const { data: jobs } = await supabase
     .from("jobs")
-    .select("id,title,restaurant_name,city,state,active,created_at")
+    .select(
+      "id,title,restaurant_name,city,state,active,created_at,pay_range,employment_type,role_category"
+    )
     .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(6);
@@ -81,21 +89,32 @@ export default async function HomePage() {
     color: "rgba(0,0,0,.75)",
   };
 
+  const featureCards = [
+    {
+      title: "Clean listings",
+      body: "No clutter. Just the details job seekers actually need.",
+      Icon: ClipboardList,
+    },
+    {
+      title: "Fast search",
+      body: "Browse roles by category and location in a couple clicks.",
+      Icon: Search,
+    },
+    {
+      title: "Verified posting flow",
+      body: "Employers submit for review before a job goes public.",
+      Icon: ShieldCheck,
+    },
+  ] as const;
+
   return (
     <main style={pageWrap}>
       <div style={container}>
         {/* HERO */}
-        <section
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.2fr 0.8fr",
-            gap: 18,
-            alignItems: "stretch",
-            marginBottom: 18,
-          }}
-        >
+        <section className="rn-home-hero">
           {/* Left: headline + CTAs */}
           <div style={cardStyle}>
+            {/* Site name row */}
             <div
               style={{
                 display: "flex",
@@ -109,14 +128,31 @@ export default async function HomePage() {
                 alt="Restaurants Now Hiring"
                 style={{ height: 28, width: "auto", display: "block" }}
               />
+
               <div
                 style={{
                   fontWeight: 900,
                   color: TEXT,
                   fontFamily: "var(--font-body)",
+                  fontSize: 18,
+                  letterSpacing: 0.2,
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                  display: "flex",
+                  alignItems: "baseline",
                 }}
               >
-                RestaurantsNowHiring.com
+                <span>Restaurants</span>
+                <span
+                  style={{
+                    color: GREEN,
+                    textTransform: "uppercase",
+                    margin: "0 3px",
+                  }}
+                >
+                  NOW
+                </span>
+                <span>Hiring.com</span>
               </div>
             </div>
 
@@ -159,7 +195,7 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            {/* Quick value props */}
+            {/* Quick value props (with Lucide icons) */}
             <div
               style={{
                 display: "grid",
@@ -168,39 +204,45 @@ export default async function HomePage() {
                 marginTop: 18,
               }}
             >
-              {[
-                {
-                  title: "Clean listings",
-                  body: "No clutter. Just the details job seekers actually need.",
-                },
-                {
-                  title: "Fast search",
-                  body: "Browse roles by category and location in a couple clicks.",
-                },
-                {
-                  title: "Verified posting flow",
-                  body: "Employers submit for review before a job goes public.",
-                },
-              ].map((x) => (
+              {featureCards.map(({ title, body, Icon }) => (
                 <div
-                  key={x.title}
+                  key={title}
                   style={{
                     backgroundColor: "rgba(255,255,255,.75)",
                     border: `1px solid ${BORDER}`,
                     borderRadius: 14,
-                    padding: 14,
+                    padding: 16,
                   }}
                 >
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      border: "1px solid rgba(53,128,110,0.20)",
+                      backgroundColor: "rgba(53,128,110,0.08)",
+                      marginBottom: 10,
+                    }}
+                    aria-hidden="true"
+                  >
+                    <Icon size={18} color={GREEN} />
+                  </div>
+
                   <div
                     style={{
                       fontWeight: 900,
                       color: TEXT,
                       fontFamily: "var(--font-body)",
                       marginBottom: 6,
+                      fontSize: 16,
                     }}
                   >
-                    {x.title}
+                    {title}
                   </div>
+
                   <div
                     style={{
                       color: "rgba(0,0,0,.72)",
@@ -210,59 +252,82 @@ export default async function HomePage() {
                       fontSize: 13,
                     }}
                   >
-                    {x.body}
+                    {body}
                   </div>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Right: image card */}
+          {/* Right: Growth & Opportunity Card */}
           <div
             style={{
               ...cardStyle,
-              padding: 12,
-              overflow: "hidden",
               display: "flex",
               flexDirection: "column",
-              gap: 10,
+              justifyContent: "center",
+              gap: 18,
             }}
           >
             <div
               style={{
-                borderRadius: 14,
-                overflow: "hidden",
-                border: `1px solid ${BORDER}`,
-                backgroundColor: "#fff",
-                flex: 1,
+                fontSize: 22,
+                fontWeight: 900,
+                color: GREEN,
+                fontFamily: "var(--font-heading)",
               }}
             >
-              <img
-                src="/hero.jpg"
-                alt="Restaurant team"
-                style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-              />
+              Real Career Growth
             </div>
 
             <div
               style={{
-                display: "flex",
-                gap: 10,
-                flexWrap: "wrap",
-                alignItems: "center",
-                justifyContent: "space-between",
+                fontSize: 16,
+                lineHeight: 1.6,
+                color: "rgba(0,0,0,.75)",
+                fontFamily: "var(--font-body)",
+                fontWeight: 600,
               }}
             >
-              <div style={{ fontFamily: "var(--font-body)", fontWeight: 800, color: TEXT }}>
-                Employers:
-                <span style={{ fontWeight: 650, color: "rgba(0,0,0,.70)" }}>
-                  {" "}
-                  Post your opening in minutes.
-                </span>
-              </div>
-              <Link href="/post-job" style={{ ...primaryBtn, padding: "10px 14px" }}>
+              Many restaurant leaders start at hourly roles and move into management within a few
+              years.
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: 14,
+                marginTop: 8,
+              }}
+            >
+              <StatCard number="Minimum Wage" label="Starting roles" green={GREEN} />
+              <StatCard number="$60k+" label="Kitchen managers" green={GREEN} />
+              <StatCard number="$100k+" label="Multi-unit leaders" green={GREEN} />
+              <StatCard number="5 yrs" label="Typical growth path" green={GREEN} />
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
+              <Link href="/jobs" style={secondaryBtn}>
+                Browse Jobs
+              </Link>
+              <Link href="/post-job" style={primaryBtn}>
                 Post a Job
               </Link>
+            </div>
+
+            <div
+              style={{
+                marginTop: 6,
+                color: "rgba(0,0,0,.55)",
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: "var(--font-body)",
+                lineHeight: 1.5,
+              }}
+            >
+              This varies by brand, market, and performance — but the restaurant industry is one of
+              the fastest paths to leadership.
             </div>
           </div>
         </section>
@@ -292,35 +357,11 @@ export default async function HomePage() {
             <div style={{ height: 1, width: 160, background: "rgba(0,0,0,.20)" }} />
           </div>
 
-          {/* This component should render inside the card */}
           <TopRolesSection />
         </section>
 
         {/* LATEST JOBS */}
         <section style={{ ...cardStyle, marginBottom: 18 }}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 14,
-              marginBottom: 14,
-            }}
-          >
-            <div style={{ height: 1, width: 160, background: "rgba(0,0,0,.20)" }} />
-            <div
-              style={{
-                fontSize: 18,
-                fontWeight: 900,
-                color: TEXT,
-                fontFamily: "var(--font-heading)",
-              }}
-            >
-              Latest Jobs
-            </div>
-            <div style={{ height: 1, width: 160, background: "rgba(0,0,0,.20)" }} />
-          </div>
-
           <LatestJobsPanel jobs={latestJobs} />
         </section>
 
@@ -419,20 +460,70 @@ export default async function HomePage() {
         </footer>
       </div>
 
-      {/* Responsive tweaks */}
-      <div style={{ height: 1 }} />
+      {/* Responsive */}
       <style
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{
           __html: `
-          @media (max-width: 980px) {
             .rn-home-hero {
-              grid-template-columns: 1fr !important;
+              display: grid;
+              grid-template-columns: 1.2fr 0.8fr;
+              gap: 18px;
+              align-items: stretch;
+              margin-bottom: 18px;
             }
-          }
-        `,
+            @media (max-width: 980px) {
+              .rn-home-hero {
+                grid-template-columns: 1fr !important;
+              }
+            }
+          `,
         }}
       />
     </main>
+  );
+}
+
+function StatCard({
+  number,
+  label,
+  green,
+}: {
+  number: string;
+  label: string;
+  green: string;
+}) {
+  return (
+    <div
+      style={{
+        backgroundColor: "#ffffff",
+        border: "1px solid rgba(0,0,0,.10)",
+        borderRadius: 14,
+        padding: 16,
+        textAlign: "center",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 22,
+          fontWeight: 900,
+          color: green,
+          fontFamily: "var(--font-heading)",
+        }}
+      >
+        {number}
+      </div>
+      <div
+        style={{
+          marginTop: 6,
+          fontSize: 13,
+          fontWeight: 700,
+          color: "rgba(0,0,0,.65)",
+          fontFamily: "var(--font-body)",
+        }}
+      >
+        {label}
+      </div>
+    </div>
   );
 }
