@@ -1,1215 +1,1356 @@
-// app/post-job/page.tsx
 "use client";
 
 import Link from "next/link";
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 
 type Step = 1 | 2 | 3 | 4;
-
-type FormState = {
-  // Step 1 — Company Info
-  companyName: string;
-  employeeCount: string;
-  contactName: string;
-  workEmail: string;
-
-  // Step 2 — Job Info
-  restaurantType: string;
-  jobTitle: string;
-  roleCategories: string[]; // multi-select
-  city: string;
-  state: string;
-
-  // Step 3 — Job Details
-  employmentTypes: string[]; // multi-select
-  schedules: string[]; // multi-select
-
-  payMode: "range" | "min" | "max" | "rate";
-  payMin: string;
-  payMax: string;
-  payRate: string;
-
-  website: string;
-  howToApply: string;
-  description: string;
-  address: string;
-  benefits: string[]; // multi-select
-};
-
-const EMPLOYEE_OPTIONS = ["1-10", "11-25", "26-75", "76-150", "151-500", "501+"];
-
-const RESTAURANT_TYPES = [
-  "Quick Service (Fast Food)",
-  "Fast Casual",
-  "Casual Dining",
-  "Fine Dining",
-  "Bar / Pub",
-  "Coffee Shop / Bakery",
-  "Food Truck",
-  "Catering",
-  "Franchise Group",
-  "Other",
-];
-
-const ROLE_CATEGORIES = [
-  "Line",
-  "Prep",
-  "Dish",
-  "Server",
-  "Cashier",
-  "Host",
-  "Bartender",
-  "Manager",
-  "Other",
-];
-
-const EMPLOYMENT_TYPES = ["Full time", "Part time", "Seasonal", "Temporary"];
-
-const SCHEDULE_OPTIONS = [
-  "Day shift",
-  "Night shift",
-  "Morning shift",
-  "Evening shift",
-  "Overnight shift",
-  "Weekends required",
-  "Weekdays only (M-F)",
-  "Flexible schedule",
-  "Rotating schedule",
-  "On-call",
-  "Overtime",
-  "No weekends",
-  "Choose your own hours",
-  "Other",
-];
-
-const BENEFITS_OPTIONS = [
-  "Health insurance",
-  "Dental insurance",
-  "Vision insurance",
-  "401(k)",
-  "Paid time off",
-  "Flexible schedule",
-  "Employee discount",
-  "Free meals",
-  "Tuition assistance",
-  "Paid training",
-  "Referral bonus",
-  "Bonus pay",
-  "Overtime available",
-  "Career growth",
-  "Other",
-];
-
-const US_STATES = [
-  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
-  "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
-  "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
-  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
-  "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY",
-];
-
-function isValidEmail(email: string) {
-  return /^\S+@\S+\.\S+$/.test(email.trim());
-}
-
-function toggleValue(list: string[], value: string) {
-  return list.includes(value) ? list.filter((x) => x !== value) : [...list, value];
-}
-
-function buildPayRange(f: FormState) {
-  const min = f.payMin.trim();
-  const max = f.payMax.trim();
-  const rate = f.payRate.trim();
-
-  if (f.payMode === "range") {
-    if (!min || !max) return "";
-    return `${min} – ${max}`;
-  }
-  if (f.payMode === "min") return min || "";
-  if (f.payMode === "max") return max || "";
-  return rate || "";
-}
+type PayMode = "range" | "minimum" | "maximum" | "rate";
 
 export default function PostJobPage() {
-  // Theme tokens (match your green/white site)
-  const GREEN = "#35806e";
-  const BG = "#ffffff";
-  const CARD = "#f6f5f3";
-  const BORDER = "rgba(0,0,0,.10)";
-  const TEXT = "rgba(0,0,0,.85)";
-  const MUTED = "rgba(0,0,0,.65)";
+  const router = useRouter();
 
+  const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [step, setStep] = useState<Step>(1);
-  const [attemptedNext, setAttemptedNext] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string>("");
-  const [submitSuccess, setSubmitSuccess] = useState<string>("");
+  // Step 1
+  const [companyName, setCompanyName] = useState("");
+  const [employeeCount, setEmployeeCount] = useState("");
+  const [contactName, setContactName] = useState("");
+  const [workEmail, setWorkEmail] = useState("");
 
-  const [form, setForm] = useState<FormState>({
-    companyName: "",
-    employeeCount: "",
-    contactName: "",
-    workEmail: "",
+  // Step 2
+  const [restaurantType, setRestaurantType] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
+  const [roleCategories, setRoleCategories] = useState<string[]>([]);
+  const [city, setCity] = useState("");
+  const [stateVal, setStateVal] = useState("");
 
-    restaurantType: "",
-    jobTitle: "",
-    roleCategories: [],
-    city: "",
-    state: "",
+  // Step 3
+  const [employmentType, setEmploymentType] = useState("");
+  const [scheduleTags, setScheduleTags] = useState<string[]>([]);
+  const [payMode, setPayMode] = useState<PayMode>("range");
+  const [payMin, setPayMin] = useState("");
+  const [payMax, setPayMax] = useState("");
+  const [payRate, setPayRate] = useState("");
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [address, setAddress] = useState("");
+  const [howToApply, setHowToApply] = useState("");
+  const [description, setDescription] = useState("");
+  const [benefits, setBenefits] = useState<string[]>([]);
 
-    employmentTypes: [],
-    schedules: [],
-    payMode: "range",
-    payMin: "",
-    payMax: "",
-    payRate: "",
+  const GREEN = "#35806e";
+  const BG = "#f6f5f3";
+  const BORDER = "rgba(0,0,0,.10)";
+  const TEXT = "rgba(0,0,0,.88)";
+  const MUTED = "rgba(0,0,0,.58)";
+  const SOFT_GREEN = "#dfe7e3";
+  const CARD = "#ffffff";
+  const ERROR = "#b00020";
 
-    website: "",
-    howToApply: "",
-    description: "",
-    address: "",
-    benefits: [],
-  });
+  const EMPLOYEE_OPTIONS = ["1-10", "11-25", "26-50", "51-100", "100+"];
+  const RESTAURANT_TYPES = [
+    "Quick Service (Fast Food)",
+    "Fast Casual",
+    "Casual Dining",
+    "Bar / Tavern",
+    "Cafe / Bakery",
+    "Fine Dining",
+    "Food Truck",
+    "Other",
+  ];
 
-  // Persist draft locally (nice UX)
+  const ROLE_OPTIONS = [
+    "Line",
+    "Prep",
+    "Dish",
+    "Server",
+    "Cashier",
+    "Host",
+    "Bartender",
+    "Manager",
+    "Other",
+  ];
+
+  const EMPLOYMENT_OPTIONS = ["Full time", "Part time", "Seasonal", "Temporary"];
+  const SCHEDULE_OPTIONS = [
+    "Day shift",
+    "Night shift",
+    "Morning shift",
+    "Evening shift",
+    "Overnight shift",
+    "Weekends required",
+    "Weekdays only (M-F)",
+    "Flexible schedule",
+    "Rotating schedule",
+    "On-call",
+    "Overtime",
+    "No weekends",
+    "Choose your own hours",
+    "Other",
+  ];
+
+  const BENEFIT_OPTIONS = [
+    "Health insurance",
+    "Dental insurance",
+    "Vision insurance",
+    "401(k)",
+    "Paid time off",
+    "Flexible schedule",
+    "Employee discount",
+    "Free meals",
+    "Tuition assistance",
+    "Paid training",
+    "Referral bonus",
+    "Bonus pay",
+    "Overtime available",
+    "Career growth",
+    "Other",
+  ];
+
+  const STATES = [
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+    "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+    "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+    "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+    "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC",
+  ];
+
   useEffect(() => {
-    try {
-      const key = "rn_post_job_draft_v2";
-      const raw = window.localStorage.getItem(key);
-      if (raw) {
-        const parsed = JSON.parse(raw) as Partial<FormState>;
-        setForm((prev) => ({ ...prev, ...parsed }));
+    let mounted = true;
+
+    async function checkAuth() {
+      const { data } = await supabase.auth.getSession();
+      const isLoggedIn = !!data?.session;
+
+      if (!isLoggedIn) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/post-job")}`);
+        return;
       }
-    } catch {}
-  }, []);
 
-  useEffect(() => {
-    try {
-      const key = "rn_post_job_draft_v2";
-      window.localStorage.setItem(key, JSON.stringify(form));
-    } catch {}
-  }, [form]);
+      if (mounted) setAuthStatus("allowed");
+    }
+
+    checkAuth();
+
+    return () => {
+      mounted = false;
+    };
+  }, [router]);
+
+  function toggleValue(value: string, list: string[], setter: (v: string[]) => void) {
+    if (list.includes(value)) {
+      setter(list.filter((item) => item !== value));
+    } else {
+      setter([...list, value]);
+    }
+  }
+
+  function resetMessage() {
+    setMessage(null);
+  }
+
+  function validateStep(currentStep: Step) {
+    resetMessage();
+
+    if (currentStep === 1) {
+      if (!companyName.trim() || !employeeCount || !contactName.trim() || !workEmail.trim()) {
+        setMessage("Please fill out all required company info fields.");
+        return false;
+      }
+      return true;
+    }
+
+    if (currentStep === 2) {
+      if (
+        !restaurantType ||
+        !jobTitle.trim() ||
+        roleCategories.length === 0 ||
+        !city.trim() ||
+        !stateVal.trim()
+      ) {
+        setMessage("Please complete all required job info fields.");
+        return false;
+      }
+      return true;
+    }
+
+    if (currentStep === 3) {
+      if (!employmentType || !howToApply.trim() || !description.trim()) {
+        setMessage("Please complete the required details fields.");
+        return false;
+      }
+
+      if (payMode === "range" && (!payMin.trim() || !payMax.trim())) {
+        setMessage("Please enter both values for the pay range.");
+        return false;
+      }
+
+      if (payMode !== "range" && !payRate.trim()) {
+        setMessage("Please enter a pay value.");
+        return false;
+      }
+
+      return true;
+    }
+
+    return true;
+  }
+
+  function nextStep() {
+    if (!validateStep(step)) return;
+    setStep((prev) => Math.min(4, prev + 1) as Step);
+  }
+
+  function previousStep() {
+    resetMessage();
+    setStep((prev) => Math.max(1, prev - 1) as Step);
+  }
+
+  const computedPay = useMemo(() => {
+    if (payMode === "range") {
+      if (!payMin && !payMax) return "";
+      return `${payMin || "—"} – ${payMax || "—"}`;
+    }
+    return payRate;
+  }, [payMode, payMin, payMax, payRate]);
+
+  function resetForm() {
+    setStep(1);
+    setMessage(null);
+
+    setCompanyName("");
+    setEmployeeCount("");
+    setContactName("");
+    setWorkEmail("");
+
+    setRestaurantType("");
+    setJobTitle("");
+    setRoleCategories([]);
+    setCity("");
+    setStateVal("");
+
+    setEmploymentType("");
+    setScheduleTags([]);
+    setPayMode("range");
+    setPayMin("");
+    setPayMax("");
+    setPayRate("");
+    setCompanyWebsite("");
+    setAddress("");
+    setHowToApply("");
+    setDescription("");
+    setBenefits([]);
+  }
+
+  async function handleFinalSubmit() {
+    resetMessage();
+
+    if (!validateStep(3)) {
+      setStep(3);
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    const roleCategoryForDb = roleCategories[0] || "Other";
+
+    const combinedDescription = [
+      description.trim(),
+      scheduleTags.length ? `Schedule: ${scheduleTags.join(", ")}` : "",
+      benefits.length ? `Benefits: ${benefits.join(", ")}` : "",
+      restaurantType ? `Restaurant type: ${restaurantType}` : "",
+      contactName.trim() ? `Contact: ${contactName.trim()}` : "",
+      employeeCount ? `Company size: ${employeeCount}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const { error } = await supabase.from("jobs").insert([
+      {
+        restaurant_name: companyName.trim(),
+        title: jobTitle.trim(),
+        role_category: roleCategoryForDb,
+        city: city.trim(),
+        state: stateVal.trim().toUpperCase(),
+        apply_email: workEmail.trim(),
+        company_website: companyWebsite.trim() || null,
+        employment_type: employmentType || null,
+        pay_range: computedPay || null,
+        address: address.trim() || null,
+        how_to_apply: howToApply.trim() || null,
+        description: combinedDescription,
+        active: false,
+      },
+    ]);
+
+    setIsSubmitting(false);
+
+    if (error) {
+      setMessage(`Error: ${error.message}`);
+      return;
+    }
+
+    setMessage(null);
+    setShowSuccessModal(true);
+  }
 
   const pageWrap: React.CSSProperties = {
-    backgroundColor: BG,
     minHeight: "100vh",
-    paddingTop: 90,
-    paddingBottom: 70,
+    backgroundColor: BG,
+    paddingTop: 58,
+    paddingBottom: 44,
   };
 
   const container: React.CSSProperties = {
-    maxWidth: 1100,
+    maxWidth: 1180,
     margin: "0 auto",
     padding: "0 18px",
   };
 
-  const cardStyle: React.CSSProperties = {
-    backgroundColor: CARD,
+  const mainCard: React.CSSProperties = {
+    backgroundColor: BG,
     border: `1px solid ${BORDER}`,
+    borderRadius: 24,
+    padding: 24,
+    boxShadow: "0 10px 22px rgba(0,0,0,.04)",
+  };
+
+  const stepCard = (active: boolean): React.CSSProperties => ({
+    border: `1px solid ${active ? "rgba(53,128,110,.24)" : BORDER}`,
+    backgroundColor: active ? SOFT_GREEN : "rgba(255,255,255,.52)",
     borderRadius: 18,
-    padding: 22,
-    boxShadow: "0 18px 40px rgba(0,0,0,.12)",
+    padding: "14px 18px",
+    minHeight: 86,
+  });
+
+  const sectionTitleWrap: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 16,
+    marginTop: 22,
+    marginBottom: 22,
   };
 
-  const inputStyle: React.CSSProperties = {
-    height: 46,
-    borderRadius: 12,
-    border: `1px solid ${BORDER}`,
-    backgroundColor: "#fff",
-    color: "rgba(0,0,0,.85)",
-    padding: "0 14px",
-    outline: "none",
-    fontWeight: 750,
-    fontFamily: "var(--font-body)",
-    boxShadow: "0 6px 14px rgba(0,0,0,.10)",
-    width: "100%",
-  };
-
-  const textareaStyle: React.CSSProperties = {
-    ...inputStyle,
-    height: "auto",
-    padding: "12px 14px",
-    minHeight: 140,
-    lineHeight: 1.55,
-    fontWeight: 650,
+  const sectionTitleLine: React.CSSProperties = {
+    height: 1,
+    width: 180,
+    background: "rgba(0,0,0,.18)",
   };
 
   const labelStyle: React.CSSProperties = {
-    fontFamily: "var(--font-body)",
+    display: "block",
+    marginBottom: 8,
+    fontSize: 13,
     fontWeight: 900,
     color: TEXT,
-    fontSize: 14,
+    fontFamily: "var(--font-body)",
   };
 
-  const helpStyle: React.CSSProperties = {
+  const helperStyle: React.CSSProperties = {
     marginTop: 8,
-    color: "rgba(0,0,0,.55)",
+    color: MUTED,
     fontSize: 12,
     fontWeight: 700,
-    fontFamily: "var(--font-body)",
     lineHeight: 1.45,
-  };
-
-  const errorText: React.CSSProperties = {
-    marginTop: 8,
-    color: "rgba(180, 30, 30, .95)",
-    fontSize: 12,
-    fontWeight: 900,
     fontFamily: "var(--font-body)",
   };
 
-  const inputErrorRing: React.CSSProperties = {
-    border: "1px solid rgba(180, 30, 30, .35)",
-    boxShadow: "0 10px 22px rgba(180,30,30,.10)",
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    height: 54,
+    borderRadius: 14,
+    border: `1px solid ${BORDER}`,
+    backgroundColor: CARD,
+    padding: "0 16px",
+    outline: "none",
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: 800,
+    fontFamily: "var(--font-body)",
+    boxShadow: "0 8px 18px rgba(0,0,0,.05)",
   };
 
-  const buttonBase: React.CSSProperties = {
+  const textareaStyle: React.CSSProperties = {
+    width: "100%",
+    minHeight: 130,
+    borderRadius: 14,
+    border: `1px solid ${BORDER}`,
+    backgroundColor: CARD,
+    padding: "14px 16px",
+    outline: "none",
+    color: TEXT,
+    fontSize: 15,
+    fontWeight: 700,
+    fontFamily: "var(--font-body)",
+    boxShadow: "0 8px 18px rgba(0,0,0,.05)",
+    resize: "vertical" as const,
+  };
+
+  const pillStyle = (selected: boolean): React.CSSProperties => ({
     display: "inline-flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "12px 18px",
-    borderRadius: 14,
-    textDecoration: "none",
+    minHeight: 42,
+    padding: "0 14px",
+    borderRadius: 999,
+    border: `1px solid ${selected ? "rgba(53,128,110,.22)" : "rgba(0,0,0,.10)"}`,
+    backgroundColor: selected ? SOFT_GREEN : "rgba(255,255,255,.5)",
+    color: selected ? GREEN : "rgba(0,0,0,.75)",
     fontWeight: 900,
+    fontSize: 14,
     fontFamily: "var(--font-body)",
-    whiteSpace: "nowrap",
-    border: `1px solid ${BORDER}`,
-    boxShadow: "0 10px 22px rgba(0,0,0,.10)",
     cursor: "pointer",
-  };
+    userSelect: "none" as const,
+  });
 
   const primaryBtn: React.CSSProperties = {
-    ...buttonBase,
+    minWidth: 180,
+    height: 58,
+    borderRadius: 18,
+    border: "1px solid rgba(0,0,0,.08)",
     backgroundColor: GREEN,
     color: "#fff",
-    border: "1px solid rgba(0,0,0,.08)",
+    fontWeight: 900,
+    fontSize: 16,
+    fontFamily: "var(--font-body)",
+    cursor: "pointer",
+    boxShadow: "0 8px 18px rgba(0,0,0,.07)",
   };
 
   const secondaryBtn: React.CSSProperties = {
-    ...buttonBase,
-    backgroundColor: "#ffffff",
-    color: "rgba(0,0,0,.75)",
-  };
-
-  // ✅ “Pill” styling via real checkbox/radio inputs (prevents focus-jank)
-  const pillWrap: React.CSSProperties = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 10,
-  };
-
-  const pillLabelBase: React.CSSProperties = {
-    borderRadius: 999,
+    minWidth: 90,
+    height: 50,
+    borderRadius: 16,
     border: `1px solid ${BORDER}`,
-    backgroundColor: "rgba(0,0,0,.05)",
-    padding: "9px 12px",
-    fontFamily: "var(--font-body)",
+    backgroundColor: "#fff",
+    color: "rgba(0,0,0,.76)",
     fontWeight: 900,
-    color: "rgba(0,0,0,.72)",
+    fontSize: 14,
+    fontFamily: "var(--font-body)",
     cursor: "pointer",
-    userSelect: "none",
+    boxShadow: "0 6px 14px rgba(0,0,0,.04)",
+  };
+
+  const topActionLink: React.CSSProperties = {
     display: "inline-flex",
     alignItems: "center",
-    gap: 8,
-  };
-
-  const pillLabelActive: React.CSSProperties = {
-    ...pillLabelBase,
-    backgroundColor: "rgba(53,128,110,0.14)",
-    border: "1px solid rgba(53,128,110,0.35)",
-    color: "#2d6e5f",
-  };
-
-  const hiddenInput: React.CSSProperties = {
-    position: "absolute",
-    opacity: 0,
-    pointerEvents: "none",
-    width: 1,
-    height: 1,
-  };
-
-  const errorsForStep = useMemo(() => {
-    const errs: string[] = [];
-
-    if (step === 1) {
-      if (!form.companyName.trim()) errs.push("companyName");
-      if (!form.employeeCount) errs.push("employeeCount");
-      if (!form.contactName.trim()) errs.push("contactName");
-      if (!form.workEmail.trim() || !isValidEmail(form.workEmail)) errs.push("workEmail");
-    }
-
-    if (step === 2) {
-      if (!form.restaurantType) errs.push("restaurantType");
-      if (!form.jobTitle.trim()) errs.push("jobTitle");
-      if (form.roleCategories.length === 0) errs.push("roleCategories");
-      if (!form.city.trim()) errs.push("city");
-      if (!form.state) errs.push("state");
-    }
-
-    if (step === 3) {
-      if (form.employmentTypes.length === 0) errs.push("employmentTypes");
-      if (form.schedules.length === 0) errs.push("schedules");
-
-      const payText = buildPayRange(form);
-      if (!payText) errs.push("pay");
-
-      if (!form.howToApply.trim()) errs.push("howToApply");
-      if (!form.description.trim()) errs.push("description");
-    }
-
-    return errs;
-  }, [step, form]);
-
-  const stepIsValid = errorsForStep.length === 0;
-
-  function nextStep() {
-    setAttemptedNext(true);
-    if (!stepIsValid) return;
-    setAttemptedNext(false);
-    setStep((prev) => (Math.min(4, prev + 1) as Step));
-  }
-
-  function prevStep() {
-    setAttemptedNext(false);
-    setStep((prev) => (Math.max(1, prev - 1) as Step));
-  }
-
-  async function submitToSupabase() {
-    setAttemptedNext(true);
-    if (!stepIsValid) return;
-
-    setSubmitting(true);
-    setSubmitError("");
-    setSubmitSuccess("");
-
-    try {
-      const pay_range = buildPayRange(form);
-      const employment_type = form.employmentTypes.join(", ");
-      const role_category = form.roleCategories.join(", ");
-
-      const payload = {
-        title: form.jobTitle.trim(),
-        restaurant_name: form.companyName.trim(),
-        city: form.city.trim(),
-        state: form.state,
-        description: form.description.trim(),
-        apply_email: form.workEmail.trim(), // for MVP, using work email
-        how_to_apply: form.howToApply.trim(),
-        company_website: form.website.trim() || null,
-        address: form.address.trim() || null,
-        pay_range: pay_range || null,
-        employment_type: employment_type || null,
-        role_category: role_category || null,
-        active: false, // ✅ pending review by default
-      };
-
-      const { error } = await supabase.from("jobs").insert(payload);
-      if (error) throw error;
-
-      setSubmitSuccess("Submitted for review. We’ll publish it once approved.");
-
-      // clear draft
-      try {
-        window.localStorage.removeItem("rn_post_job_draft_v2");
-      } catch {}
-    } catch (e: any) {
-      setSubmitError(e?.message || "Something went wrong submitting this job.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
-  const SectionTitle = ({ title }: { title: string }) => (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 14,
-        marginTop: 22,
-        marginBottom: 18,
-      }}
-    >
-      <div style={{ height: 1, width: 180, background: "rgba(0,0,0,.20)" }} />
-      <div style={{ fontSize: 28, fontWeight: 900, color: GREEN, fontFamily: "var(--font-heading)" }}>
-        {title}
-      </div>
-      <div style={{ height: 1, width: 180, background: "rgba(0,0,0,.20)" }} />
-    </div>
-  );
-
-  const Field = ({
-    label,
-    required,
-    children,
-    hint,
-  }: {
-    label: string;
-    required?: boolean;
-    children: React.ReactNode;
-    hint?: string;
-  }) => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      <div style={labelStyle}>
-        {label} {required ? <span style={{ color: "rgba(0,0,0,.55)" }}>*</span> : null}
-      </div>
-      {children}
-      {hint ? <div style={helpStyle}>{hint}</div> : null}
-    </div>
-  );
-
-  const MultiPills = ({
-    options,
-    value,
-    onChange,
-    errorKey,
-  }: {
-    options: string[];
-    value: string[];
-    onChange: (next: string[]) => void;
-    errorKey?: string;
-  }) => (
-    <div>
-      <div style={pillWrap}>
-        {options.map((opt) => {
-          const checked = value.includes(opt);
-          return (
-            <label key={opt} style={checked ? pillLabelActive : pillLabelBase}>
-              <input
-                type="checkbox"
-                checked={checked}
-                onChange={() => onChange(toggleValue(value, opt))}
-                style={hiddenInput}
-              />
-              {opt}
-            </label>
-          );
-        })}
-      </div>
-      {attemptedNext && errorKey && errorsForStep.includes(errorKey) ? (
-        <div style={errorText}>Please select at least one option.</div>
-      ) : null}
-    </div>
-  );
-
-  const SinglePills = ({
-    options,
-    value,
-    onChange,
-  }: {
-    options: { key: FormState["payMode"]; label: string }[];
-    value: FormState["payMode"];
-    onChange: (next: FormState["payMode"]) => void;
-  }) => (
-    <div style={pillWrap}>
-      {options.map((opt) => {
-        const checked = value === opt.key;
-        return (
-          <label key={opt.key} style={checked ? pillLabelActive : pillLabelBase}>
-            <input
-              type="radio"
-              name="pay_mode"
-              checked={checked}
-              onChange={() => onChange(opt.key)}
-              style={hiddenInput}
-            />
-            {opt.label}
-          </label>
-        );
-      })}
-    </div>
-  );
-
-  const StepHeader = () => (
-    <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-      <div>
-        <div
-          style={{
-            fontSize: 44,
-            fontWeight: 900,
-            fontFamily: "var(--font-heading)",
-            color: TEXT,
-            lineHeight: 1,
-          }}
-        >
-          Post a Job
-        </div>
-        <div style={{ marginTop: 10, color: MUTED, fontWeight: 800, fontFamily: "var(--font-body)" }}>
-          Step {step} of 4 • Fields marked * are required
-        </div>
-      </div>
-
-      <Link href="/jobs" style={{ ...secondaryBtn, padding: "12px 16px" }}>
-        View jobs
-      </Link>
-    </div>
-  );
-
-  // ✅ FIX: REAL BUTTONS (no preventDefault / no role=button div)
-  const StepCard = ({ n, title }: { n: Step; title: string }) => {
-    const active = n === step;
-
-    return (
-      <button
-        type="button"
-        onClick={() => {
-          // allow going back freely; forward only if current step valid
-          if (n <= step) {
-            setAttemptedNext(false);
-            setStep(n);
-            return;
-          }
-
-          setAttemptedNext(true);
-          if (stepIsValid) {
-            setAttemptedNext(false);
-            setStep(n);
-          }
-        }}
-        style={{
-          borderRadius: 14,
-          border: active ? "1px solid rgba(53,128,110,0.28)" : `1px solid ${BORDER}`,
-          backgroundColor: active ? "rgba(53,128,110,0.10)" : "#fff",
-          padding: "14px 16px",
-          display: "flex",
-          flexDirection: "column",
-          gap: 4,
-          minHeight: 72,
-          cursor: "pointer",
-          userSelect: "none",
-          textAlign: "left",
-        }}
-        aria-current={active ? "step" : undefined}
-      >
-        <div style={{ fontFamily: "var(--font-body)", fontWeight: 900, color: "rgba(0,0,0,.70)", fontSize: 12 }}>
-          STEP {n}
-        </div>
-        <div style={{ fontFamily: "var(--font-body)", fontWeight: 950, color: TEXT, fontSize: 18 }}>
-          {title}
-        </div>
-      </button>
-    );
-  };
-
-  const chipStyle: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    height: 26,
-    padding: "0 10px",
-    borderRadius: 999,
+    justifyContent: "center",
+    minWidth: 116,
+    height: 58,
+    padding: "0 18px",
+    borderRadius: 18,
     border: `1px solid ${BORDER}`,
-    backgroundColor: "rgba(255,255,255,0.70)",
-    color: "rgba(0,0,0,.72)",
-    fontSize: 12,
+    backgroundColor: "#fff",
+    color: "rgba(0,0,0,.76)",
     fontWeight: 900,
-    whiteSpace: "nowrap",
+    fontSize: 15,
+    textDecoration: "none",
     fontFamily: "var(--font-body)",
+    boxShadow: "0 6px 14px rgba(0,0,0,.04)",
   };
 
-  const PreviewCard = () => {
-    const payText = buildPayRange(form);
+  if (authStatus === "loading") {
     return (
-      <div
+      <main
         style={{
-          border: `1px solid rgba(0,0,0,.12)`,
-          borderRadius: 14,
-          backgroundColor: "rgba(255,255,255,.75)",
-          overflow: "hidden",
+          minHeight: "100vh",
+          backgroundColor: BG,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: MUTED,
+          fontWeight: 800,
+          fontFamily: "var(--font-body)",
         }}
       >
-        <div style={{ padding: 16, display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center" }}>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 950, color: TEXT, fontSize: 18, fontFamily: "var(--font-body)" }}>
-              {form.jobTitle || "Job Title"}
-            </div>
-            <div
-              style={{
-                opacity: 0.85,
-                color: "rgba(0,0,0,.70)",
-                marginTop: 4,
-                fontWeight: 750,
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              {form.companyName || "Company"} — {form.city || "City"}, {form.state || "State"}
-            </div>
-
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 10 }}>
-              {payText ? <span style={chipStyle}>{payText}</span> : null}
-              {form.employmentTypes.map((t) => (
-                <span key={t} style={chipStyle}>{t}</span>
-              ))}
-              {form.roleCategories.map((c) => (
-                <span key={c} style={chipStyle}>{c}</span>
-              ))}
-            </div>
-          </div>
-
-          <div
-            style={{
-              backgroundColor: GREEN,
-              color: "#fff",
-              padding: "10px 18px",
-              borderRadius: 10,
-              fontWeight: 900,
-              boxShadow: "0 10px 22px rgba(0,0,0,.16)",
-              whiteSpace: "nowrap",
-              fontFamily: "var(--font-body)",
-            }}
-          >
-            View →
-          </div>
-        </div>
-
-        <div style={{ padding: 16, borderTop: "1px solid rgba(0,0,0,.10)" }}>
-          <div style={{ fontWeight: 950, color: TEXT, fontFamily: "var(--font-body)", marginBottom: 8 }}>
-            Job description
-          </div>
-          <div style={{ color: "rgba(0,0,0,.72)", fontWeight: 650, fontFamily: "var(--font-body)", lineHeight: 1.6 }}>
-            {form.description || "—"}
-          </div>
-        </div>
-      </div>
+        Loading…
+      </main>
     );
-  };
+  }
 
   return (
     <main style={pageWrap}>
       <div style={container}>
-        <div style={cardStyle}>
-          <StepHeader />
+        <section style={mainCard}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 16,
+              alignItems: "flex-start",
+              marginBottom: 10,
+            }}
+            className="rn-postjob-top"
+          >
+            <div>
+              <h1
+                style={{
+                  margin: 0,
+                  fontFamily: "var(--font-heading)",
+                  fontSize: 52,
+                  lineHeight: 0.98,
+                  color: "rgba(0,0,0,.88)",
+                }}
+              >
+                Post a Job
+              </h1>
+
+              <div
+                style={{
+                  marginTop: 10,
+                  fontSize: 16,
+                  color: MUTED,
+                  fontWeight: 800,
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                Step {step} of 4 • Fields marked * are required
+              </div>
+            </div>
+
+            <Link href="/jobs" style={topActionLink}>
+              View jobs
+            </Link>
+          </div>
 
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: 10,
-              marginTop: 18,
+              gap: 12,
+              marginTop: 16,
             }}
+            className="rn-steps-grid"
           >
-            <StepCard n={1} title="Company info" />
-            <StepCard n={2} title="Job info" />
-            <StepCard n={3} title="Details" />
-            <StepCard n={4} title="Review" />
+            {[
+              { n: 1, title: "Company info" },
+              { n: 2, title: "Job info" },
+              { n: 3, title: "Details" },
+              { n: 4, title: "Review" },
+            ].map((item) => (
+              <div key={item.n} style={stepCard(step === item.n)}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 900,
+                    color: MUTED,
+                    fontFamily: "var(--font-body)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Step {item.n}
+                </div>
+                <div
+                  style={{
+                    marginTop: 8,
+                    fontSize: 18,
+                    fontWeight: 900,
+                    color: TEXT,
+                    fontFamily: "var(--font-body)",
+                    lineHeight: 1.05,
+                  }}
+                >
+                  {item.title}
+                </div>
+              </div>
+            ))}
           </div>
 
-          {/* STEP 1 */}
-          {step === 1 ? (
-            <>
-              <SectionTitle title="Company Info" />
+          <div style={sectionTitleWrap}>
+            <div style={sectionTitleLine} />
+            <div
+              style={{
+                fontSize: 34,
+                lineHeight: 1,
+                fontWeight: 700,
+                color: GREEN,
+                fontFamily: "var(--font-heading)",
+              }}
+              className="rn-section-title"
+            >
+              {step === 1 && "Company Info"}
+              {step === 2 && "Job Info"}
+              {step === 3 && "Job Details"}
+              {step === 4 && "Review"}
+            </div>
+            <div style={sectionTitleLine} />
+          </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <Field label="Your company’s name" required>
-                  <input
-                    value={form.companyName}
-                    onChange={(e) => setForm((p) => ({ ...p, companyName: e.target.value }))}
-                    style={{
-                      ...inputStyle,
-                      ...(attemptedNext && errorsForStep.includes("companyName") ? inputErrorRing : {}),
-                    }}
-                    placeholder="e.g., Riverstone Grill"
-                  />
-                  {attemptedNext && errorsForStep.includes("companyName") ? (
-                    <div style={errorText}>Company name is required.</div>
-                  ) : null}
-                </Field>
+          {step === 1 && (
+            <div className="rn-two-col">
+              <div>
+                <label style={labelStyle}>Your company’s name *</label>
+                <input
+                  value={companyName}
+                  onChange={(e) => setCompanyName(e.target.value)}
+                  style={inputStyle}
+                  placeholder="MISSION BBQ"
+                />
+              </div>
 
-                <Field label="Your company’s number of employees" required>
-                  <select
-                    value={form.employeeCount}
-                    onChange={(e) => setForm((p) => ({ ...p, employeeCount: e.target.value }))}
-                    style={{
-                      ...inputStyle,
-                      ...(attemptedNext && errorsForStep.includes("employeeCount") ? inputErrorRing : {}),
-                    }}
-                  >
-                    <option value="">Select</option>
-                    {EMPLOYEE_OPTIONS.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
-                    ))}
-                  </select>
-                  {attemptedNext && errorsForStep.includes("employeeCount") ? (
-                    <div style={errorText}>Number of employees is required.</div>
-                  ) : null}
-                </Field>
-
-                <Field label="Your first and last name" required>
-                  <input
-                    value={form.contactName}
-                    onChange={(e) => setForm((p) => ({ ...p, contactName: e.target.value }))}
-                    style={{
-                      ...inputStyle,
-                      ...(attemptedNext && errorsForStep.includes("contactName") ? inputErrorRing : {}),
-                    }}
-                    placeholder="e.g., Taylor Smith"
-                  />
-                  {attemptedNext && errorsForStep.includes("contactName") ? (
-                    <div style={errorText}>Your first and last name is required.</div>
-                  ) : null}
-                </Field>
-
-                <Field
-                  label="Work Email"
-                  required
-                  hint="We use your email to follow up about the job post and verification. We do not show it publicly."
+              <div>
+                <label style={labelStyle}>Your company’s number of employees *</label>
+                <select
+                  value={employeeCount}
+                  onChange={(e) => setEmployeeCount(e.target.value)}
+                  style={inputStyle}
                 >
-                  <input
-                    value={form.workEmail}
-                    onChange={(e) => setForm((p) => ({ ...p, workEmail: e.target.value }))}
-                    style={{
-                      ...inputStyle,
-                      ...(attemptedNext && errorsForStep.includes("workEmail") ? inputErrorRing : {}),
-                    }}
-                    placeholder="name@company.com"
-                    inputMode="email"
-                  />
-                  {attemptedNext && errorsForStep.includes("workEmail") ? (
-                    <div style={errorText}>
-                      {!form.workEmail.trim() ? "Work email is required." : "Please enter a valid email."}
-                    </div>
-                  ) : null}
-                </Field>
+                  <option value="">Select…</option>
+                  {EMPLOYEE_OPTIONS.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </div>
-            </>
-          ) : null}
 
-          {/* STEP 2 */}
-          {step === 2 ? (
+              <div>
+                <label style={labelStyle}>Your first and last name *</label>
+                <input
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Jane Doe"
+                />
+              </div>
+
+              <div>
+                <label style={labelStyle}>Work Email *</label>
+                <input
+                  type="email"
+                  value={workEmail}
+                  onChange={(e) => setWorkEmail(e.target.value)}
+                  style={inputStyle}
+                  placeholder="you@restaurant.com"
+                />
+                <div style={helperStyle}>
+                  We use your email to follow up about the job post and verification.
+                </div>
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
             <>
-              <SectionTitle title="Job Info" />
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <Field label="Type of Restaurant" required>
+              <div className="rn-two-col">
+                <div>
+                  <label style={labelStyle}>Type of Restaurant *</label>
                   <select
-                    value={form.restaurantType}
-                    onChange={(e) => setForm((p) => ({ ...p, restaurantType: e.target.value }))}
-                    style={{
-                      ...inputStyle,
-                      ...(attemptedNext && errorsForStep.includes("restaurantType") ? inputErrorRing : {}),
-                    }}
+                    value={restaurantType}
+                    onChange={(e) => setRestaurantType(e.target.value)}
+                    style={inputStyle}
                   >
-                    <option value="">Select</option>
-                    {RESTAURANT_TYPES.map((opt) => (
-                      <option key={opt} value={opt}>{opt}</option>
+                    <option value="">Select…</option>
+                    {RESTAURANT_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {type}
+                      </option>
                     ))}
                   </select>
-                  {attemptedNext && errorsForStep.includes("restaurantType") ? (
-                    <div style={errorText}>Restaurant type is required.</div>
-                  ) : null}
-                </Field>
-
-                <Field label="Job title" required>
-                  <input
-                    value={form.jobTitle}
-                    onChange={(e) => setForm((p) => ({ ...p, jobTitle: e.target.value }))}
-                    style={{
-                      ...inputStyle,
-                      ...(attemptedNext && errorsForStep.includes("jobTitle") ? inputErrorRing : {}),
-                    }}
-                    placeholder="e.g., Line Cook"
-                  />
-                  {attemptedNext && errorsForStep.includes("jobTitle") ? (
-                    <div style={errorText}>Job title is required.</div>
-                  ) : null}
-                </Field>
-
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="Role Category" required hint="Select one or more categories that fit this role.">
-                    <MultiPills
-                      options={ROLE_CATEGORIES}
-                      value={form.roleCategories}
-                      onChange={(next) => setForm((p) => ({ ...p, roleCategories: next }))}
-                      errorKey="roleCategories"
-                    />
-                  </Field>
                 </div>
 
-                <Field label="City" required hint="We’ll add Google Places autocomplete later.">
+                <div>
+                  <label style={labelStyle}>Job title *</label>
                   <input
-                    value={form.city}
-                    onChange={(e) => setForm((p) => ({ ...p, city: e.target.value }))}
-                    style={{
-                      ...inputStyle,
-                      ...(attemptedNext && errorsForStep.includes("city") ? inputErrorRing : {}),
-                    }}
-                    placeholder="e.g., Baltimore"
+                    value={jobTitle}
+                    onChange={(e) => setJobTitle(e.target.value)}
+                    style={inputStyle}
+                    placeholder="Host"
                   />
-                  {attemptedNext && errorsForStep.includes("city") ? (
-                    <div style={errorText}>City is required.</div>
-                  ) : null}
-                </Field>
+                </div>
+              </div>
 
-                <Field label="State" required>
+              <div style={{ marginTop: 18 }}>
+                <label style={labelStyle}>Role Category *</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {ROLE_OPTIONS.map((role) => (
+                    <button
+                      key={role}
+                      type="button"
+                      onClick={() => toggleValue(role, roleCategories, setRoleCategories)}
+                      style={pillStyle(roleCategories.includes(role))}
+                    >
+                      {role}
+                    </button>
+                  ))}
+                </div>
+                <div style={helperStyle}>Select one or more categories that fit this role.</div>
+              </div>
+
+              <div className="rn-two-col" style={{ marginTop: 18 }}>
+                <div>
+                  <label style={labelStyle}>City *</label>
+                  <input
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    style={inputStyle}
+                    placeholder="Baltimore"
+                  />
+                  <div style={helperStyle}>We’ll add Google Places autocomplete later.</div>
+                </div>
+
+                <div>
+                  <label style={labelStyle}>State *</label>
                   <select
-                    value={form.state}
-                    onChange={(e) => setForm((p) => ({ ...p, state: e.target.value }))}
-                    style={{
-                      ...inputStyle,
-                      ...(attemptedNext && errorsForStep.includes("state") ? inputErrorRing : {}),
-                    }}
+                    value={stateVal}
+                    onChange={(e) => setStateVal(e.target.value)}
+                    style={inputStyle}
                   >
-                    <option value="">Select</option>
-                    {US_STATES.map((st) => (
-                      <option key={st} value={st}>{st}</option>
+                    <option value="">Select…</option>
+                    {STATES.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
                     ))}
                   </select>
-                  {attemptedNext && errorsForStep.includes("state") ? (
-                    <div style={errorText}>State is required.</div>
-                  ) : null}
-                </Field>
+                </div>
               </div>
             </>
-          ) : null}
+          )}
 
-          {/* STEP 3 */}
-          {step === 3 ? (
+          {step === 3 && (
             <>
-              <SectionTitle title="Job Details" />
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="What type of job is this?" required>
-                    <MultiPills
-                      options={EMPLOYMENT_TYPES}
-                      value={form.employmentTypes}
-                      onChange={(next) => setForm((p) => ({ ...p, employmentTypes: next }))}
-                      errorKey="employmentTypes"
-                    />
-                  </Field>
+              <div>
+                <label style={labelStyle}>What type of job is this? *</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {EMPLOYMENT_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => setEmploymentType(option)}
+                      style={pillStyle(employmentType === option)}
+                    >
+                      {option}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="What is the schedule for this job?" required>
-                    <MultiPills
-                      options={SCHEDULE_OPTIONS}
-                      value={form.schedules}
-                      onChange={(next) => setForm((p) => ({ ...p, schedules: next }))}
-                      errorKey="schedules"
-                    />
-                  </Field>
+              <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>What is the schedule for this job?</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {SCHEDULE_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => toggleValue(option, scheduleTags, setScheduleTags)}
+                      style={pillStyle(scheduleTags.includes(option))}
+                    >
+                      {option}
+                    </button>
+                  ))}
                 </div>
+              </div>
 
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="Pay" required hint="For MVP we’ll require pay. Later we can enforce only for certain states.">
-                    <SinglePills
-                      value={form.payMode}
-                      onChange={(m) => setForm((p) => ({ ...p, payMode: m }))}
-                      options={[
-                        { key: "range", label: "Range" },
-                        { key: "min", label: "Minimum" },
-                        { key: "max", label: "Maximum" },
-                        { key: "rate", label: "Rate" },
-                      ]}
-                    />
+              <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>Pay *</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {[
+                    { value: "range", label: "Range" },
+                    { value: "minimum", label: "Minimum" },
+                    { value: "maximum", label: "Maximum" },
+                    { value: "rate", label: "Rate" },
+                  ].map((item) => (
+                    <button
+                      key={item.value}
+                      type="button"
+                      onClick={() => setPayMode(item.value as PayMode)}
+                      style={pillStyle(payMode === item.value)}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-                    <div style={{ height: 10 }} />
-
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                      {form.payMode === "range" ? (
-                        <>
-                          <input
-                            value={form.payMin}
-                            onChange={(e) => setForm((p) => ({ ...p, payMin: e.target.value }))}
-                            style={{
-                              ...inputStyle,
-                              ...(attemptedNext && errorsForStep.includes("pay") ? inputErrorRing : {}),
-                            }}
-                            placeholder="Minimum (e.g., $15/hr)"
-                          />
-                          <input
-                            value={form.payMax}
-                            onChange={(e) => setForm((p) => ({ ...p, payMax: e.target.value }))}
-                            style={{
-                              ...inputStyle,
-                              ...(attemptedNext && errorsForStep.includes("pay") ? inputErrorRing : {}),
-                            }}
-                            placeholder="Maximum (e.g., $18/hr)"
-                          />
-                        </>
-                      ) : form.payMode === "min" ? (
-                        <input
-                          value={form.payMin}
-                          onChange={(e) => setForm((p) => ({ ...p, payMin: e.target.value }))}
-                          style={{
-                            ...inputStyle,
-                            ...(attemptedNext && errorsForStep.includes("pay") ? inputErrorRing : {}),
-                            gridColumn: "1 / -1",
-                          }}
-                          placeholder="Minimum (e.g., $15/hr)"
-                        />
-                      ) : form.payMode === "max" ? (
-                        <input
-                          value={form.payMax}
-                          onChange={(e) => setForm((p) => ({ ...p, payMax: e.target.value }))}
-                          style={{
-                            ...inputStyle,
-                            ...(attemptedNext && errorsForStep.includes("pay") ? inputErrorRing : {}),
-                            gridColumn: "1 / -1",
-                          }}
-                          placeholder="Maximum (e.g., $18/hr)"
-                        />
-                      ) : (
-                        <input
-                          value={form.payRate}
-                          onChange={(e) => setForm((p) => ({ ...p, payRate: e.target.value }))}
-                          style={{
-                            ...inputStyle,
-                            ...(attemptedNext && errorsForStep.includes("pay") ? inputErrorRing : {}),
-                            gridColumn: "1 / -1",
-                          }}
-                          placeholder="Rate (e.g., $16/hr or $55,000/yr)"
-                        />
-                      )}
+              <div className="rn-two-col" style={{ marginTop: 16 }}>
+                {payMode === "range" ? (
+                  <>
+                    <div>
+                      <input
+                        value={payMin}
+                        onChange={(e) => setPayMin(e.target.value)}
+                        style={inputStyle}
+                        placeholder="Minimum"
+                      />
                     </div>
+                    <div>
+                      <input
+                        value={payMax}
+                        onChange={(e) => setPayMax(e.target.value)}
+                        style={inputStyle}
+                        placeholder="Maximum"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <input
+                        value={payRate}
+                        onChange={(e) => setPayRate(e.target.value)}
+                        style={inputStyle}
+                        placeholder={payMode === "rate" ? "$18/hr" : "$18"}
+                      />
+                    </div>
+                    <div />
+                  </>
+                )}
+              </div>
 
-                    {attemptedNext && errorsForStep.includes("pay") ? (
-                      <div style={errorText}>Pay is required. Please enter a value.</div>
-                    ) : null}
-                  </Field>
-                </div>
+              <div style={helperStyle}>
+                For MVP we’ll require pay. Later we can enforce only for certain states.
+              </div>
 
-                <Field label="Company website">
+              <div className="rn-two-col" style={{ marginTop: 16 }}>
+                <div>
+                  <label style={labelStyle}>Company website</label>
                   <input
-                    value={form.website}
-                    onChange={(e) => setForm((p) => ({ ...p, website: e.target.value }))}
+                    value={companyWebsite}
+                    onChange={(e) => setCompanyWebsite(e.target.value)}
                     style={inputStyle}
                     placeholder="https://company.com"
                   />
-                </Field>
+                </div>
 
-                <Field label="Address">
+                <div>
+                  <label style={labelStyle}>Address</label>
                   <input
-                    value={form.address}
-                    onChange={(e) => setForm((p) => ({ ...p, address: e.target.value }))}
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
                     style={inputStyle}
-                    placeholder="Street address (optional)"
+                    placeholder="3410 Plum Tree Dr"
                   />
-                </Field>
-
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="How to apply" required hint="Example: Apply online, email, or visit in person.">
-                    <input
-                      value={form.howToApply}
-                      onChange={(e) => setForm((p) => ({ ...p, howToApply: e.target.value }))}
-                      style={{
-                        ...inputStyle,
-                        ...(attemptedNext && errorsForStep.includes("howToApply") ? inputErrorRing : {}),
-                      }}
-                      placeholder="How should job seekers apply?"
-                    />
-                    {attemptedNext && errorsForStep.includes("howToApply") ? (
-                      <div style={errorText}>How to apply is required.</div>
-                    ) : null}
-                  </Field>
                 </div>
+              </div>
 
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="Job description" required>
-                    <textarea
-                      value={form.description}
-                      onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                      style={{
-                        ...textareaStyle,
-                        ...(attemptedNext && errorsForStep.includes("description") ? inputErrorRing : {}),
-                      }}
-                      placeholder="Describe responsibilities, requirements, and what makes this role great."
-                    />
-                    {attemptedNext && errorsForStep.includes("description") ? (
-                      <div style={errorText}>Job description is required.</div>
-                    ) : null}
-                  </Field>
-                </div>
+              <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>How to apply *</label>
+                <input
+                  value={howToApply}
+                  onChange={(e) => setHowToApply(e.target.value)}
+                  style={inputStyle}
+                  placeholder="Apply online, email, or visit in person."
+                />
+                <div style={helperStyle}>Example: Apply online, email, or visit in person.</div>
+              </div>
 
-                <div style={{ gridColumn: "1 / -1" }}>
-                  <Field label="Benefits">
-                    <div style={{ ...pillWrap, gap: 10 }}>
-                      {BENEFITS_OPTIONS.map((b) => {
-                        const checked = form.benefits.includes(b);
-                        return (
-                          <label key={b} style={checked ? pillLabelActive : pillLabelBase}>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => setForm((p) => ({ ...p, benefits: toggleValue(p.benefits, b) }))}
-                              style={hiddenInput}
-                            />
-                            {b}
-                          </label>
-                        );
-                      })}
-                    </div>
-                  </Field>
+              <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>Job description *</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  style={textareaStyle}
+                  placeholder="Responsibilities, schedule, experience required, etc."
+                />
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <label style={labelStyle}>Benefits</label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {BENEFIT_OPTIONS.map((option) => (
+                    <button
+                      key={option}
+                      type="button"
+                      onClick={() => toggleValue(option, benefits, setBenefits)}
+                      style={pillStyle(benefits.includes(option))}
+                    >
+                      {option}
+                    </button>
+                  ))}
                 </div>
               </div>
             </>
-          ) : null}
+          )}
 
-          {/* STEP 4 */}
-          {step === 4 ? (
-            <>
-              <SectionTitle title="Review" />
-
-              <div style={{ display: "grid", gridTemplateColumns: "1.1fr 0.9fr", gap: 16 }}>
+          {step === 4 && (
+            <div className="rn-review-grid">
+              <div
+                style={{
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 18,
+                  backgroundColor: "#ffffff",
+                  padding: 20,
+                  boxShadow: "0 8px 18px rgba(0,0,0,.04)",
+                }}
+              >
                 <div
                   style={{
-                    borderRadius: 18,
-                    border: `1px solid ${BORDER}`,
-                    backgroundColor: "rgba(255,255,255,.75)",
-                    padding: 16,
+                    fontSize: 22,
+                    fontWeight: 900,
+                    color: TEXT,
+                    fontFamily: "var(--font-body)",
+                    marginBottom: 16,
                   }}
                 >
-                  <div style={{ fontFamily: "var(--font-heading)", fontSize: 20, fontWeight: 900, color: TEXT }}>
-                    Review your job post
-                  </div>
-
-                  <div style={{ marginTop: 14, fontFamily: "var(--font-body)", fontWeight: 750, color: TEXT, lineHeight: 1.65 }}>
-                    <div><b>Company:</b> {form.companyName || "—"}</div>
-                    <div><b>Employees:</b> {form.employeeCount || "—"}</div>
-                    <div><b>Contact:</b> {form.contactName || "—"}</div>
-                    <div><b>Email:</b> {form.workEmail || "—"}</div>
-                    <div style={{ height: 10 }} />
-                    <div><b>Restaurant type:</b> {form.restaurantType || "—"}</div>
-                    <div><b>Job title:</b> {form.jobTitle || "—"}</div>
-                    <div><b>Role categories:</b> {form.roleCategories.length ? form.roleCategories.join(", ") : "—"}</div>
-                    <div><b>Location:</b> {form.city && form.state ? `${form.city}, ${form.state}` : "—"}</div>
-                    <div style={{ height: 10 }} />
-                    <div><b>Employment type:</b> {form.employmentTypes.length ? form.employmentTypes.join(", ") : "—"}</div>
-                    <div><b>Schedule:</b> {form.schedules.length ? form.schedules.join(", ") : "—"}</div>
-                    <div><b>Pay:</b> {buildPayRange(form) || "—"}</div>
-                    <div><b>Website:</b> {form.website || "—"}</div>
-                    <div><b>Address:</b> {form.address || "—"}</div>
-                    <div><b>How to apply:</b> {form.howToApply || "—"}</div>
-                    <div><b>Benefits:</b> {form.benefits.length ? form.benefits.join(", ") : "—"}</div>
-                    <div style={{ height: 10 }} />
-                    <div><b>Description:</b></div>
-                    <div style={{ whiteSpace: "pre-wrap" }}>{form.description || "—"}</div>
-                  </div>
+                  Review your job post
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  <div
-                    style={{
-                      borderRadius: 18,
-                      border: `1px solid ${BORDER}`,
-                      backgroundColor: "rgba(255,255,255,.75)",
-                      padding: 16,
-                    }}
-                  >
-                    <div style={{ fontFamily: "var(--font-heading)", fontSize: 18, fontWeight: 900, color: TEXT }}>
-                      Preview
-                    </div>
-                    <div style={{ marginTop: 12 }}>
-                      <PreviewCard />
-                    </div>
-                  </div>
+                <div
+                  style={{
+                    display: "grid",
+                    gap: 8,
+                    fontSize: 15,
+                    lineHeight: 1.45,
+                    color: "rgba(0,0,0,.80)",
+                    fontWeight: 700,
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  <div><strong>Company:</strong> {companyName || "—"}</div>
+                  <div><strong>Employees:</strong> {employeeCount || "—"}</div>
+                  <div><strong>Contact:</strong> {contactName || "—"}</div>
+                  <div><strong>Email:</strong> {workEmail || "—"}</div>
 
-                  <div
-                    style={{
-                      borderRadius: 18,
-                      border: `1px solid ${BORDER}`,
-                      backgroundColor: "rgba(255,255,255,.75)",
-                      padding: 16,
-                    }}
-                  >
-                    <div style={{ fontFamily: "var(--font-body)", fontWeight: 950, color: TEXT }}>
-                      When you confirm
-                    </div>
-                    <div style={{ marginTop: 8, fontFamily: "var(--font-body)", fontWeight: 700, color: MUTED, lineHeight: 1.6 }}>
-                      We’ll submit this job post for review. Once approved, it becomes publicly visible on the site.
-                    </div>
-                  </div>
+                  <div style={{ height: 6 }} />
 
-                  {submitError ? (
-                    <div
-                      style={{
-                        borderRadius: 14,
-                        border: "1px solid rgba(180,30,30,.25)",
-                        backgroundColor: "rgba(180,30,30,.06)",
-                        padding: 12,
-                        color: "rgba(180,30,30,.95)",
-                        fontFamily: "var(--font-body)",
-                        fontWeight: 900,
-                      }}
-                    >
-                      {submitError}
-                    </div>
-                  ) : null}
+                  <div><strong>Restaurant type:</strong> {restaurantType || "—"}</div>
+                  <div><strong>Job title:</strong> {jobTitle || "—"}</div>
+                  <div><strong>Role categories:</strong> {roleCategories.join(", ") || "—"}</div>
+                  <div><strong>Location:</strong> {city || "—"}, {stateVal || "—"}</div>
 
-                  {submitSuccess ? (
-                    <div
-                      style={{
-                        borderRadius: 14,
-                        border: "1px solid rgba(53,128,110,.25)",
-                        backgroundColor: "rgba(53,128,110,.08)",
-                        padding: 12,
-                        color: "rgba(0,0,0,.78)",
-                        fontFamily: "var(--font-body)",
-                        fontWeight: 900,
-                      }}
-                    >
-                      {submitSuccess}
-                    </div>
-                  ) : null}
+                  <div style={{ height: 6 }} />
+
+                  <div><strong>Employment type:</strong> {employmentType || "—"}</div>
+                  <div><strong>Schedule:</strong> {scheduleTags.join(", ") || "—"}</div>
+                  <div><strong>Pay:</strong> {computedPay || "—"}</div>
+                  <div><strong>Website:</strong> {companyWebsite || "—"}</div>
+                  <div><strong>Address:</strong> {address || "—"}</div>
+                  <div><strong>How to apply:</strong> {howToApply || "—"}</div>
+                  <div><strong>Benefits:</strong> {benefits.join(", ") || "—"}</div>
+
+                  <div style={{ height: 6 }} />
+
+                  <div style={{ fontWeight: 900, color: TEXT }}>Description:</div>
+                  <div style={{ whiteSpace: "pre-wrap" }}>{description || "—"}</div>
                 </div>
               </div>
-            </>
-          ) : null}
 
-          {/* ACTIONS */}
+              <div style={{ display: "grid", gap: 14 }}>
+                <div
+                  style={{
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 18,
+                    backgroundColor: "#ffffff",
+                    padding: 18,
+                    boxShadow: "0 8px 18px rgba(0,0,0,.04)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 22,
+                      fontWeight: 900,
+                      color: TEXT,
+                      fontFamily: "var(--font-body)",
+                      marginBottom: 14,
+                    }}
+                  >
+                    Preview
+                  </div>
+
+                  <div
+                    style={{
+                      border: `1px solid ${BORDER}`,
+                      borderRadius: 16,
+                      backgroundColor: "#fcfcfb",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        padding: 16,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
+                        alignItems: "flex-start",
+                      }}
+                      className="rn-preview-top"
+                    >
+                      <div style={{ minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 18,
+                            fontWeight: 900,
+                            color: TEXT,
+                            lineHeight: 1.2,
+                            fontFamily: "var(--font-body)",
+                          }}
+                        >
+                          {jobTitle || "Job title"}
+                        </div>
+
+                        <div
+                          style={{
+                            marginTop: 6,
+                            fontSize: 14,
+                            color: MUTED,
+                            fontWeight: 800,
+                            lineHeight: 1.35,
+                            fontFamily: "var(--font-body)",
+                          }}
+                        >
+                          {companyName || "Company"} — {city || "City"}, {stateVal || "ST"}
+                        </div>
+
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
+                          {[
+                            computedPay || "Pay",
+                            employmentType || "Type",
+                            roleCategories[0] || "Role",
+                          ].map((pill) => (
+                            <div
+                              key={pill}
+                              style={{
+                                padding: "6px 10px",
+                                borderRadius: 999,
+                                border: `1px solid ${BORDER}`,
+                                backgroundColor: "rgba(255,255,255,.85)",
+                                fontWeight: 800,
+                                fontSize: 12,
+                                color: "rgba(0,0,0,.78)",
+                              }}
+                            >
+                              {pill}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div
+                        style={{
+                          minWidth: 102,
+                          height: 48,
+                          borderRadius: 14,
+                          backgroundColor: GREEN,
+                          color: "#fff",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontWeight: 900,
+                          fontSize: 15,
+                          fontFamily: "var(--font-body)",
+                          padding: "0 12px",
+                        }}
+                      >
+                        View →
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        borderTop: `1px solid ${BORDER}`,
+                        padding: 16,
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: 15,
+                          fontWeight: 900,
+                          color: TEXT,
+                          marginBottom: 8,
+                          fontFamily: "var(--font-body)",
+                        }}
+                      >
+                        Job description
+                      </div>
+                      <div
+                        style={{
+                          color: "rgba(0,0,0,.72)",
+                          lineHeight: 1.5,
+                          fontWeight: 700,
+                          fontSize: 13,
+                          fontFamily: "var(--font-body)",
+                        }}
+                      >
+                        {description || "Description preview"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div
+                  style={{
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 18,
+                    backgroundColor: "#ffffff",
+                    padding: 18,
+                    boxShadow: "0 8px 18px rgba(0,0,0,.04)",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 15,
+                      fontWeight: 900,
+                      color: TEXT,
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    When you confirm
+                  </div>
+                  <div
+                    style={{
+                      marginTop: 8,
+                      fontSize: 14,
+                      lineHeight: 1.5,
+                      color: MUTED,
+                      fontWeight: 800,
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    We’ll submit this job post for review. Once approved, it becomes publicly
+                    visible on the site.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div
             style={{
-              marginTop: 22,
               display: "flex",
-              alignItems: "center",
+              alignItems: "flex-end",
               justifyContent: "space-between",
-              gap: 12,
-              flexWrap: "wrap",
+              gap: 18,
+              marginTop: 22,
+            }}
+            className="rn-footer-actions"
+          >
+            <div>
+              <button type="button" onClick={previousStep} style={secondaryBtn} disabled={step === 1}>
+                Back
+              </button>
+
+              <div
+                style={{
+                  marginTop: 12,
+                  color: MUTED,
+                  fontSize: 12,
+                  fontWeight: 800,
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                Draft saves automatically on this device. Posting is reviewed before going public.
+              </div>
+
+              {message && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    color: ERROR,
+                    fontWeight: 800,
+                    fontSize: 13,
+                    fontFamily: "var(--font-body)",
+                  }}
+                >
+                  {message}
+                </div>
+              )}
+            </div>
+
+            <div>
+              {step < 4 ? (
+                <button type="button" onClick={nextStep} style={primaryBtn}>
+                  Save & Continue
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleFinalSubmit}
+                  disabled={isSubmitting}
+                  style={{
+                    ...primaryBtn,
+                    opacity: isSubmitting ? 0.7 : 1,
+                    boxShadow: "0 0 0 3px rgba(53,128,110,.10), 0 8px 18px rgba(0,0,0,.07)",
+                  }}
+                >
+                  {isSubmitting ? "Submitting..." : "Confirm"}
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+
+      {showSuccessModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,.35)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: 20,
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 500,
+              backgroundColor: "#ffffff",
+              borderRadius: 24,
+              border: `1px solid ${BORDER}`,
+              boxShadow: "0 24px 60px rgba(0,0,0,.20)",
+              padding: 28,
+              textAlign: "center",
             }}
           >
-            <button
-              type="button"
-              onClick={prevStep}
-              style={secondaryBtn}
-              disabled={step === 1 || submitting}
+            <div
+              style={{
+                width: 60,
+                height: 60,
+                borderRadius: 999,
+                backgroundColor: "rgba(53,128,110,.12)",
+                color: GREEN,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 28,
+                fontWeight: 900,
+                margin: "0 auto 16px",
+                fontFamily: "var(--font-body)",
+              }}
             >
-              Back
-            </button>
+              ✓
+            </div>
 
-            {step === 4 ? (
+            <h2
+              style={{
+                margin: 0,
+                fontSize: 30,
+                lineHeight: 1.05,
+                color: "rgba(0,0,0,.88)",
+                fontFamily: "var(--font-heading)",
+              }}
+            >
+              Job submitted
+            </h2>
+
+            <p
+              style={{
+                marginTop: 14,
+                marginBottom: 0,
+                color: "rgba(0,0,0,.68)",
+                fontSize: 15,
+                lineHeight: 1.6,
+                fontWeight: 700,
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              Your job post has been submitted for review. Once approved, it will become publicly
+              visible on the site.
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                gap: 10,
+                flexWrap: "wrap",
+                marginTop: 22,
+              }}
+            >
               <button
                 type="button"
-                onClick={submitToSupabase}
-                style={{
-                  ...primaryBtn,
-                  opacity: submitting ? 0.75 : 1,
-                  cursor: submitting ? "not-allowed" : "pointer",
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  router.push("/jobs");
                 }}
-                disabled={submitting}
+                style={{
+                  minWidth: 150,
+                  height: 50,
+                  borderRadius: 16,
+                  border: "1px solid rgba(0,0,0,.08)",
+                  backgroundColor: GREEN,
+                  color: "#fff",
+                  fontWeight: 900,
+                  fontSize: 15,
+                  fontFamily: "var(--font-body)",
+                  cursor: "pointer",
+                }}
               >
-                {submitting ? "Submitting…" : "Confirm"}
+                View jobs
               </button>
-            ) : (
+
               <button
                 type="button"
-                onClick={nextStep}
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  resetForm();
+                }}
                 style={{
-                  ...primaryBtn,
-                  opacity: stepIsValid ? 1 : 0.6,
-                  cursor: stepIsValid ? "pointer" : "not-allowed",
+                  minWidth: 150,
+                  height: 50,
+                  borderRadius: 16,
+                  border: `1px solid ${BORDER}`,
+                  backgroundColor: "#fff",
+                  color: "rgba(0,0,0,.76)",
+                  fontWeight: 900,
+                  fontSize: 15,
+                  fontFamily: "var(--font-body)",
+                  cursor: "pointer",
                 }}
               >
-                Save & Continue
+                Post another
               </button>
-            )}
-          </div>
-
-          <div style={{ marginTop: 12, ...helpStyle }}>
-            Draft saves automatically on this device. Posting is reviewed before going public.
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      <style
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html: `
+            .rn-two-col {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 18px;
+            }
+
+            .rn-review-grid {
+              display: grid;
+              grid-template-columns: 1.1fr .9fr;
+              gap: 18px;
+            }
+
+            @media (max-width: 980px) {
+              .rn-steps-grid {
+                grid-template-columns: 1fr 1fr !important;
+              }
+
+              .rn-review-grid,
+              .rn-two-col {
+                grid-template-columns: 1fr !important;
+              }
+            }
+
+            @media (max-width: 720px) {
+              .rn-postjob-top,
+              .rn-footer-actions,
+              .rn-preview-top {
+                flex-direction: column !important;
+                align-items: stretch !important;
+              }
+
+              .rn-section-title {
+                font-size: 28px !important;
+              }
+
+              .rn-steps-grid {
+                grid-template-columns: 1fr !important;
+              }
+            }
+          `,
+        }}
+      />
     </main>
   );
 }

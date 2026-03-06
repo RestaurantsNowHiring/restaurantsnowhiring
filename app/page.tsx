@@ -1,3 +1,4 @@
+// app/page.tsx
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import LatestJobsPanel from "./components/LatestJobsPanel";
@@ -34,7 +35,7 @@ export default async function HomePage() {
 
   const latestJobs: Job[] = (jobs ?? []) as Job[];
 
-  // ✅ Theme tokens (match your newer green/white pages)
+  // Theme tokens
   const GREEN = "#35806e";
   const BG = "#ffffff";
   const CARD = "#f6f5f3";
@@ -150,9 +151,9 @@ export default async function HomePage() {
                     margin: "0 3px",
                   }}
                 >
-                  NOW
+                  NOWHiring
                 </span>
-                <span>Hiring.com</span>
+                <span>.com</span>
               </div>
             </div>
 
@@ -195,7 +196,7 @@ export default async function HomePage() {
               </Link>
             </div>
 
-            {/* Quick value props (with Lucide icons) */}
+            {/* Quick value props */}
             <div
               style={{
                 display: "grid",
@@ -259,14 +260,14 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Right: Growth & Opportunity Card */}
+          {/* Right: Career Ladder Diagram */}
           <div
             style={{
               ...cardStyle,
               display: "flex",
               flexDirection: "column",
               justifyContent: "center",
-              gap: 18,
+              gap: 12,
             }}
           >
             <div
@@ -277,35 +278,23 @@ export default async function HomePage() {
                 fontFamily: "var(--font-heading)",
               }}
             >
-              Real Career Growth
+              Your Way to 100k!
             </div>
 
             <div
               style={{
-                fontSize: 16,
-                lineHeight: 1.6,
+                fontSize: 14,
+                lineHeight: 1.55,
                 color: "rgba(0,0,0,.75)",
                 fontFamily: "var(--font-body)",
-                fontWeight: 600,
+                fontWeight: 650,
               }}
             >
               Many restaurant leaders start at hourly roles and move into management within a few
               years.
             </div>
 
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 14,
-                marginTop: 8,
-              }}
-            >
-              <StatCard number="Minimum Wage" label="Starting roles" green={GREEN} />
-              <StatCard number="$60k+" label="Kitchen managers" green={GREEN} />
-              <StatCard number="$100k+" label="Multi-unit leaders" green={GREEN} />
-              <StatCard number="5 yrs" label="Typical growth path" green={GREEN} />
-            </div>
+            <CareerLadder green={GREEN} border={BORDER} />
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
               <Link href="/jobs" style={secondaryBtn}>
@@ -318,7 +307,7 @@ export default async function HomePage() {
 
             <div
               style={{
-                marginTop: 6,
+                marginTop: 4,
                 color: "rgba(0,0,0,.55)",
                 fontSize: 12,
                 fontWeight: 700,
@@ -484,45 +473,180 @@ export default async function HomePage() {
   );
 }
 
-function StatCard({
-  number,
-  label,
+/**
+ * Panda-style “ladder” diagram:
+ * numbers on the left, roles on the right, vertical spine + dots.
+ * Compact so it doesn’t take up the whole hero.
+ */
+function CareerLadder({
   green,
+  border,
 }: {
-  number: string;
-  label: string;
   green: string;
+  border: string;
 }) {
+  const rows = [
+    { pay: "$100k+", role: "Multi-Unit Leader", note: "Experienced leaders" },
+    { pay: "$60k+", role: "General Manager", note: "Varies by market" },
+    { pay: "$48k+", role: "Manager", note: "Often 6–18 months" },
+    { pay: "Hourly", role: "Service & Kitchen Team", note: "Competitive hourly pay" },
+  ] as const;
+
+  const spineW = 26;
+
   return (
     <div
       style={{
-        backgroundColor: "#ffffff",
-        border: "1px solid rgba(0,0,0,.10)",
-        borderRadius: 14,
-        padding: 16,
-        textAlign: "center",
+        backgroundColor: "rgba(255,255,255,.70)",
+        border: `1px solid ${border}`,
+        borderRadius: 16,
+        padding: 14,
       }}
     >
       <div
         style={{
-          fontSize: 22,
-          fontWeight: 900,
-          color: green,
-          fontFamily: "var(--font-heading)",
+          display: "grid",
+          gridTemplateColumns: `1fr ${spineW}px 1.35fr`,
+          gap: 10,
+          alignItems: "center",
         }}
       >
-        {number}
+        {rows.map((r, i) => (
+          <div
+            key={r.role}
+            style={{
+              display: "contents",
+            }}
+          >
+            {/* Left: Pay */}
+            <div
+              style={{
+                textAlign: "right",
+                paddingRight: 2,
+              }}
+            >
+              <div
+                style={{
+                  fontFamily: "var(--font-heading)",
+                  fontWeight: 900,
+                  fontSize: i === 0 ? 24 : 22,
+                  color: green,
+                  lineHeight: 1.05,
+                  letterSpacing: -0.2,
+                }}
+              >
+                {r.pay}
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontFamily: "var(--font-body)",
+                  fontWeight: 800,
+                  fontSize: 11,
+                  color: "rgba(0,0,0,.55)",
+                }}
+              >
+                
+              </div>
+            </div>
+
+            {/* Middle: Spine + dot + connector */}
+            <div
+              aria-hidden="true"
+              style={{
+                position: "relative",
+                height: 54,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              {/* vertical line */}
+              <div
+                style={{
+                  position: "absolute",
+                  top: -28,
+                  bottom: -28,
+                  left: "50%",
+                  width: 4,
+                  transform: "translateX(-50%)",
+                  background: "rgba(53,128,110,0.22)",
+                  borderRadius: 999,
+                }}
+              />
+              {/* dot */}
+              <div
+                style={{
+                  width: 16,
+                  height: 16,
+                  borderRadius: 999,
+                  backgroundColor: "#fff",
+                  border: "3px solid rgba(53,128,110,0.35)",
+                  boxShadow: "0 8px 18px rgba(0,0,0,.10)",
+                  position: "relative",
+                  zIndex: 2,
+                }}
+              />
+              {/* horizontal connector to right */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: "50%",
+                  height: 3,
+                  width: 16,
+                  background: "rgba(53,128,110,0.22)",
+                  borderRadius: 999,
+                  transform: "translateX(6px)",
+                }}
+              />
+            </div>
+
+            {/* Right: Role */}
+            <div>
+              <div
+                style={{
+                  fontFamily: "var(--font-body)",
+                  fontWeight: 950,
+                  fontSize: 16,
+                  color: "rgba(0,0,0,.85)",
+                  lineHeight: 1.15,
+                }}
+              >
+                {r.role}
+              </div>
+              <div
+                style={{
+                  marginTop: 4,
+                  fontFamily: "var(--font-body)",
+                  fontWeight: 750,
+                  fontSize: 12,
+                  color: "rgba(0,0,0,.62)",
+                }}
+              >
+                {r.note}
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
+
+      {/* Tiny caption row (optional “path” hint) */}
       <div
         style={{
-          marginTop: 6,
-          fontSize: 13,
-          fontWeight: 700,
-          color: "rgba(0,0,0,.65)",
+          marginTop: 10,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          paddingTop: 10,
+          borderTop: `1px dashed rgba(0,0,0,.12)`,
+          color: "rgba(0,0,0,.55)",
           fontFamily: "var(--font-body)",
+          fontWeight: 800,
+          fontSize: 11,
         }}
       >
-        {label}
+
       </div>
     </div>
   );

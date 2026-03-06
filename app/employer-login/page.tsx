@@ -12,19 +12,16 @@ export default function EmployerLoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  // If they were redirected here, we’ll send them back after login
   const nextUrl = searchParams.get("next") || "/post-job";
 
   const [mode, setMode] = useState<Mode>("login");
-
-  // ✅ Multi-step signup
   const [signupStep, setSignupStep] = useState<SignupStep>(1);
 
-  // Shared fields
+  // Shared
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
-  // ✅ Step 3 fields (ONLY ONCE — no duplicates)
+  // Signup fields
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [companyName, setCompanyName] = useState("");
@@ -33,11 +30,17 @@ export default function EmployerLoginPage() {
 
   const JOBS_OPEN_OPTIONS = ["1", "2–5", "6–10", "11–25", "26–50", "50+"];
 
-  // Form UX
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  // If already logged in, bounce to next
+  const GREEN = "#35806e";
+  const BG = "#ffffff";
+  const CARD = "#f6f5f3";
+  const BORDER = "rgba(0,0,0,.10)";
+  const TEXT = "rgba(0,0,0,.85)";
+  const MUTED = "rgba(0,0,0,.62)";
+  const ERROR = "#b00020";
+
   useEffect(() => {
     let mounted = true;
 
@@ -49,6 +52,7 @@ export default function EmployerLoginPage() {
     }
 
     checkSession();
+
     return () => {
       mounted = false;
     };
@@ -65,14 +69,14 @@ export default function EmployerLoginPage() {
 
   function switchMode(nextMode: Mode) {
     setMode(nextMode);
-    resetMessages();
     setIsSubmitting(false);
+    resetMessages();
 
-    // reset step flow when switching
-    if (nextMode === "signup") setSignupStep(1);
+    if (nextMode === "signup") {
+      setSignupStep(1);
+    }
   }
 
-  // ✅ Step 1: Email → Continue
   function handleSignupEmailContinue(e: React.FormEvent) {
     e.preventDefault();
     resetMessages();
@@ -85,7 +89,6 @@ export default function EmployerLoginPage() {
     setSignupStep(2);
   }
 
-  // ✅ Login submit
   async function handleLoginSubmit(e: React.FormEvent) {
     e.preventDefault();
     resetMessages();
@@ -108,14 +111,12 @@ export default function EmployerLoginPage() {
     }
   }
 
-  // ✅ Signup Step 3: Create account + save profile
   async function handleSignupCreateAccount(e: React.FormEvent) {
     e.preventDefault();
     resetMessages();
     setIsSubmitting(true);
 
     try {
-      // Basic required checks
       if (
         !firstName.trim() ||
         !lastName.trim() ||
@@ -127,10 +128,19 @@ export default function EmployerLoginPage() {
         return;
       }
 
-      // Create auth account
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        options: {
+          data: {
+            first_name: firstName.trim(),
+            last_name: lastName.trim(),
+            company_name: companyName.trim(),
+            job_title: jobTitle.trim(),
+            jobs_open: jobsOpen,
+            role: "employer",
+          },
+        },
       });
 
       if (error) {
@@ -139,206 +149,369 @@ export default function EmployerLoginPage() {
       }
 
       const userId = data?.user?.id;
+
       if (!userId) {
         setMessage("Account created, but we couldn't finish setup. Please log in.");
         return;
       }
 
-      // ✅ Save employer record (YOUR TABLE NAME: employers)
-     
+      // If you want to insert into your employers table later, do it here.
 
-      // ✅ Go to welcome screen after signup
       router.replace("/employer-welcome");
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  // Styles (kept consistent)
-  const labelStyle: React.CSSProperties = {
+  const pageWrap: React.CSSProperties = {
+    minHeight: "100vh",
+    backgroundColor: BG,
+    paddingTop: 110,
+    paddingBottom: 80,
+  };
+
+  const container: React.CSSProperties = {
+    maxWidth: 1100,
+    margin: "0 auto",
+    padding: "0 18px",
+  };
+
+  const shell: React.CSSProperties = {
+    display: "grid",
+    gridTemplateColumns: "1fr 520px",
+    gap: 22,
+    alignItems: "stretch",
+  };
+
+  const card: React.CSSProperties = {
+    backgroundColor: CARD,
+    border: `1px solid ${BORDER}`,
+    borderRadius: 20,
+    padding: 28,
+    boxShadow: "0 18px 40px rgba(0,0,0,.10)",
+  };
+
+  const badgeStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    padding: "7px 12px",
+    borderRadius: 999,
+    border: "1px solid rgba(53,128,110,0.18)",
+    backgroundColor: "rgba(53,128,110,0.08)",
+    color: GREEN,
     fontWeight: 900,
-    color: "rgba(0,0,0,.85)",
-    marginBottom: 8,
+    fontFamily: "var(--font-body)",
+    fontSize: 12,
+  };
+
+  const labelStyle: React.CSSProperties = {
     display: "block",
-    fontFamily: "var(--font-coldsmith)",
-    letterSpacing: 1,
+    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: 0.4,
     textTransform: "uppercase",
-    fontSize: 18,
+    color: MUTED,
+    fontFamily: "var(--font-body)",
   };
 
   const inputStyle: React.CSSProperties = {
     width: "100%",
-    height: 48,
-    borderRadius: 10,
-    border: "1px solid rgba(0,0,0,.18)",
+    height: 50,
+    borderRadius: 14,
+    border: `1px solid ${BORDER}`,
     padding: "0 14px",
     outline: "none",
-    backgroundColor: "rgba(255,255,255,.95)",
-    color: "rgba(0,0,0,.9)",
-    fontSize: 14,
-    fontFamily: "var(--font-coldsmith)",
-    letterSpacing: 0.3,
+    backgroundColor: "#fff",
+    color: TEXT,
+    fontSize: 15,
+    fontFamily: "var(--font-body)",
+    fontWeight: 700,
   };
 
   const primaryBtnStyle: React.CSSProperties = {
-    height: 56,
-    borderRadius: 12,
-    border: "2px solid #000",
-    backgroundColor: "#ff7a00",
-    color: "#000",
+    height: 54,
+    borderRadius: 14,
+    border: "1px solid rgba(0,0,0,.08)",
+    backgroundColor: GREEN,
+    color: "#fff",
     fontWeight: 900,
     cursor: "pointer",
-    boxShadow: "0 10px 20px rgba(0,0,0,.25)",
-    fontFamily: "var(--font-coldsmith)",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    fontSize: 22,
+    boxShadow: "0 10px 22px rgba(0,0,0,.10)",
+    fontFamily: "var(--font-body)",
+    fontSize: 15,
   };
 
   const secondaryBtnStyle: React.CSSProperties = {
-    height: 56,
-    borderRadius: 12,
-    border: "2px solid #000",
-    backgroundColor: "rgba(0,0,0,.08)",
-    color: "#000",
+    height: 54,
+    borderRadius: 14,
+    border: `1px solid ${BORDER}`,
+    backgroundColor: "#fff",
+    color: "rgba(0,0,0,.75)",
     fontWeight: 900,
     cursor: "pointer",
-    fontFamily: "var(--font-coldsmith)",
-    letterSpacing: 1,
-    textTransform: "uppercase",
-    fontSize: 20,
+    fontFamily: "var(--font-body)",
+    fontSize: 15,
+    boxShadow: "0 10px 22px rgba(0,0,0,.07)",
+  };
+
+  const toggleBase: React.CSSProperties = {
+    flex: 1,
+    height: 46,
+    borderRadius: 12,
+    fontWeight: 900,
+    cursor: "pointer",
+    fontFamily: "var(--font-body)",
+    fontSize: 14,
+    border: `1px solid ${BORDER}`,
+    transition: "all 0.18s ease",
   };
 
   return (
-    <main style={{ backgroundColor: "#000", minHeight: "100vh" }}>
-      {/* Header */}
-      <section
-        style={{
-          width: "100vw",
-          paddingTop: 90,
-          paddingBottom: 22,
-          backgroundImage: "url('/hero.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center right",
-          position: "relative",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(90deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,.55) 25%, rgba(0,0,0,.18) 45%, rgba(0,0,0,0) 70%)",
-          }}
-        />
-        <div style={{ position: "relative", maxWidth: 1200, margin: "0 auto", padding: "26px 18px" }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 60,
-              fontWeight: 900,
-              color: "#fff",
-              lineHeight: 1.05,
-              fontFamily: "var(--font-coldsmith)",
-              letterSpacing: 1,
-              textTransform: "uppercase",
-              textShadow: "0px 4px 12px rgba(0,0,0,0.65)",
-            }}
-          >
-            {mode === "login" ? "Employer Login" : "Create Employer Account"}
-          </h1>
-
-          <p
-            style={{
-              marginTop: 10,
-              marginBottom: 0,
-              maxWidth: 720,
-              color: "rgba(255,255,255,.92)",
-              lineHeight: 1.6,
-              fontSize: 16,
-              fontFamily: "var(--font-coldsmith)",
-            }}
-          >
-            {mode === "login"
-              ? "Log in to post a job and manage your listings."
-              : "Create an employer account to post restaurant jobs and manage listings."}
-          </p>
-        </div>
-      </section>
-
-      {/* Background */}
-      <div
-        style={{
-          backgroundImage: "url('/background.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "repeat",
-          width: "100%",
-          minHeight: "calc(100vh - 220px)",
-        }}
-      >
-        <div style={{ backgroundColor: "rgba(0,0,0,0.10)", width: "100%" }}>
-          <section style={{ width: "100vw", padding: "34px 0 80px" }}>
-            <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 18px" }}>
+    <main style={pageWrap}>
+      <div style={container}>
+        <div style={shell} className="rn-employer-auth-shell">
+          {/* Left panel */}
+          <section style={card}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 14,
+              }}
+            >
+              <img
+                src="/logo-star.png"
+                alt="Restaurants Now Hiring"
+                style={{ height: 28, width: "auto", display: "block" }}
+              />
               <div
                 style={{
-                  backgroundColor: "rgba(255,255,255,.85)",
-                  borderRadius: 14,
-                  padding: "22px 22px 26px",
-                  boxShadow: "0 16px 40px rgba(0,0,0,.35)",
-                  border: "1px solid rgba(0,0,0,.10)",
+                  fontWeight: 900,
+                  color: TEXT,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 18,
+                  letterSpacing: 0.2,
+                  lineHeight: 1,
+                  whiteSpace: "nowrap",
+                  display: "flex",
+                  alignItems: "baseline",
                 }}
               >
-                {/* Mode toggle */}
-                <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-                  <button
-                    type="button"
-                    onClick={() => switchMode("login")}
-                    className="hero-button"
-                    style={{
-                      flex: 1,
-                      height: 46,
-                      borderRadius: 10,
-                      border: "2px solid #000",
-                      backgroundColor: mode === "login" ? "#ff7a00" : "rgba(0,0,0,.08)",
-                      color: "#000",
-                      fontWeight: 900,
-                      cursor: "pointer",
-                      fontFamily: "var(--font-coldsmith)",
-                      letterSpacing: 1,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Login
-                  </button>
+                <span>Restaurants</span>
+                <span
+                  style={{
+                    color: GREEN,
+                
+                    margin: "0 3px",
+                  }}
+                >
+                  NOWHiring
+                </span>
+                <span>.com</span>
+              </div>
+            </div>
 
-                  <button
-                    type="button"
-                    onClick={() => switchMode("signup")}
-                    className="hero-button"
+            <div style={badgeStyle}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 999,
+                  backgroundColor: GREEN,
+                  display: "inline-block",
+                }}
+              />
+              Employer access
+            </div>
+
+            <h1
+              style={{
+                margin: "16px 0 0 0",
+                fontSize: 50,
+                lineHeight: 1.02,
+                fontWeight: 700,
+                letterSpacing: 0,
+                color: GREEN,
+                fontFamily: "var(--font-heading)",
+              }}
+            >
+              {mode === "login" ? "Log in to manage your jobs." : "Create your employer account."}
+            </h1>
+
+            <p
+              style={{
+                marginTop: 14,
+                marginBottom: 0,
+                maxWidth: 560,
+                color: "rgba(0,0,0,.70)",
+                lineHeight: 1.65,
+                fontSize: 16,
+                fontFamily: "var(--font-body)",
+                fontWeight: 600,
+              }}
+            >
+              {mode === "login"
+                ? "Access your employer dashboard, manage listings, and continue posting restaurant jobs."
+                : "Set up your employer profile to post restaurant jobs and manage listings in one place."}
+            </p>
+
+            <div
+              style={{
+                marginTop: 22,
+                display: "grid",
+                gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+                gap: 12,
+              }}
+              className="rn-employer-auth-benefits"
+            >
+              {[
+                {
+                  title: "Post jobs",
+                  body: "Create and manage job listings from one dashboard.",
+                },
+                {
+                  title: "Track activity",
+                  body: "Keep employer access organized and easy to maintain.",
+                },
+                {
+                  title: "Built for restaurants",
+                  body: "A cleaner hiring experience tailored to restaurant teams.",
+                },
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  style={{
+                    backgroundColor: "rgba(255,255,255,.78)",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 16,
+                    padding: 16,
+                  }}
+                >
+                  <div
                     style={{
-                      flex: 1,
-                      height: 46,
-                      borderRadius: 10,
-                      border: "2px solid #000",
-                      backgroundColor: mode === "signup" ? "#ff7a00" : "rgba(0,0,0,.08)",
-                      color: "#000",
                       fontWeight: 900,
-                      cursor: "pointer",
-                      fontFamily: "var(--font-coldsmith)",
-                      letterSpacing: 1,
-                      textTransform: "uppercase",
+                      color: TEXT,
+                      fontFamily: "var(--font-body)",
+                      marginBottom: 6,
+                      fontSize: 15,
                     }}
                   >
-                    Sign Up
-                  </button>
+                    {item.title}
+                  </div>
+
+                  <div
+                    style={{
+                      color: "rgba(0,0,0,.66)",
+                      lineHeight: 1.5,
+                      fontWeight: 650,
+                      fontFamily: "var(--font-body)",
+                      fontSize: 13,
+                    }}
+                  >
+                    {item.body}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* Right form panel */}
+          <section style={card}>
+            <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+              <button
+                type="button"
+                onClick={() => switchMode("login")}
+                style={{
+                  ...toggleBase,
+                  backgroundColor: mode === "login" ? GREEN : "#fff",
+                  color: mode === "login" ? "#fff" : "rgba(0,0,0,.75)",
+                  boxShadow: mode === "login" ? "0 10px 22px rgba(0,0,0,.10)" : "none",
+                }}
+              >
+                Login
+              </button>
+
+              <button
+                type="button"
+                onClick={() => switchMode("signup")}
+                style={{
+                  ...toggleBase,
+                  backgroundColor: mode === "signup" ? GREEN : "#fff",
+                  color: mode === "signup" ? "#fff" : "rgba(0,0,0,.75)",
+                  boxShadow: mode === "signup" ? "0 10px 22px rgba(0,0,0,.10)" : "none",
+                }}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            {/* LOGIN */}
+            {mode === "login" ? (
+              <form onSubmit={handleLoginSubmit} style={{ display: "grid", gap: 16 }}>
+                <div>
+                  <label style={labelStyle}>Email</label>
+                  <input
+                    required
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    style={inputStyle}
+                    placeholder="you@restaurant.com"
+                    autoComplete="email"
+                  />
                 </div>
 
-                {/* LOGIN FORM */}
-                {mode === "login" ? (
-                  <form onSubmit={handleLoginSubmit} style={{ display: "grid", gap: 14 }}>
+                <div>
+                  <label style={labelStyle}>Password</label>
+                  <input
+                    required
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    style={inputStyle}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  style={{
+                    ...primaryBtnStyle,
+                    backgroundColor: isSubmitting ? "rgba(53,128,110,.55)" : GREEN,
+                    cursor: isSubmitting ? "not-allowed" : "pointer",
+                  }}
+                >
+                  {isSubmitting ? "Working..." : "Log In"}
+                </button>
+
+                {message && (
+                  <div
+                    role="status"
+                    aria-live="polite"
+                    style={{
+                      marginTop: 2,
+                      fontWeight: 800,
+                      color: message.startsWith("Error") ? ERROR : TEXT,
+                      fontFamily: "var(--font-body)",
+                      lineHeight: 1.5,
+                    }}
+                  >
+                    {message}
+                  </div>
+                )}
+              </form>
+            ) : (
+              <>
+                {/* STEP 1 */}
+                {signupStep === 1 && (
+                  <form onSubmit={handleSignupEmailContinue} style={{ display: "grid", gap: 16 }}>
                     <div>
-                      <label style={labelStyle}>Email</label>
+                      <label style={labelStyle}>Work Email</label>
                       <input
                         required
                         type="email"
@@ -350,30 +523,14 @@ export default function EmployerLoginPage() {
                       />
                     </div>
 
-                    <div>
-                      <label style={labelStyle}>Password</label>
-                      <input
-                        required
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        style={inputStyle}
-                        placeholder="••••••••"
-                        autoComplete="current-password"
-                      />
-                    </div>
-
                     <button
                       type="submit"
-                      disabled={isSubmitting}
-                      className="hero-button"
                       style={{
                         ...primaryBtnStyle,
-                        backgroundColor: isSubmitting ? "rgba(0,0,0,.25)" : "#ff7a00",
-                        cursor: isSubmitting ? "not-allowed" : "pointer",
+                        opacity: emailLooksValid ? 1 : 0.82,
                       }}
                     >
-                      {isSubmitting ? "Working..." : "Log In"}
+                      Continue
                     </button>
 
                     {message && (
@@ -382,303 +539,274 @@ export default function EmployerLoginPage() {
                         aria-live="polite"
                         style={{
                           marginTop: 2,
-                          fontWeight: 900,
-                          color: message.startsWith("Error") ? "#b00020" : "rgba(0,0,0,.85)",
-                          fontFamily: "var(--font-coldsmith)",
+                          fontWeight: 800,
+                          color: message.startsWith("Error") ? ERROR : TEXT,
+                          fontFamily: "var(--font-body)",
+                          lineHeight: 1.5,
                         }}
                       >
                         {message}
                       </div>
                     )}
                   </form>
-                ) : (
-                  /* SIGNUP FLOW */
-                  <>
-                    {/* STEP 1 */}
-                    {signupStep === 1 && (
-                      <form onSubmit={handleSignupEmailContinue} style={{ display: "grid", gap: 14 }}>
-                        <div>
-                          <label style={labelStyle}>Work Email</label>
-                          <input
-                            required
-                            type="email"
-                            value={email}
-                            onChange={(e) => setEmail(e.target.value)}
-                            style={inputStyle}
-                            placeholder="you@restaurant.com"
-                            autoComplete="email"
-                          />
-                        </div>
-
-                        <button
-                          type="submit"
-                          className="hero-button"
-                          style={{
-                            ...primaryBtnStyle,
-                            opacity: emailLooksValid ? 1 : 0.75,
-                          }}
-                        >
-                          Continue
-                        </button>
-
-                        {message && (
-                          <div
-                            role="status"
-                            aria-live="polite"
-                            style={{
-                              marginTop: 2,
-                              fontWeight: 900,
-                              color: message.startsWith("Error") ? "#b00020" : "rgba(0,0,0,.85)",
-                              fontFamily: "var(--font-coldsmith)",
-                            }}
-                          >
-                            {message}
-                          </div>
-                        )}
-                      </form>
-                    )}
-
-                    {/* STEP 2 */}
-                    {signupStep === 2 && (
-                      <form
-                        onSubmit={(e) => {
-                          e.preventDefault();
-                          resetMessages();
-
-                          const p = password;
-
-                          const hasMin = p.length >= 8;
-                          const hasUpper = /[A-Z]/.test(p);
-                          const hasLower = /[a-z]/.test(p);
-                          const hasNumber = /[0-9]/.test(p);
-
-                          if (!hasMin || !hasUpper || !hasLower || !hasNumber) {
-                            setMessage(
-                              "Password must be at least 8 characters and include uppercase, lowercase, and a number."
-                            );
-                            return;
-                          }
-
-                          setSignupStep(3);
-                        }}
-                        style={{ display: "grid", gap: 14 }}
-                      >
-                        <div>
-                          <label style={labelStyle}>Create Password</label>
-                          <input
-                            required
-                            type="password"
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            style={inputStyle}
-                            placeholder="••••••••"
-                            autoComplete="new-password"
-                          />
-                          <div
-                            style={{
-                              marginTop: 8,
-                              fontFamily: "var(--font-coldsmith)",
-                              fontWeight: 800,
-                              fontSize: 12,
-                              color: "rgba(0,0,0,.70)",
-                              letterSpacing: 0.4,
-                              textTransform: "uppercase",
-                            }}
-                          >
-                            Must be 8+ characters and include uppercase, lowercase, and a number.
-                          </div>
-                        </div>
-
-                        <div style={{ display: "flex", gap: 10 }}>
-                          <button
-                            type="button"
-                            className="hero-button"
-                            onClick={() => {
-                              resetMessages();
-                              setSignupStep(1);
-                            }}
-                            style={{ ...secondaryBtnStyle, flex: 1 }}
-                          >
-                            Back
-                          </button>
-
-                          <button type="submit" className="hero-button" style={{ ...primaryBtnStyle, flex: 1 }}>
-                            Continue
-                          </button>
-                        </div>
-
-                        {message && (
-                          <div
-                            role="status"
-                            aria-live="polite"
-                            style={{
-                              marginTop: 2,
-                              fontWeight: 900,
-                              color: message.startsWith("Error") ? "#b00020" : "rgba(0,0,0,.85)",
-                              fontFamily: "var(--font-coldsmith)",
-                            }}
-                          >
-                            {message}
-                          </div>
-                        )}
-                      </form>
-                    )}
-
-                    {/* STEP 3 */}
-                    {signupStep === 3 && (
-                      <form onSubmit={handleSignupCreateAccount} style={{ display: "grid", gap: 14 }}>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                          <div>
-                            <label style={labelStyle}>
-                              First Name <span style={{ color: "#ff7a00" }}>*</span>
-                            </label>
-                            <input
-                              required
-                              value={firstName}
-                              onChange={(e) => setFirstName(e.target.value)}
-                              style={inputStyle}
-                              placeholder="Jane"
-                              autoComplete="given-name"
-                            />
-                          </div>
-
-                          <div>
-                            <label style={labelStyle}>
-                              Last Name <span style={{ color: "#ff7a00" }}>*</span>
-                            </label>
-                            <input
-                              required
-                              value={lastName}
-                              onChange={(e) => setLastName(e.target.value)}
-                              style={inputStyle}
-                              placeholder="Doe"
-                              autoComplete="family-name"
-                            />
-                          </div>
-                        </div>
-
-                        <div>
-                          <label style={labelStyle}>
-                            Company <span style={{ color: "#ff7a00" }}>*</span>
-                          </label>
-                          <input
-                            required
-                            value={companyName}
-                            onChange={(e) => setCompanyName(e.target.value)}
-                            style={inputStyle}
-                            placeholder="MISSION BBQ"
-                          />
-                        </div>
-
-                        <div>
-                          <label style={labelStyle}>
-                            Your Job Title <span style={{ color: "#ff7a00" }}>*</span>
-                          </label>
-                          <input
-                            required
-                            value={jobTitle}
-                            onChange={(e) => setJobTitle(e.target.value)}
-                            style={inputStyle}
-                            placeholder="Hiring Manager"
-                          />
-                        </div>
-
-                        <div>
-                          <label style={labelStyle}>
-                            # Jobs Open <span style={{ color: "#ff7a00" }}>*</span>
-                          </label>
-                          <select
-                            required
-                            value={jobsOpen}
-                            onChange={(e) => setJobsOpen(e.target.value)}
-                            style={inputStyle}
-                          >
-                            <option value="">Select…</option>
-                            {JOBS_OPEN_OPTIONS.map((o) => (
-                              <option key={o} value={o}>
-                                {o}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
-
-                        <div>
-                          <label style={labelStyle}>Work Email</label>
-                          <input
-                            value={email}
-                            style={{ ...inputStyle, backgroundColor: "rgba(0,0,0,.06)" }}
-                            disabled
-                          />
-                        </div>
-
-                        <div style={{ display: "flex", gap: 10 }}>
-                          <button
-                            type="button"
-                            className="hero-button"
-                            onClick={() => {
-                              resetMessages();
-                              setSignupStep(2);
-                            }}
-                            style={{ ...secondaryBtnStyle, flex: 1 }}
-                          >
-                            Back
-                          </button>
-
-                          <button
-                            type="submit"
-                            disabled={isSubmitting}
-                            className="hero-button"
-                            style={{
-                              ...primaryBtnStyle,
-                              flex: 1,
-                              backgroundColor: isSubmitting ? "rgba(0,0,0,.25)" : "#ff7a00",
-                              cursor: isSubmitting ? "not-allowed" : "pointer",
-                            }}
-                          >
-                            {isSubmitting ? "Creating..." : "Create Account"}
-                          </button>
-                        </div>
-
-                        {message && (
-                          <div
-                            role="status"
-                            aria-live="polite"
-                            style={{
-                              marginTop: 2,
-                              fontWeight: 900,
-                              color: message.startsWith("Error") ? "#b00020" : "rgba(0,0,0,.85)",
-                              fontFamily: "var(--font-coldsmith)",
-                            }}
-                          >
-                            {message}
-                          </div>
-                        )}
-                      </form>
-                    )}
-                  </>
                 )}
 
-                <div style={{ marginTop: 14, textAlign: "center" }}>
-                  <Link
-                    href="/"
-                    style={{
-                      color: "rgba(0,0,0,.75)",
-                      textDecoration: "none",
-                      fontWeight: 900,
-                      borderBottom: "1px solid rgba(0,0,0,.35)",
-                      paddingBottom: 2,
-                      fontFamily: "var(--font-coldsmith)",
-                      letterSpacing: 0.5,
+                {/* STEP 2 */}
+                {signupStep === 2 && (
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      resetMessages();
+
+                      const p = password;
+                      const hasMin = p.length >= 8;
+                      const hasUpper = /[A-Z]/.test(p);
+                      const hasLower = /[a-z]/.test(p);
+                      const hasNumber = /[0-9]/.test(p);
+
+                      if (!hasMin || !hasUpper || !hasLower || !hasNumber) {
+                        setMessage(
+                          "Password must be at least 8 characters and include uppercase, lowercase, and a number."
+                        );
+                        return;
+                      }
+
+                      setSignupStep(3);
                     }}
+                    style={{ display: "grid", gap: 16 }}
                   >
-                    Back to homepage
-                  </Link>
-                </div>
-              </div>
+                    <div>
+                      <label style={labelStyle}>Create Password</label>
+                      <input
+                        required
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        style={inputStyle}
+                        placeholder="••••••••"
+                        autoComplete="new-password"
+                      />
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontFamily: "var(--font-body)",
+                          fontWeight: 700,
+                          fontSize: 12,
+                          color: MUTED,
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        Must be at least 8 characters and include uppercase, lowercase, and a
+                        number.
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetMessages();
+                          setSignupStep(1);
+                        }}
+                        style={{ ...secondaryBtnStyle, flex: 1 }}
+                      >
+                        Back
+                      </button>
+
+                      <button type="submit" style={{ ...primaryBtnStyle, flex: 1 }}>
+                        Continue
+                      </button>
+                    </div>
+
+                    {message && (
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        style={{
+                          marginTop: 2,
+                          fontWeight: 800,
+                          color: message.startsWith("Error") ? ERROR : TEXT,
+                          fontFamily: "var(--font-body)",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {message}
+                      </div>
+                    )}
+                  </form>
+                )}
+
+                {/* STEP 3 */}
+                {signupStep === 3 && (
+                  <form onSubmit={handleSignupCreateAccount} style={{ display: "grid", gap: 16 }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr 1fr",
+                        gap: 12,
+                      }}
+                      className="rn-employer-auth-two-col"
+                    >
+                      <div>
+                        <label style={labelStyle}>First Name *</label>
+                        <input
+                          required
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          style={inputStyle}
+                          placeholder="Jane"
+                          autoComplete="given-name"
+                        />
+                      </div>
+
+                      <div>
+                        <label style={labelStyle}>Last Name *</label>
+                        <input
+                          required
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          style={inputStyle}
+                          placeholder="Doe"
+                          autoComplete="family-name"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Company *</label>
+                      <input
+                        required
+                        value={companyName}
+                        onChange={(e) => setCompanyName(e.target.value)}
+                        style={inputStyle}
+                        placeholder="MISSION BBQ"
+                      />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Your Job Title *</label>
+                      <input
+                        required
+                        value={jobTitle}
+                        onChange={(e) => setJobTitle(e.target.value)}
+                        style={inputStyle}
+                        placeholder="Hiring Manager"
+                      />
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}># Jobs Open *</label>
+                      <select
+                        required
+                        value={jobsOpen}
+                        onChange={(e) => setJobsOpen(e.target.value)}
+                        style={inputStyle}
+                      >
+                        <option value="">Select…</option>
+                        {JOBS_OPEN_OPTIONS.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={labelStyle}>Work Email</label>
+                      <input
+                        value={email}
+                        style={{ ...inputStyle, backgroundColor: "rgba(0,0,0,.04)" }}
+                        disabled
+                      />
+                    </div>
+
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetMessages();
+                          setSignupStep(2);
+                        }}
+                        style={{ ...secondaryBtnStyle, flex: 1 }}
+                      >
+                        Back
+                      </button>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        style={{
+                          ...primaryBtnStyle,
+                          flex: 1,
+                          backgroundColor: isSubmitting ? "rgba(53,128,110,.55)" : GREEN,
+                          cursor: isSubmitting ? "not-allowed" : "pointer",
+                        }}
+                      >
+                        {isSubmitting ? "Creating..." : "Create Account"}
+                      </button>
+                    </div>
+
+                    {message && (
+                      <div
+                        role="status"
+                        aria-live="polite"
+                        style={{
+                          marginTop: 2,
+                          fontWeight: 800,
+                          color: message.startsWith("Error") ? ERROR : TEXT,
+                          fontFamily: "var(--font-body)",
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {message}
+                      </div>
+                    )}
+                  </form>
+                )}
+              </>
+            )}
+
+            <div style={{ marginTop: 16, textAlign: "center" }}>
+              <Link
+                href="/"
+                style={{
+                  color: "rgba(0,0,0,.72)",
+                  textDecoration: "none",
+                  fontWeight: 800,
+                  borderBottom: "1px solid rgba(0,0,0,.25)",
+                  paddingBottom: 2,
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                Back to homepage
+              </Link>
             </div>
           </section>
         </div>
       </div>
+
+      <style
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html: `
+            @media (max-width: 980px) {
+              .rn-employer-auth-shell {
+                grid-template-columns: 1fr !important;
+              }
+            }
+
+            @media (max-width: 720px) {
+              .rn-employer-auth-benefits {
+                grid-template-columns: 1fr !important;
+              }
+
+              .rn-employer-auth-two-col {
+                grid-template-columns: 1fr !important;
+              }
+            }
+          `,
+        }}
+      />
     </main>
   );
 }
