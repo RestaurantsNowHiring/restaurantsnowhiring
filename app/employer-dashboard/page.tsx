@@ -98,19 +98,47 @@ function deriveStatus(active: boolean): DashboardJob["dashboard_status"] {
   return active ? "Active" : "Pending";
 }
 
+const PAUSED_JOB_STORAGE_KEY = "rn-paused-jobs";
+
+function readPausedJobIds(): string[] {
+  if (typeof window === "undefined") return [];
+
+  try {
+    const raw = window.localStorage.getItem(PAUSED_JOB_STORAGE_KEY);
+    if (!raw) return [];
+
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writePausedJobIds(ids: string[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PAUSED_JOB_STORAGE_KEY, JSON.stringify(ids));
+}
+
 export default function EmployerDashboardPage() {
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [source, setSource] = useState<"live" | "mock" | "empty">("empty");
+  const [busyJobId, setBusyJobId] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     async function loadDashboard() {
+      const pausedJobIds = new Set(readPausedJobIds());
+
       const client = getSupabaseClient();
       if (!client) {
         if (mounted) {
-          setJobs(MOCK_JOBS);
+          setJobs(
+            MOCK_JOBS.map((job) =>
+              pausedJobIds.has(job.id) ? { ...job, dashboard_status: "Paused" } : job
+            )
+          );
           setSource("mock");
           setAuthStatus("allowed");
         }
@@ -122,7 +150,11 @@ export default function EmployerDashboardPage() {
 
       if (!session) {
         if (mounted) {
-          setJobs(MOCK_JOBS);
+          setJobs(
+            MOCK_JOBS.map((job) =>
+              pausedJobIds.has(job.id) ? { ...job, dashboard_status: "Paused" } : job
+            )
+          );
           setSource("mock");
           setAuthStatus("allowed");
         }
@@ -132,7 +164,11 @@ export default function EmployerDashboardPage() {
       const email = session.user.email;
       if (!email) {
         if (mounted) {
-          setJobs(MOCK_JOBS);
+          setJobs(
+            MOCK_JOBS.map((job) =>
+              pausedJobIds.has(job.id) ? { ...job, dashboard_status: "Paused" } : job
+            )
+          );
           setSource("mock");
           setAuthStatus("allowed");
         }
@@ -147,7 +183,11 @@ export default function EmployerDashboardPage() {
 
       if (error || !liveJobs || liveJobs.length === 0) {
         if (mounted) {
-          setJobs(MOCK_JOBS);
+          setJobs(
+            MOCK_JOBS.map((job) =>
+              pausedJobIds.has(job.id) ? { ...job, dashboard_status: "Paused" } : job
+            )
+          );
           setSource("mock");
           setAuthStatus("allowed");
         }
@@ -157,7 +197,7 @@ export default function EmployerDashboardPage() {
       const hydratedJobs: DashboardJob[] = liveJobs.map((job, index) => ({
         ...job,
         views: 32 + index * 18,
-        dashboard_status: deriveStatus(job.active),
+        dashboard_status: pausedJobIds.has(job.id) ? "Paused" : deriveStatus(job.active),
       }));
 
       if (mounted) {
@@ -173,6 +213,66 @@ export default function EmployerDashboardPage() {
       mounted = false;
     };
   }, []);
+
+  async function handlePauseToggle(job: DashboardJob) {
+    if (busyJobId) return;
+
+    const isPaused = job.dashboard_status === "Paused";
+    const nextStatus: DashboardJob["dashboard_status"] = isPaused ? "Active" : "Paused";
+
+    setBusyJobId(job.id);
+    setJobs((prev) =>
+      prev.map((item) =>
+        item.id === job.id
+          ? {
+              ...item,
+              active: !isPaused,
+              dashboard_status: nextStatus,
+            }
+          : item
+      )
+    );
+
+    const pausedIds = new Set(readPausedJobIds());
+    if (isPaused) {
+      pausedIds.delete(job.id);
+    } else {
+      pausedIds.add(job.id);
+    }
+    writePausedJobIds(Array.from(pausedIds));
+
+    if (source === "live") {
+      const client = getSupabaseClient();
+      if (!client) {
+        setBusyJobId(null);
+        return;
+      }
+
+      const { error } = await client.from("jobs").update({ active: isPaused }).eq("id", job.id);
+      if (error) {
+        setJobs((prev) =>
+          prev.map((item) =>
+            item.id === job.id
+              ? {
+                  ...item,
+                  active: job.active,
+                  dashboard_status: job.dashboard_status,
+                }
+              : item
+          )
+        );
+
+        if (isPaused) {
+          pausedIds.add(job.id);
+        } else {
+          pausedIds.delete(job.id);
+        }
+        writePausedJobIds(Array.from(pausedIds));
+      }
+    }
+
+    setBusyJobId(null);
+  }
 
   const metrics = useMemo(() => {
     const active = jobs.filter((job) => job.dashboard_status === "Active").length;
@@ -398,11 +498,25 @@ export default function EmployerDashboardPage() {
                             <Link href={`/jobs/${job.id}`} style={homeSecondaryButton} className="rn-btn-secondary">
                               View
                             </Link>
-                            <button type="button" style={homeSecondaryButton} className="rn-btn-secondary">
+                            <Link
+                              href={`/employer-dashboard/jobs/${job.id}/edit`}
+                              style={homeSecondaryButton}
+                              className="rn-btn-secondary"
+                            >
                               Edit
-                            </button>
-                            <button type="button" style={homeSecondaryButton} className="rn-btn-secondary">
-                              {job.dashboard_status === "Active" ? "Pause" : "Archive"}
+                            </Link>
+                            <button
+                              type="button"
+                              style={homeSecondaryButton}
+                              className="rn-btn-secondary"
+                              onClick={() => handlePauseToggle(job)}
+                              disabled={busyJobId === job.id}
+                            >
+                              {busyJobId === job.id
+                                ? "Saving..."
+                                : job.dashboard_status === "Paused"
+                                  ? "Resume"
+                                  : "Pause"}
                             </button>
                           </div>
                         </td>
@@ -431,11 +545,25 @@ export default function EmployerDashboardPage() {
                       <Link href={`/jobs/${job.id}`} style={homeSecondaryButton} className="rn-btn-secondary">
                         View
                       </Link>
-                      <button type="button" style={homeSecondaryButton} className="rn-btn-secondary">
+                      <Link
+                        href={`/employer-dashboard/jobs/${job.id}/edit`}
+                        style={homeSecondaryButton}
+                        className="rn-btn-secondary"
+                      >
                         Edit
-                      </button>
-                      <button type="button" style={homeSecondaryButton} className="rn-btn-secondary">
-                        {job.dashboard_status === "Active" ? "Pause" : "Archive"}
+                      </Link>
+                      <button
+                        type="button"
+                        style={homeSecondaryButton}
+                        className="rn-btn-secondary"
+                        onClick={() => handlePauseToggle(job)}
+                        disabled={busyJobId === job.id}
+                      >
+                        {busyJobId === job.id
+                          ? "Saving..."
+                          : job.dashboard_status === "Paused"
+                            ? "Resume"
+                            : "Pause"}
                       </button>
                     </div>
                   </article>
