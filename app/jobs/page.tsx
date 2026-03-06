@@ -60,11 +60,22 @@ export default async function JobsPage({
   const initialResult = await query;
 
   const { data: jobs, error } = isMissingStatusColumnError(initialResult.error)
-    ? await supabase
-        .from("jobs")
-        .select("id,title,restaurant_name,city,state,created_at,active,role_category,pay_range,employment_type")
-        .eq("active", true)
-        .order("created_at", { ascending: false })
+    ? await (rolesArray.length > 0
+        ? supabase
+            .from("jobs")
+            .select(
+              "id,title,restaurant_name,city,state,created_at,active,role_category,pay_range,employment_type"
+            )
+            .eq("active", true)
+            .in("role_category", rolesArray)
+            .order("created_at", { ascending: false })
+        : supabase
+            .from("jobs")
+            .select(
+              "id,title,restaurant_name,city,state,created_at,active,role_category,pay_range,employment_type"
+            )
+            .eq("active", true)
+            .order("created_at", { ascending: false }))
     : initialResult;
 
   const activeJobs: Job[] = ((jobs ?? []) as Job[]).filter((job) =>
