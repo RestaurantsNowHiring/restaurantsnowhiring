@@ -3,9 +3,7 @@ import {
   BriefcaseBusiness,
   Search,
   ShieldCheck,
-  TrendingUp,
   Users,
-  ClipboardCheck,
   ArrowRight,
 } from "lucide-react";
 
@@ -92,8 +90,8 @@ export default function AboutPage() {
   return (
     <main style={pageWrap}>
       <div style={container}>
-        {/* HERO */}
-        <section style={{ ...cardStyle, marginBottom: 18 }}>
+        {/* INTRO */}
+        <section style={{ ...cardStyle, marginBottom: 28 }}>
           <div className="rn-about-hero">
             <div>
               <div style={eyebrowIconWrap(true)}>
@@ -103,30 +101,30 @@ export default function AboutPage() {
               <h1
                 style={{
                   margin: 0,
-                  fontSize: 58,
-                  lineHeight: 0.98,
+                  fontSize: 56,
+                  lineHeight: 1,
                   fontWeight: 700,
                   color: GREEN,
                   fontFamily: "var(--font-heading)",
                 }}
               >
-                About
+                About Restaurants Now Hiring
               </h1>
 
               <p
                 style={{
                   marginTop: 14,
                   marginBottom: 0,
-                  maxWidth: 700,
+                  maxWidth: 620,
                   color: MUTED,
-                  lineHeight: 1.65,
-                  fontSize: 18,
+                  lineHeight: 1.55,
+                  fontSize: 17,
                   fontFamily: "var(--font-body)",
                   fontWeight: 700,
                 }}
               >
-                Restaurants Now Hiring helps restaurants post open roles and helps job seekers find
-                restaurant jobs faster — by role, location, and real details.
+                Restaurants Now Hiring is a focused job board that helps restaurants hire faster and
+                helps job seekers find the right roles with clear, practical listings.
               </p>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
@@ -135,9 +133,6 @@ export default function AboutPage() {
                 </Link>
                 <Link href="/post-job" style={secondaryBtn} className="rn-btn-secondary">
                   Post a Job
-                </Link>
-                <Link href="/" style={secondaryBtn} className="rn-btn-secondary">
-                  Home
                 </Link>
               </div>
             </div>
@@ -160,18 +155,18 @@ export default function AboutPage() {
                 {[
                   {
                     icon: <Search size={18} color={GREEN} />,
-                    title: "Easy browsing",
-                    body: "Find jobs by role and location without clutter.",
+                    title: "Easy to scan",
+                    body: "Find restaurant jobs by role and location in seconds.",
                   },
                   {
                     icon: <ShieldCheck size={18} color={GREEN} />,
-                    title: "Reviewed listings",
-                    body: "Employers submit jobs for review before they go live.",
+                    title: "Reviewed quality",
+                    body: "Listings are checked before they go live to keep standards high.",
                   },
                   {
                     icon: <Users size={18} color={GREEN} />,
                     title: "Built for restaurants",
-                    body: "Focused specifically on restaurant roles and hiring needs.",
+                    body: "Everything is tailored to restaurant teams and job seekers.",
                   },
                 ].map((item) => (
                   <div
@@ -215,82 +210,30 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* QUICK VALUE STRIP */}
-        <section
-          style={{
-            ...cardStyle,
-            marginBottom: 18,
-            paddingTop: 18,
-            paddingBottom: 18,
-          }}
-        >
-          <div className="rn-about-stats">
-            {[
-              {
-                title: "For Job Seekers",
-                body: "Browse restaurant roles by category and location, then open a listing to see the details that matter.",
-              },
-              {
-                title: "For Employers",
-                body: "Create an employer account, submit jobs for review, and publish approved listings publicly.",
-              },
-              {
-                title: "Quality First",
-                body: "We keep listings clean, readable, and focused on what people need to apply.",
-              },
-            ].map((item) => (
-              <div key={item.title} style={smallCard}>
-                <div
-                  style={{
-                    fontWeight: 900,
-                    fontSize: 18,
-                    color: TEXT,
-                    fontFamily: "var(--font-body)",
-                    marginBottom: 10,
-                  }}
-                >
-                  {item.title}
-                </div>
-                <div
-                  style={{
-                    color: MUTED,
-                    lineHeight: 1.6,
-                    fontWeight: 700,
-                    fontFamily: "var(--font-body)",
-                    fontSize: 15,
-                  }}
-                >
-                  {item.body}
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* WHAT WE DO */}
-        <section style={{ ...cardStyle, marginBottom: 18 }}>
-          <SectionHeader title="What We Do" />
+        {/* VALUE */}
+        <section style={{ ...cardStyle, marginBottom: 28 }}>
+          <SectionHeader title="Why People Use It" />
 
           <div className="rn-about-three-col">
             <div style={smallCard}>
               <div style={eyebrowIconWrap(true)}>
                 <Search size={20} color={GREEN} />
               </div>
-              <div className="rn-about-card-title">For Job Seekers</div>
+              <div className="rn-about-card-title">Find better-fit jobs faster</div>
               <div className="rn-about-card-body">
-                Browse restaurant roles by category and location. Click any job to view details
-                like pay, schedule, and how to apply.
+                Listings stay focused on essentials like role, location, schedule, and how to
+                apply.
               </div>
             </div>
 
             <div style={smallCard}>
               <div style={eyebrowIconWrap(true)}>
-                <ClipboardCheck size={20} color={GREEN} />
+                <BriefcaseBusiness size={20} color={GREEN} />
               </div>
-              <div className="rn-about-card-title">For Employers</div>
+              <div className="rn-about-card-title">Post roles with less friction</div>
               <div className="rn-about-card-body">
-                Create an employer account to submit jobs for review. Once approved, your listing is
-                published publicly.
+                Restaurant teams can submit openings quickly and get approved jobs in front of
+                active candidates.
               </div>
             </div>
 
@@ -298,32 +241,25 @@ export default function AboutPage() {
               <div style={eyebrowIconWrap(true)}>
                 <ShieldCheck size={20} color={GREEN} />
               </div>
-              <div className="rn-about-card-title">Quality First</div>
+              <div className="rn-about-card-title">Maintain listing quality</div>
               <div className="rn-about-card-body">
-                We keep listings clean and easy to read — no clutter, no confusion, just the info
-                people need to apply.
+                Review keeps postings clear, professional, and useful for both applicants and hiring
+                managers.
               </div>
             </div>
           </div>
+        </section>
 
-          <div style={{ ...smallCard, marginTop: 14 }}>
-            <div
-              style={{
-                fontWeight: 900,
-                fontSize: 18,
-                color: TEXT,
-                fontFamily: "var(--font-body)",
-                marginBottom: 14,
-              }}
-            >
-              How jobs get posted
-            </div>
+        {/* HOW IT WORKS */}
+        <section style={{ ...cardStyle, marginBottom: 28 }}>
+          <SectionHeader title="How It Works" />
 
+          <div style={{ ...smallCard, maxWidth: 960, margin: "0 auto" }}>
             <div className="rn-about-process">
               {[
-                "Employers submit a job listing.",
-                "Listings are reviewed before going live.",
-                "Approved jobs appear under Browse Jobs.",
+                "Employers submit a listing with role details.",
+                "Our team reviews the listing before publishing.",
+                "Candidates browse and apply through clear job pages.",
               ].map((item, i) => (
                 <div
                   key={item}
@@ -367,84 +303,9 @@ export default function AboutPage() {
           </div>
         </section>
 
-        {/* WHY INDUSTRY */}
-        <section style={{ ...cardStyle, marginBottom: 18 }}>
-          <SectionHeader title="Why The Restaurant Industry" />
-
-          <div
-            style={{
-              color: TEXT,
-              lineHeight: 1.7,
-              fontSize: 18,
-              fontWeight: 700,
-              fontFamily: "var(--font-body)",
-              maxWidth: 920,
-              margin: "0 auto 18px",
-              textAlign: "center",
-            }}
-          >
-            Restaurants are one of the best places to build real, transferable skills fast —
-            communication, teamwork, leadership, and operations. For many people, it’s not just a
-            job. It’s a career path with momentum.
-          </div>
-
-          <div className="rn-about-three-col">
-            <div style={smallCard}>
-              <div style={eyebrowIconWrap(true)}>
-                <BriefcaseBusiness size={20} color={GREEN} />
-              </div>
-              <div className="rn-about-card-title">Start Anywhere</div>
-              <div className="rn-about-card-body">
-                Many careers in restaurants start at entry-level and build quickly through
-                consistent performance and training.
-              </div>
-            </div>
-
-            <div style={smallCard}>
-              <div style={eyebrowIconWrap(true)}>
-                <TrendingUp size={20} color={GREEN} />
-              </div>
-              <div className="rn-about-card-title">Grow Fast</div>
-              <div className="rn-about-card-body">
-                With the right opportunity, people can move from hourly roles into leadership in a
-                relatively short time.
-              </div>
-            </div>
-
-            <div style={smallCard}>
-              <div style={eyebrowIconWrap(true)}>
-                <Users size={20} color={GREEN} />
-              </div>
-              <div className="rn-about-card-title">Real Career Upside</div>
-              <div className="rn-about-card-body">
-                Strong performers can grow into bigger leadership roles over time as responsibility,
-                skill, and results increase.
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              marginTop: 14,
-              padding: "14px 16px",
-              borderRadius: 16,
-              border: `1px solid ${BORDER}`,
-              backgroundColor: "rgba(255,255,255,.55)",
-              color: MUTED,
-              fontSize: 13,
-              fontWeight: 700,
-              lineHeight: 1.55,
-              fontFamily: "var(--font-body)",
-            }}
-          >
-            Note: Pay and timelines vary by company, role, market, and performance. We share this
-            to highlight the industry’s potential — not to promise specific earnings.
-          </div>
-        </section>
-
-        {/* QUESTIONS / CTA */}
+        {/* FINAL CTA */}
         <section style={cardStyle}>
-          <SectionHeader title="Questions" />
+          <SectionHeader title="Ready to Get Started?" />
 
           <div
             style={{
@@ -456,13 +317,14 @@ export default function AboutPage() {
             <div
               style={{
                 color: TEXT,
-                fontSize: 18,
-                lineHeight: 1.65,
+                fontSize: 17,
+                lineHeight: 1.55,
                 fontWeight: 700,
                 fontFamily: "var(--font-body)",
               }}
             >
-              Need help or have feedback? Visit the Contact page and send us a note.
+              Browse current openings or post a role today. If you need help, our contact page is
+              always available.
             </div>
 
             <div
@@ -500,21 +362,19 @@ export default function AboutPage() {
       </div>
 
       <style
-        // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{
           __html: `
             .rn-about-hero {
               display: grid;
               grid-template-columns: 1.2fr .8fr;
-              gap: 18px;
+              gap: 20px;
               align-items: stretch;
             }
 
-            .rn-about-stats,
             .rn-about-three-col {
               display: grid;
               grid-template-columns: repeat(3, minmax(0, 1fr));
-              gap: 14px;
+              gap: 16px;
             }
 
             .rn-about-process {
@@ -541,7 +401,6 @@ export default function AboutPage() {
 
             @media (max-width: 980px) {
               .rn-about-hero,
-              .rn-about-stats,
               .rn-about-three-col,
               .rn-about-process {
                 grid-template-columns: 1fr !important;
