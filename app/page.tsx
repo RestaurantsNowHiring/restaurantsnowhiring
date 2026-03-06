@@ -31,8 +31,7 @@ export default async function HomePage() {
     .select(
       "id,title,restaurant_name,city,state,active,status,created_at,pay_range,employment_type,role_category"
     )
-    .order("created_at", { ascending: false })
-    .limit(6);
+    .order("created_at", { ascending: false });
 
   const { data: jobs } = isMissingStatusColumnError(initialResult.error)
     ? await supabase
@@ -40,12 +39,11 @@ export default async function HomePage() {
         .select("id,title,restaurant_name,city,state,active,created_at,pay_range,employment_type,role_category")
         .eq("active", true)
         .order("created_at", { ascending: false })
-        .limit(6)
     : initialResult;
 
-  const latestJobs: Job[] = ((jobs ?? []) as Job[]).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active)
-  );
+  const latestJobs: Job[] = ((jobs ?? []) as Job[])
+    .filter((job) => isPubliclyVisibleJob(job.status, job.active))
+    .slice(0, 6);
 
   // Theme tokens
   const GREEN = "#35806e";
