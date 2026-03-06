@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import JobsFilterPanel from "../components/JobsFilterPanel";
+import {
+  homePrimaryButton,
+  homeSecondaryButton,
+  homeTheme,
+} from "../styles/homepageDesignSystem";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -57,9 +62,9 @@ export default async function JobsPage({
   return (
     <main
       style={{
-        backgroundColor: "#ffffffff",
+        backgroundColor: homeTheme.bg,
         minHeight: "100vh",
-        paddingTop: 70,
+        paddingTop: 90,
         paddingBottom: 64,
       }}
     >
@@ -69,12 +74,11 @@ export default async function JobsPage({
             style={{
               margin: 0,
               fontSize: 54,
-              fontWeight: 600,
-              color: "#35806e",
+              fontWeight: 700,
+              color: homeTheme.green,
               lineHeight: 1.05,
               fontFamily: "var(--font-heading)",
               letterSpacing: 0,
-              textShadow: "0px 4px 12px rgba(0, 0, 0, 0.24)",
             }}
           >
             {rolesArray.length
@@ -87,9 +91,11 @@ export default async function JobsPage({
               marginTop: 10,
               marginBottom: 0,
               maxWidth: 760,
-              color: "#000000ff",
+              color: "rgba(0,0,0,.70)",
               lineHeight: 1.6,
               fontSize: 16,
+              fontFamily: "var(--font-body)",
+              fontWeight: 600,
             }}
           >
             {rolesArray.length
@@ -102,15 +108,7 @@ export default async function JobsPage({
               href="/post-job"
               className="hero-button"
               style={{
-                backgroundColor: "#35806e",
-                color: "#fef5ea",
-                padding: "10px 20px",
-                fontWeight: 600,
-                borderRadius: 4,
-                textDecoration: "none",
-                fontSize: 16,
-                fontFamily: "var(--font-body)",
-                letterSpacing: 0,
+                ...homePrimaryButton,
               }}
             >
               Post a Job
@@ -120,15 +118,7 @@ export default async function JobsPage({
               href="/"
               className="hero-button"
               style={{
-                backgroundColor: "#35806e",
-                color: "#fef5ea",
-                padding: "10px 20px",
-                fontWeight: 600,
-                borderRadius: 4,
-                textDecoration: "none",
-                fontSize: 16,
-                fontFamily: "var(--font-body)",
-                letterSpacing: 0,
+                ...homeSecondaryButton,
               }}
             >
               Home
@@ -139,15 +129,7 @@ export default async function JobsPage({
                 href="/jobs"
                 className="hero-button"
                 style={{
-                  backgroundColor: "#35806e",
-                  color: "#fef5ea",
-                  padding: "10px 20px",
-                  fontWeight: 600,
-                  borderRadius: 2,
-                  textDecoration: "none",
-                  fontSize: 16,
-                  fontFamily: "var(--font-body)",
-                  letterSpacing: 0,
+                  ...homeSecondaryButton,
                 }}
               >
                 View all Jobs

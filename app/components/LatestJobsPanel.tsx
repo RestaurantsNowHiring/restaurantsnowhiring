@@ -106,23 +106,23 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
   // shared styles (match Available Jobs)
   const inputStyle: React.CSSProperties = {
     height: 46,
-    borderRadius: 10,
-    border: "1px solid rgba(0,0,0,.18)",
+    borderRadius: 18,
+    border: "1px solid rgba(0,0,0,.10)",
     backgroundColor: "#fff",
     color: "#111",
     padding: "0 14px",
     outline: "none",
-    fontWeight: 600,
+    fontWeight: 700,
     fontFamily: "var(--font-body)",
-    boxShadow: "0 6px 14px rgba(0,0,0,.12)",
+    boxShadow: "0 8px 18px rgba(0,0,0,.05)",
     width: "100%",
   };
 
   const pillButtonStyle: React.CSSProperties = {
     height: 40,
     borderRadius: 999,
-    border: "1px solid rgba(0,0,0,.14)",
-    backgroundColor: "rgba(0,0,0,0.05)",
+    border: "1px solid rgba(0,0,0,.10)",
+    backgroundColor: "rgba(255,255,255,.75)",
     padding: "0 14px",
     display: "inline-flex",
     alignItems: "center",
@@ -130,7 +130,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
     cursor: "pointer",
     fontFamily: "var(--font-body)",
     fontWeight: 800,
-    color: "rgba(0,0,0,0.78)",
+    color: "rgba(0,0,0,.75)",
     whiteSpace: "nowrap",
   };
 
@@ -140,9 +140,9 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
     left: 0,
     minWidth: 240,
     background: "#fff",
-    border: "1px solid rgba(0,0,0,.14)",
-    borderRadius: 12,
-    boxShadow: "0 18px 40px rgba(0,0,0,.18)",
+    border: "1px solid rgba(0,0,0,.10)",
+    borderRadius: 18,
+    boxShadow: "0 18px 40px rgba(0,0,0,.12)",
     padding: 8,
     zIndex: 50,
   };
@@ -151,13 +151,13 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
     width: "100%",
     textAlign: "left",
     padding: "10px 10px",
-    borderRadius: 10,
+    borderRadius: 18,
     border: "none",
     background: "transparent",
     cursor: "pointer",
     fontFamily: "var(--font-body)",
     fontWeight: 700,
-    color: "rgba(0,0,0,0.82)",
+    color: "rgba(0,0,0,.75)",
   };
 
   const chipStyle: React.CSSProperties = {
@@ -166,7 +166,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
     height: 26,
     padding: "0 10px",
     borderRadius: 999,
-    border: "1px solid rgba(0,0,0,.14)",
+    border: "1px solid rgba(0,0,0,.10)",
     backgroundColor: "rgba(255,255,255,0.70)",
     color: "rgba(0,0,0,.72)",
     fontSize: 12,
@@ -212,11 +212,11 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
     <div
       ref={menuWrapRef}
       style={{
-        backgroundColor: "#ece9e48f",
-        border: "1px solid rgba(0,0,0,0.08)",
-        borderRadius: 12,
+        backgroundColor: "#f6f5f3",
+        border: "1px solid rgba(0,0,0,.10)",
+        borderRadius: 18,
         padding: "22px 22px 26px",
-        boxShadow: "0 10px 30px rgba(0, 0, 0, 0.16)",
+        boxShadow: "0 18px 40px rgba(0,0,0,.12)",
       }}
     >
       {/* Title (keep this; remove “Latest Jobs” header from app/page.tsx) */}
@@ -234,7 +234,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
         <div
           style={{
             fontSize: 36,
-            fontWeight: 800,
+            fontWeight: 700,
             color: GREEN,
             fontFamily: "var(--font-heading)",
             whiteSpace: "nowrap",
@@ -277,9 +277,9 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
           style={{
             height: 46,
             padding: "0 16px",
-            borderRadius: 12,
+            borderRadius: 18,
             border: "1px solid rgba(0,0,0,.16)",
-            backgroundColor: "rgba(0,0,0,0.05)",
+            backgroundColor: "rgba(255,255,255,.75)",
             color: "rgba(0,0,0,0.75)",
             fontWeight: 900,
             cursor: "pointer",
@@ -377,7 +377,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
       <div
         style={{
           border: "1px solid rgba(0,0,0,.12)",
-          borderRadius: 10,
+          borderRadius: 18,
           maxHeight: "min(460px, 55vh)",
           overflowY: "auto",
           overflowX: "hidden",
@@ -444,8 +444,8 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
                     backgroundColor: GREEN,
                     color: "#fef5ea",
                     padding: "10px 18px",
-                    borderRadius: 10,
-                    fontWeight: 800,
+                    borderRadius: 18,
+                    fontWeight: 700,
                     textDecoration: "none",
                     boxShadow: "0 10px 22px rgba(0,0,0,.16)",
                     whiteSpace: "nowrap",
@@ -466,7 +466,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
           style={{
             color: "rgba(0,0,0,.85)",
             textDecoration: "none",
-            fontWeight: 800,
+            fontWeight: 700,
             borderBottom: "1px solid rgba(0,0,0,.35)",
             paddingBottom: 2,
           }}

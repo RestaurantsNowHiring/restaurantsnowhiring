@@ -4,6 +4,11 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import {
+  homePrimaryButton,
+  homeSecondaryButton,
+  homeTheme,
+} from "../styles/homepageDesignSystem";
 
 type Step = 1 | 2 | 3 | 4;
 type PayMode = "range" | "minimum" | "maximum" | "rate";
@@ -43,11 +48,11 @@ export default function PostJobPage() {
   const [description, setDescription] = useState("");
   const [benefits, setBenefits] = useState<string[]>([]);
 
-  const GREEN = "#35806e";
-  const BG = "#f6f5f3";
-  const BORDER = "rgba(0,0,0,.10)";
-  const TEXT = "rgba(0,0,0,.88)";
-  const MUTED = "rgba(0,0,0,.58)";
+  const GREEN = homeTheme.green;
+  const BG = homeTheme.bg;
+  const BORDER = homeTheme.border;
+  const TEXT = homeTheme.text;
+  const MUTED = homeTheme.muted;
   const SOFT_GREEN = "#dfe7e3";
   const CARD = "#ffffff";
   const ERROR = "#b00020";
@@ -313,11 +318,11 @@ export default function PostJobPage() {
   };
 
   const mainCard: React.CSSProperties = {
-    backgroundColor: BG,
+    backgroundColor: "#f6f5f3",
     border: `1px solid ${BORDER}`,
-    borderRadius: 24,
+    borderRadius: 18,
     padding: 24,
-    boxShadow: "0 10px 22px rgba(0,0,0,.04)",
+    boxShadow: "0 18px 40px rgba(0,0,0,.12)",
   };
 
   const stepCard = (active: boolean): React.CSSProperties => ({
@@ -410,49 +415,26 @@ export default function PostJobPage() {
   });
 
   const primaryBtn: React.CSSProperties = {
+    ...homePrimaryButton,
     minWidth: 180,
-    height: 58,
-    borderRadius: 18,
-    border: "1px solid rgba(0,0,0,.08)",
-    backgroundColor: GREEN,
-    color: "#fff",
-    fontWeight: 900,
+    minHeight: 58,
     fontSize: 16,
-    fontFamily: "var(--font-body)",
     cursor: "pointer",
-    boxShadow: "0 8px 18px rgba(0,0,0,.07)",
   };
 
   const secondaryBtn: React.CSSProperties = {
+    ...homeSecondaryButton,
     minWidth: 90,
-    height: 50,
-    borderRadius: 16,
-    border: `1px solid ${BORDER}`,
-    backgroundColor: "#fff",
-    color: "rgba(0,0,0,.76)",
-    fontWeight: 900,
+    minHeight: 50,
     fontSize: 14,
-    fontFamily: "var(--font-body)",
     cursor: "pointer",
-    boxShadow: "0 6px 14px rgba(0,0,0,.04)",
   };
 
   const topActionLink: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
+    ...homeSecondaryButton,
     minWidth: 116,
-    height: 58,
-    padding: "0 18px",
-    borderRadius: 18,
-    border: `1px solid ${BORDER}`,
-    backgroundColor: "#fff",
-    color: "rgba(0,0,0,.76)",
-    fontWeight: 900,
+    minHeight: 58,
     fontSize: 15,
-    textDecoration: "none",
-    fontFamily: "var(--font-body)",
-    boxShadow: "0 6px 14px rgba(0,0,0,.04)",
   };
 
   if (authStatus === "loading") {
