@@ -496,7 +496,7 @@ export default function PostJobPage() {
               </div>
             </div>
 
-            <Link href="/jobs" style={topActionLink}>
+            <Link href="/jobs" style={topActionLink} className="rn-btn-secondary">
               View jobs
             </Link>
           </div>
@@ -656,6 +656,7 @@ export default function PostJobPage() {
                       key={role}
                       type="button"
                       onClick={() => toggleValue(role, roleCategories, setRoleCategories)}
+                      className="rn-btn-pill"
                       style={pillStyle(roleCategories.includes(role))}
                     >
                       {role}
@@ -706,6 +707,7 @@ export default function PostJobPage() {
                       key={option}
                       type="button"
                       onClick={() => setEmploymentType(option)}
+                      className="rn-btn-pill"
                       style={pillStyle(employmentType === option)}
                     >
                       {option}
@@ -722,6 +724,7 @@ export default function PostJobPage() {
                       key={option}
                       type="button"
                       onClick={() => toggleValue(option, scheduleTags, setScheduleTags)}
+                      className="rn-btn-pill"
                       style={pillStyle(scheduleTags.includes(option))}
                     >
                       {option}
@@ -743,6 +746,7 @@ export default function PostJobPage() {
                       key={item.value}
                       type="button"
                       onClick={() => setPayMode(item.value as PayMode)}
+                      className="rn-btn-pill"
                       style={pillStyle(payMode === item.value)}
                     >
                       {item.label}
@@ -841,6 +845,7 @@ export default function PostJobPage() {
                       key={option}
                       type="button"
                       onClick={() => toggleValue(option, benefits, setBenefits)}
+                      className="rn-btn-pill"
                       style={pillStyle(benefits.includes(option))}
                     >
                       {option}
@@ -1105,7 +1110,7 @@ export default function PostJobPage() {
             className="rn-footer-actions"
           >
             <div>
-              <button type="button" onClick={previousStep} style={secondaryBtn} disabled={step === 1}>
+              <button className="rn-btn-secondary" type="button" onClick={previousStep} style={secondaryBtn} disabled={step === 1}>
                 Back
               </button>
 
@@ -1138,11 +1143,12 @@ export default function PostJobPage() {
 
             <div>
               {step < 4 ? (
-                <button type="button" onClick={nextStep} style={primaryBtn}>
+                <button className="rn-btn-primary" type="button" onClick={nextStep} style={primaryBtn}>
                   Save & Continue
                 </button>
               ) : (
                 <button
+                  className="rn-btn-primary"
                   type="button"
                   onClick={handleFinalSubmit}
                   disabled={isSubmitting}
@@ -1241,6 +1247,7 @@ export default function PostJobPage() {
               }}
             >
               <button
+                className="rn-btn-primary"
                 type="button"
                 onClick={() => {
                   setShowSuccessModal(false);
@@ -1263,6 +1270,7 @@ export default function PostJobPage() {
               </button>
 
               <button
+                className="rn-btn-secondary"
                 type="button"
                 onClick={() => {
                   setShowSuccessModal(false);

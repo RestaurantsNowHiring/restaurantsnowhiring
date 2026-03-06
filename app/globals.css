@@ -305,3 +305,46 @@ html, body {
   outline-offset: 3px;
 }
 
+
+/* Homepage design system button hovers */
+.rn-btn-primary,
+.rn-btn-secondary,
+.rn-btn-subtle,
+.rn-btn-pill,
+.rn-btn-menu,
+.rn-btn-view {
+  cursor: pointer;
+  transition:
+    background-color 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease,
+    color 180ms ease;
+}
+
+.rn-btn-primary:hover:not(:disabled) {
+  background-color: #2d6e5f !important;
+  border-color: rgba(0, 0, 0, 0.16) !important;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.18) !important;
+  transform: translateY(-2px);
+}
+
+.rn-btn-secondary:hover:not(:disabled),
+.rn-btn-subtle:hover:not(:disabled) {
+  background-color: #f4f4f3 !important;
+  border-color: rgba(0, 0, 0, 0.18) !important;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12) !important;
+  transform: translateY(-1px);
+}
+
+.rn-btn-pill:hover:not(:disabled),
+.rn-btn-menu:hover:not(:disabled) {
+  background-color: rgba(53, 128, 110, 0.1) !important;
+  border-color: rgba(53, 128, 110, 0.3) !important;
+}
+
+.rn-btn-view:hover:not(:disabled) {
+  background-color: #2d6e5f !important;
+  box-shadow: 0 14px 26px rgba(0, 0, 0, 0.18) !important;
+  transform: translateY(-2px);
+}

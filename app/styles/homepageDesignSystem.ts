@@ -29,6 +29,8 @@ const buttonBase: React.CSSProperties = {
   whiteSpace: "nowrap",
   border: `1px solid ${homeTheme.border}`,
   boxShadow: "0 10px 22px rgba(0,0,0,.10)",
+  cursor: "pointer",
+  transition: "background-color 180ms ease, border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease",
 };
 
 export const homePrimaryButton: React.CSSProperties = {

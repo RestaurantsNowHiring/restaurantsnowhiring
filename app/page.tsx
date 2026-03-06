@@ -188,10 +188,10 @@ export default async function HomePage() {
             </p>
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-              <Link href="/jobs" style={primaryBtn}>
+              <Link href="/jobs" style={primaryBtn} className="rn-btn-primary">
                 Browse Jobs
               </Link>
-              <Link href="/post-job" style={secondaryBtn}>
+              <Link href="/post-job" style={secondaryBtn} className="rn-btn-secondary">
                 Post a Job
               </Link>
             </div>
@@ -297,10 +297,10 @@ export default async function HomePage() {
             <CareerLadder green={GREEN} border={BORDER} />
 
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 6 }}>
-              <Link href="/jobs" style={secondaryBtn}>
+              <Link href="/jobs" style={secondaryBtn} className="rn-btn-secondary">
                 Browse Jobs
               </Link>
-              <Link href="/post-job" style={primaryBtn}>
+              <Link href="/post-job" style={primaryBtn} className="rn-btn-primary">
                 Post a Job
               </Link>
             </div>

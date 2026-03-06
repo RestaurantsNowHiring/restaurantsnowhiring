@@ -106,7 +106,7 @@ export default async function JobsPage({
           <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
             <Link
               href="/post-job"
-              className="hero-button"
+              className="hero-button rn-btn-primary"
               style={{
                 ...homePrimaryButton,
               }}
@@ -116,7 +116,7 @@ export default async function JobsPage({
 
             <Link
               href="/"
-              className="hero-button"
+              className="hero-button rn-btn-secondary"
               style={{
                 ...homeSecondaryButton,
               }}
@@ -127,7 +127,7 @@ export default async function JobsPage({
             {rolesArray.length > 0 && (
               <Link
                 href="/jobs"
-                className="hero-button"
+                className="hero-button rn-btn-secondary"
                 style={{
                   ...homeSecondaryButton,
                 }}

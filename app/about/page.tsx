@@ -130,13 +130,13 @@ export default function AboutPage() {
               </p>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
-                <Link href="/jobs" style={primaryBtn}>
+                <Link href="/jobs" style={primaryBtn} className="rn-btn-primary">
                   Browse Jobs
                 </Link>
-                <Link href="/post-job" style={secondaryBtn}>
+                <Link href="/post-job" style={secondaryBtn} className="rn-btn-secondary">
                   Post a Job
                 </Link>
-                <Link href="/" style={secondaryBtn}>
+                <Link href="/" style={secondaryBtn} className="rn-btn-secondary">
                   Home
                 </Link>
               </div>
@@ -474,11 +474,11 @@ export default function AboutPage() {
                 marginTop: 20,
               }}
             >
-              <Link href="/contact" style={primaryBtn}>
+              <Link href="/contact" style={primaryBtn} className="rn-btn-primary">
                 Contact
                 <ArrowRight size={16} />
               </Link>
-              <Link href="/jobs" style={secondaryBtn}>
+              <Link href="/jobs" style={secondaryBtn} className="rn-btn-secondary">
                 Browse Jobs
               </Link>
             </div>
