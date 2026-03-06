@@ -71,7 +71,10 @@ export default function TopBanner() {
           {!isLoggedIn ? (
             <NavLink href="/employer-login?next=/post-job">POST A JOB</NavLink>
           ) : (
-            <NavLink href="/post-job">POST A JOB</NavLink>
+            <>
+              <NavLink href="/post-job">POST A JOB</NavLink>
+              <NavLink href="/employer-dashboard">DASHBOARD</NavLink>
+            </>
           )}
 
           <NavLink href="/about">ABOUT</NavLink>
