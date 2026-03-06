@@ -141,13 +141,13 @@ export default function PricingPage() {
               </p>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
-                <Link href="/post-job" style={primaryBtn}>
+                <Link href="/post-job" style={primaryBtn} className="rn-btn-primary">
                   Post a Job
                 </Link>
-                <Link href="/employer-login" style={secondaryBtn}>
+                <Link href="/employer-login" style={secondaryBtn} className="rn-btn-secondary">
                   Employer Login
                 </Link>
-                <Link href="/" style={secondaryBtn}>
+                <Link href="/" style={secondaryBtn} className="rn-btn-secondary">
                   Home
                 </Link>
               </div>
@@ -327,10 +327,10 @@ export default function PricingPage() {
               </div>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
-                <Link href="/post-job" style={primaryBtn}>
+                <Link href="/post-job" style={primaryBtn} className="rn-btn-primary">
                   Start Posting
                 </Link>
-                <Link href="/contact" style={secondaryBtn}>
+                <Link href="/contact" style={secondaryBtn} className="rn-btn-secondary">
                   Contact
                 </Link>
               </div>
@@ -464,10 +464,10 @@ export default function PricingPage() {
                 marginTop: 20,
               }}
             >
-              <Link href="/post-job" style={primaryBtn}>
+              <Link href="/post-job" style={primaryBtn} className="rn-btn-primary">
                 Post a Job
               </Link>
-              <Link href="/contact" style={secondaryBtn}>
+              <Link href="/contact" style={secondaryBtn} className="rn-btn-secondary">
                 Contact
               </Link>
             </div>

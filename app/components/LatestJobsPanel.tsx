@@ -190,6 +190,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
     return (
       <div style={{ position: "relative" }}>
         <button
+          className="rn-btn-pill"
           type="button"
           onClick={() => setOpenMenu((prev) => (prev === id ? null : id))}
           style={{
@@ -272,6 +273,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
         />
 
         <button
+          className="rn-btn-subtle"
           type="button"
           onClick={clearFilters}
           style={{
@@ -299,7 +301,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
           isActive={!!position}
         >
           <button
-            style={menuItemStyle}
+            className="rn-btn-menu" style={menuItemStyle}
             onClick={() => {
               setPosition("");
               setOpenMenu(null);
@@ -310,7 +312,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
           {positionOptions.map((p) => (
             <button
               key={p}
-              style={menuItemStyle}
+              className="rn-btn-menu" style={menuItemStyle}
               onClick={() => {
                 setPosition(p);
                 setOpenMenu(null);
@@ -342,7 +344,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
           isActive={!!datePosted}
         >
           <button
-            style={menuItemStyle}
+            className="rn-btn-menu" style={menuItemStyle}
             onClick={() => {
               setDatePosted("");
               setOpenMenu(null);
@@ -350,19 +352,19 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
           >
             Any time
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("24h"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("24h"); setOpenMenu(null); }}>
             Last 24 hours
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("3d"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("3d"); setOpenMenu(null); }}>
             Last 3 days
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("7d"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("7d"); setOpenMenu(null); }}>
             Last 7 days
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("14d"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("14d"); setOpenMenu(null); }}>
             Last 14 days
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("30d"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("30d"); setOpenMenu(null); }}>
             Last 30 days
           </button>
         </PillMenu>
@@ -440,6 +442,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
 
                 <Link
                   href={`/jobs/${job.id}`}
+                  className="rn-btn-view"
                   style={{
                     backgroundColor: GREEN,
                     color: "#fef5ea",

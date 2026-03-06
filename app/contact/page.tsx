@@ -200,13 +200,13 @@ export default function ContactPage() {
               </p>
 
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
-                <Link href="/jobs" style={primaryBtn}>
+                <Link href="/jobs" style={primaryBtn} className="rn-btn-primary">
                   Browse Jobs
                 </Link>
-                <Link href="/post-job" style={secondaryBtn}>
+                <Link href="/post-job" style={secondaryBtn} className="rn-btn-secondary">
                   Post a Job
                 </Link>
-                <Link href="/" style={secondaryBtn}>
+                <Link href="/" style={secondaryBtn} className="rn-btn-secondary">
                   Home
                 </Link>
               </div>
@@ -355,6 +355,7 @@ export default function ContactPage() {
 
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button
+                    className="rn-btn-primary"
                     type="submit"
                     disabled={isSubmitting}
                     style={{
@@ -367,7 +368,7 @@ export default function ContactPage() {
                     {isSubmitting ? "Sending..." : "Submit"}
                   </button>
 
-                  <Link href="/jobs" style={secondaryBtn}>
+                  <Link href="/jobs" style={secondaryBtn} className="rn-btn-secondary">
                     Browse Jobs
                   </Link>
                 </div>
@@ -491,11 +492,11 @@ export default function ContactPage() {
                 marginTop: 20,
               }}
             >
-              <Link href="/jobs" style={primaryBtn}>
+              <Link href="/jobs" style={primaryBtn} className="rn-btn-primary">
                 Browse Jobs
                 <ArrowRight size={16} />
               </Link>
-              <Link href="/" style={secondaryBtn}>
+              <Link href="/" style={secondaryBtn} className="rn-btn-secondary">
                 Home
               </Link>
             </div>
@@ -596,6 +597,7 @@ export default function ContactPage() {
               }}
             >
               <button
+                className="rn-btn-primary"
                 type="button"
                 onClick={() => setShowSuccessModal(false)}
                 style={{

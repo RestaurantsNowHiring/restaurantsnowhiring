@@ -263,6 +263,7 @@ export default function JobsFilterPanel({
     return (
       <div style={{ position: "relative" }}>
         <button
+          className="rn-btn-pill"
           type="button"
           onClick={() => setOpenMenu((prev) => (prev === id ? null : id))}
           style={{
@@ -352,6 +353,7 @@ export default function JobsFilterPanel({
         />
 
         <button
+          className="rn-btn-subtle"
           type="button"
           onClick={clearFilters}
           style={{
@@ -386,11 +388,11 @@ export default function JobsFilterPanel({
           activeLabel={payFilter === "listed" ? "Pay: listed" : undefined}
           isActive={payFilter === "listed"}
         >
-          <button style={menuItemStyle} onClick={() => { setPayFilter(""); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setPayFilter(""); setOpenMenu(null); }}>
             Any
           </button>
           <button
-            style={menuItemStyle}
+            className="rn-btn-menu" style={menuItemStyle}
             onClick={() => { setPayFilter("listed"); setOpenMenu(null); }}
           >
             Pay listed
@@ -403,13 +405,13 @@ export default function JobsFilterPanel({
           activeLabel={employmentType ? `Job type: ${employmentType}` : undefined}
           isActive={!!employmentType}
         >
-          <button style={menuItemStyle} onClick={() => { setEmploymentType(""); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setEmploymentType(""); setOpenMenu(null); }}>
             Any
           </button>
           {employmentTypeOptions.map((t) => (
             <button
               key={t}
-              style={menuItemStyle}
+              className="rn-btn-menu" style={menuItemStyle}
               onClick={() => { setEmploymentType(t); setOpenMenu(null); }}
             >
               {t}
@@ -423,13 +425,13 @@ export default function JobsFilterPanel({
           activeLabel={roleCategory ? `Role: ${roleCategory}` : undefined}
           isActive={!!roleCategory}
         >
-          <button style={menuItemStyle} onClick={() => { setRoleCategory(""); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setRoleCategory(""); setOpenMenu(null); }}>
             {lockedRoleCategories.length ? "All shown roles" : "Any"}
           </button>
           {roleCategoryOptions.map((r) => (
             <button
               key={r}
-              style={menuItemStyle}
+              className="rn-btn-menu" style={menuItemStyle}
               onClick={() => { setRoleCategory(r); setOpenMenu(null); }}
             >
               {r}
@@ -453,22 +455,22 @@ export default function JobsFilterPanel({
           }
           isActive={!!datePosted}
         >
-          <button style={menuItemStyle} onClick={() => { setDatePosted(""); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted(""); setOpenMenu(null); }}>
             Any time
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("24h"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("24h"); setOpenMenu(null); }}>
             Last 24 hours
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("3d"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("3d"); setOpenMenu(null); }}>
             Last 3 days
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("7d"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("7d"); setOpenMenu(null); }}>
             Last 7 days
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("14d"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("14d"); setOpenMenu(null); }}>
             Last 14 days
           </button>
-          <button style={menuItemStyle} onClick={() => { setDatePosted("30d"); setOpenMenu(null); }}>
+          <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted("30d"); setOpenMenu(null); }}>
             Last 30 days
           </button>
         </PillMenu>
@@ -546,6 +548,7 @@ export default function JobsFilterPanel({
 
                 <Link
                   href={`/jobs/${job.id}`}
+                  className="rn-btn-view"
                   style={{
                     backgroundColor: "#35806e",
                     color: "#fef5ea",
