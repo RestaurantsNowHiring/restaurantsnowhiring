@@ -1,6 +1,7 @@
 // app/page.tsx
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
+import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../lib/jobStatus";
 import LatestJobsPanel from "./components/LatestJobsPanel";
 import TopRolesSection from "./components/TopRolesSection";
 import { ClipboardList, Search, ShieldCheck } from "lucide-react";
@@ -15,6 +16,7 @@ type Job = {
   city: string;
   state: string;
   active: boolean;
+  status?: string | null;
   created_at: string;
 
   // optional (pulled for chips / future use)
@@ -24,16 +26,26 @@ type Job = {
 };
 
 export default async function HomePage() {
-  const { data: jobs } = await supabase
+  const initialResult = await supabase
     .from("jobs")
     .select(
-      "id,title,restaurant_name,city,state,active,created_at,pay_range,employment_type,role_category"
+      "id,title,restaurant_name,city,state,active,status,created_at,pay_range,employment_type,role_category"
     )
-    .eq("active", true)
     .order("created_at", { ascending: false })
     .limit(6);
 
-  const latestJobs: Job[] = (jobs ?? []) as Job[];
+  const { data: jobs } = isMissingStatusColumnError(initialResult.error)
+    ? await supabase
+        .from("jobs")
+        .select("id,title,restaurant_name,city,state,active,created_at,pay_range,employment_type,role_category")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(6)
+    : initialResult;
+
+  const latestJobs: Job[] = ((jobs ?? []) as Job[]).filter((job) =>
+    isPubliclyVisibleJob(job.status, job.active)
+  );
 
   // Theme tokens
   const GREEN = "#35806e";

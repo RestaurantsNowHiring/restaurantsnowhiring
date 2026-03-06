@@ -9,6 +9,7 @@ import {
   homeSecondaryButton,
   homeTheme,
 } from "../styles/homepageDesignSystem";
+import { dashboardStatusForJob, isMissingStatusColumnError } from "../../lib/jobStatus";
 
 type DashboardJob = {
   id: string;
@@ -16,6 +17,7 @@ type DashboardJob = {
   city: string | null;
   state: string | null;
   active: boolean;
+  status?: string | null;
   created_at: string;
   views: number;
   dashboard_status: "Active" | "Pending" | "Draft" | "Paused";
@@ -94,31 +96,6 @@ function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSPro
   };
 }
 
-function deriveStatus(active: boolean): DashboardJob["dashboard_status"] {
-  return active ? "Active" : "Pending";
-}
-
-const PAUSED_JOB_STORAGE_KEY = "rn-paused-jobs";
-
-function readPausedJobIds(): string[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const raw = window.localStorage.getItem(PAUSED_JOB_STORAGE_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function writePausedJobIds(ids: string[]) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(PAUSED_JOB_STORAGE_KEY, JSON.stringify(ids));
-}
-
 export default function EmployerDashboardPage() {
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
@@ -129,16 +106,10 @@ export default function EmployerDashboardPage() {
     let mounted = true;
 
     async function loadDashboard() {
-      const pausedJobIds = new Set(readPausedJobIds());
-
       const client = getSupabaseClient();
       if (!client) {
         if (mounted) {
-          setJobs(
-            MOCK_JOBS.map((job) =>
-              pausedJobIds.has(job.id) ? { ...job, dashboard_status: "Paused" } : job
-            )
-          );
+          setJobs(MOCK_JOBS);
           setSource("mock");
           setAuthStatus("allowed");
         }
@@ -150,11 +121,7 @@ export default function EmployerDashboardPage() {
 
       if (!session) {
         if (mounted) {
-          setJobs(
-            MOCK_JOBS.map((job) =>
-              pausedJobIds.has(job.id) ? { ...job, dashboard_status: "Paused" } : job
-            )
-          );
+          setJobs(MOCK_JOBS);
           setSource("mock");
           setAuthStatus("allowed");
         }
@@ -164,30 +131,31 @@ export default function EmployerDashboardPage() {
       const email = session.user.email;
       if (!email) {
         if (mounted) {
-          setJobs(
-            MOCK_JOBS.map((job) =>
-              pausedJobIds.has(job.id) ? { ...job, dashboard_status: "Paused" } : job
-            )
-          );
+          setJobs(MOCK_JOBS);
           setSource("mock");
           setAuthStatus("allowed");
         }
         return;
       }
 
-      const { data: liveJobs, error } = await client
+      const liveQueryWithStatus = await client
         .from("jobs")
-        .select("id,title,city,state,active,created_at")
+        .select("id,title,city,state,active,status,created_at")
         .eq("apply_email", email)
         .order("created_at", { ascending: false });
 
+      const { data: liveJobs, error } =
+        isMissingStatusColumnError(liveQueryWithStatus.error)
+          ? await client
+              .from("jobs")
+              .select("id,title,city,state,active,created_at")
+              .eq("apply_email", email)
+              .order("created_at", { ascending: false })
+          : liveQueryWithStatus;
+
       if (error || !liveJobs || liveJobs.length === 0) {
         if (mounted) {
-          setJobs(
-            MOCK_JOBS.map((job) =>
-              pausedJobIds.has(job.id) ? { ...job, dashboard_status: "Paused" } : job
-            )
-          );
+          setJobs(MOCK_JOBS);
           setSource("mock");
           setAuthStatus("allowed");
         }
@@ -197,7 +165,7 @@ export default function EmployerDashboardPage() {
       const hydratedJobs: DashboardJob[] = liveJobs.map((job, index) => ({
         ...job,
         views: 32 + index * 18,
-        dashboard_status: pausedJobIds.has(job.id) ? "Paused" : deriveStatus(job.active),
+        dashboard_status: dashboardStatusForJob(job.status, job.active),
       }));
 
       if (mounted) {
@@ -227,19 +195,12 @@ export default function EmployerDashboardPage() {
           ? {
               ...item,
               active: !isPaused,
+              status: isPaused ? "active" : "paused",
               dashboard_status: nextStatus,
             }
           : item
       )
     );
-
-    const pausedIds = new Set(readPausedJobIds());
-    if (isPaused) {
-      pausedIds.delete(job.id);
-    } else {
-      pausedIds.add(job.id);
-    }
-    writePausedJobIds(Array.from(pausedIds));
 
     if (source === "live") {
       const client = getSupabaseClient();
@@ -248,7 +209,15 @@ export default function EmployerDashboardPage() {
         return;
       }
 
-      const { error } = await client.from("jobs").update({ active: isPaused }).eq("id", job.id);
+      const updateWithStatus = await client
+        .from("jobs")
+        .update({ active: isPaused, status: isPaused ? "active" : "paused" })
+        .eq("id", job.id);
+
+      const { error } = isMissingStatusColumnError(updateWithStatus.error)
+        ? await client.from("jobs").update({ active: isPaused }).eq("id", job.id)
+        : updateWithStatus;
+
       if (error) {
         setJobs((prev) =>
           prev.map((item) =>
@@ -256,18 +225,12 @@ export default function EmployerDashboardPage() {
               ? {
                   ...item,
                   active: job.active,
+                  status: job.status,
                   dashboard_status: job.dashboard_status,
                 }
               : item
           )
         );
-
-        if (isPaused) {
-          pausedIds.add(job.id);
-        } else {
-          pausedIds.delete(job.id);
-        }
-        writePausedJobIds(Array.from(pausedIds));
       }
     }
 

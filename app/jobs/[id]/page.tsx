@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "../../../lib/supabase";
+import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../../../lib/jobStatus";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -13,6 +14,7 @@ type Job = {
   description: string | null;
   created_at: string;
   active: boolean;
+  status?: string | null;
   pay_range: string | null;
   employment_type: string | null;
   address: string | null;
@@ -29,7 +31,17 @@ export default async function JobDetailsPage({
   const resolvedParams = await Promise.resolve(params);
   const id = resolvedParams?.id;
 
-  const { data, error } = id
+  const initialResult = id
+    ? await supabase
+        .from("jobs")
+        .select(
+          "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category"
+        )
+        .eq("id", id)
+        .limit(1)
+    : { data: null, error: null };
+
+  const { data, error } = id && isMissingStatusColumnError(initialResult.error)
     ? await supabase
         .from("jobs")
         .select(
@@ -37,11 +49,11 @@ export default async function JobDetailsPage({
         )
         .eq("id", id)
         .limit(1)
-    : { data: null, error: null };
+    : initialResult;
 
   const job: Job | undefined = (data?.[0] as Job | undefined) ?? undefined;
 
-  const notFound = !id || !!error || !job || job.active === false;
+  const notFound = !id || !!error || !job || !isPubliclyVisibleJob(job.status, job.active);
 
   const locationText =
     job?.city && job?.state ? `${job.city}, ${job.state}` : "";
