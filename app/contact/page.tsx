@@ -10,14 +10,19 @@ import {
   ShieldCheck,
   Send,
 } from "lucide-react";
+import {
+  homeCardStyle,
+  homePrimaryButton,
+  homeSecondaryButton,
+  homeTheme,
+} from "../styles/homepageDesignSystem";
 
 export default function ContactPage() {
-  const GREEN = "#35806e";
-  const BG = "#ffffff";
-  const CARD = "#f6f5f3";
-  const BORDER = "rgba(0,0,0,.10)";
-  const TEXT = "rgba(0,0,0,.88)";
-  const MUTED = "rgba(0,0,0,.62)";
+  const GREEN = homeTheme.green;
+  const BG = homeTheme.bg;
+  const BORDER = homeTheme.border;
+  const TEXT = homeTheme.text;
+  const MUTED = homeTheme.muted;
   const ERROR = "#b00020";
 
   const [name, setName] = useState("");
@@ -81,11 +86,7 @@ export default function ContactPage() {
   };
 
   const cardStyle: React.CSSProperties = {
-    backgroundColor: CARD,
-    border: `1px solid ${BORDER}`,
-    borderRadius: 22,
-    padding: 22,
-    boxShadow: "0 18px 40px rgba(0,0,0,.08)",
+    ...homeCardStyle,
   };
 
   const smallCard: React.CSSProperties = {
@@ -96,32 +97,14 @@ export default function ContactPage() {
     boxShadow: "0 10px 22px rgba(0,0,0,.05)",
   };
 
-  const buttonBase: React.CSSProperties = {
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    minHeight: 48,
-    padding: "0 18px",
-    borderRadius: 16,
-    textDecoration: "none",
-    fontWeight: 900,
-    fontFamily: "var(--font-body)",
-    border: `1px solid ${BORDER}`,
-    boxShadow: "0 10px 22px rgba(0,0,0,.06)",
-    whiteSpace: "nowrap",
-  };
-
   const primaryBtn: React.CSSProperties = {
-    ...buttonBase,
-    backgroundColor: GREEN,
-    color: "#fff",
+    ...homePrimaryButton,
+    gap: 8,
   };
 
   const secondaryBtn: React.CSSProperties = {
-    ...buttonBase,
-    backgroundColor: "#fff",
-    color: "rgba(0,0,0,.78)",
+    ...homeSecondaryButton,
+    gap: 8,
   };
 
   const iconWrap = (green = false): React.CSSProperties => ({
