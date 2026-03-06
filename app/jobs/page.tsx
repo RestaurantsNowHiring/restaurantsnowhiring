@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
+import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../../lib/jobStatus";
 import JobsFilterPanel from "../components/JobsFilterPanel";
 import {
   homePrimaryButton,
@@ -19,6 +20,7 @@ type Job = {
   state: string;
   created_at: string;
   active: boolean;
+  status?: string | null;
   role_category: string | null;
 
   // ✅ Added for quick info chips
@@ -47,17 +49,27 @@ export default async function JobsPage({
   let query = supabase
     .from("jobs")
     .select(
-      "id,title,restaurant_name,city,state,created_at,active,role_category,pay_range,employment_type"
+      "id,title,restaurant_name,city,state,created_at,active,status,role_category,pay_range,employment_type"
     )
-    .eq("active", true)
     .order("created_at", { ascending: false });
 
   if (rolesArray.length > 0) {
     query = query.in("role_category", rolesArray);
   }
 
-  const { data: jobs, error } = await query;
-  const activeJobs: Job[] = (jobs ?? []) as Job[];
+  const initialResult = await query;
+
+  const { data: jobs, error } = isMissingStatusColumnError(initialResult.error)
+    ? await supabase
+        .from("jobs")
+        .select("id,title,restaurant_name,city,state,created_at,active,role_category,pay_range,employment_type")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+    : initialResult;
+
+  const activeJobs: Job[] = ((jobs ?? []) as Job[]).filter((job) =>
+    isPubliclyVisibleJob(job.status, job.active)
+  );
 
   return (
     <main
