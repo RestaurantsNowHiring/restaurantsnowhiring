@@ -1027,8 +1027,9 @@ export default function PostJobPage() {
                           minWidth: 102,
                           height: 48,
                           borderRadius: 14,
-                          backgroundColor: GREEN,
-                          color: "#fff",
+                          border: `1px solid ${BORDER}`,
+                          backgroundColor: "rgba(0,0,0,.03)",
+                          color: "rgba(0,0,0,.62)",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -1038,7 +1039,7 @@ export default function PostJobPage() {
                           padding: "0 12px",
                         }}
                       >
-                        View →
+                        Preview only
                       </div>
                     </div>
 
