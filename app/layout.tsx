@@ -1,5 +1,6 @@
 // src/app/layout.tsx
 import "./globals.css";
+import Link from "next/link";
 import localFont from "next/font/local";
 import { Inter, Sora } from "next/font/google";
 import TopBanner from "./components/TopBanner";
@@ -61,6 +62,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             textAlign: "center",
           }}
         >
+          <div style={{ display: "flex", justifyContent: "center", gap: 14, marginBottom: 8 }}>
+            <Link href="/admin" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
+              Admin
+            </Link>
+          </div>
           © {new Date().getFullYear()} RestaurantsNowHiring.com
         </footer>
       </body>
