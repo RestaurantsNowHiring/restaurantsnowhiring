@@ -448,7 +448,7 @@ export default function AdminPageClient() {
             <section style={homeCardStyle}>
               <h2 style={{ marginTop: 0, marginBottom: 12, color: homeTheme.text }}>Job ad review</h2>
               <p style={{ marginTop: 0, marginBottom: 14, color: homeTheme.muted, fontWeight: 700 }}>
-                Approval marks a listing active for the public jobs feed by updating {statusColumnAvailable ? "status = active and active = true" : "active = true"}.
+                Approval marks a listing public only when both status is active and active is true{statusColumnAvailable ? "." : " (legacy fallback: active = true)."}
               </p>
 
               {jobsError && (
