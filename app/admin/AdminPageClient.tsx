@@ -80,6 +80,7 @@ export default function AdminPageClient() {
   const [jobs, setJobs] = useState<AdminJob[]>([]);
   const [jobsState, setJobsState] = useState<"loading" | "ready" | "error">("loading");
   const [jobsError, setJobsError] = useState<string | null>(null);
+  const [jobsActionMessage, setJobsActionMessage] = useState<string | null>(null);
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
   const [statusColumnAvailable, setStatusColumnAvailable] = useState(true);
 
@@ -248,24 +249,38 @@ export default function AdminPageClient() {
   async function approveJob(jobId: string) {
     if (busyJobId) return;
 
-    const client = getSupabaseClient();
-    if (!client) {
-      setJobsError("Supabase environment variables are missing.");
-      return;
-    }
+    const previousJob = jobs.find((job) => job.id === jobId) ?? null;
+    if (!previousJob) return;
 
+    setJobsError(null);
+    setJobsActionMessage(null);
     setBusyJobId(jobId);
     setJobs((prev) =>
       prev.map((job) => (job.id === jobId ? { ...job, active: true, status: statusColumnAvailable ? "active" : job.status } : job))
     );
 
-    const payload = statusColumnAvailable ? { active: true, status: "active" } : { active: true };
+    const response = await fetch(`/api/admin/jobs/${encodeURIComponent(jobId)}/approve`, {
+      method: "POST",
+      credentials: "include",
+    });
 
-    const result = await client.from("jobs").update(payload).eq("id", jobId);
+    const body = (await response.json().catch(() => null)) as { error?: string } | null;
 
-    if (result.error) {
-      setJobsError(result.error.message || "Approval update failed.");
-      setJobs((prev) => prev.map((job) => (job.id === jobId ? { ...job, active: false } : job)));
+    if (!response.ok) {
+      setJobsError(body?.error || "Approval update failed.");
+      setJobs((prev) =>
+        prev.map((job) =>
+          job.id === jobId
+            ? {
+                ...job,
+                active: previousJob.active,
+                status: previousJob.status,
+              }
+            : job
+        )
+      );
+    } else {
+      setJobsActionMessage("Job approved and now eligible for public listings.");
     }
 
     setBusyJobId(null);
@@ -449,6 +464,22 @@ export default function AdminPageClient() {
                   }}
                 >
                   {jobsError}
+                </div>
+              )}
+
+              {jobsActionMessage && (
+                <div
+                  style={{
+                    marginBottom: 12,
+                    padding: "10px 12px",
+                    borderRadius: 10,
+                    border: "1px solid rgba(53,128,110,.24)",
+                    color: "#1d5b4d",
+                    backgroundColor: "rgba(53,128,110,.08)",
+                    fontWeight: 700,
+                  }}
+                >
+                  {jobsActionMessage}
                 </div>
               )}
 
