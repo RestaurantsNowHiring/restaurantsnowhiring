@@ -63,7 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         >
           <div style={{ display: "flex", justifyContent: "center", gap: 14, marginBottom: 8 }}>
-            <Link href="/admin" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
+            <Link href="/admin/login" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
               Admin
             </Link>
           </div>

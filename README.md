@@ -34,3 +34,15 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Admin access allowlist
+
+Admin access now uses real Supabase email/password sign-in plus a server-side email allowlist.
+
+Set this environment variable before using `/admin`:
+
+```bash
+ADMIN_ALLOWLIST_EMAILS=admin1@example.com,admin2@example.com
+```
+
+Only users whose confirmed Supabase auth email appears in this list can open the Admin workspace.
