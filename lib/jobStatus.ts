@@ -44,3 +44,10 @@ export function isMissingStatusColumnError(error: { code?: string; message?: str
   const message = (error.message ?? "").toLowerCase();
   return error.code === "PGRST204" || message.includes("status") && message.includes("column");
 }
+
+export function isMissingViewsColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+
+  const message = (error.message ?? "").toLowerCase();
+  return error.code === "PGRST204" || message.includes("views") && message.includes("column");
+}
