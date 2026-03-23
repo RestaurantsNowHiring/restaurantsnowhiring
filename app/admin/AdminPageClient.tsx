@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
-import { dashboardStatusForJob, isMissingStatusColumnError } from "../../lib/jobStatus";
+import { dashboardStatusForJob, isMissingStatusColumnError, normalizePersistedStatus } from "../../lib/jobStatus";
 
 type AdminJob = {
   id: string;
@@ -16,6 +16,10 @@ type AdminJob = {
   state: string | null;
   active: boolean;
   status: string | null;
+  description: string | null;
+  pay_range: string | null;
+  employment_type: string | null;
+  how_to_apply: string | null;
   created_at: string;
 };
 
@@ -51,12 +55,15 @@ function formatDate(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
-function statusPillStyle(status: "Active" | "Pending" | "Draft" | "Paused") {
+type AdminJobStatus = "Active" | "Pending" | "Paused" | "Rejected" | "Draft";
+
+function statusPillStyle(status: AdminJobStatus) {
   const statusMap: Record<typeof status, { bg: string; text: string; border: string }> = {
     Active: { bg: "rgba(53,128,110,0.10)", text: "#1d5b4d", border: "rgba(53,128,110,0.24)" },
     Pending: { bg: "rgba(227,160,8,0.12)", text: "#7a5600", border: "rgba(227,160,8,0.28)" },
     Draft: { bg: "rgba(101,115,126,0.12)", text: "#3f4c56", border: "rgba(101,115,126,0.24)" },
     Paused: { bg: "rgba(173,67,67,0.10)", text: "#8a2f2f", border: "rgba(173,67,67,0.24)" },
+    Rejected: { bg: "rgba(120,34,98,0.10)", text: "#6f1f59", border: "rgba(120,34,98,0.30)" },
   };
 
   return {
@@ -81,8 +88,10 @@ export default function AdminPageClient() {
   const [jobsState, setJobsState] = useState<"loading" | "ready" | "error">("loading");
   const [jobsError, setJobsError] = useState<string | null>(null);
   const [jobsActionMessage, setJobsActionMessage] = useState<string | null>(null);
-  const [busyJobId, setBusyJobId] = useState<string | null>(null);
+  const [busyJobAction, setBusyJobAction] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
   const [statusColumnAvailable, setStatusColumnAvailable] = useState(true);
+  const [jobFilter, setJobFilter] = useState<"pending" | "approved" | "paused" | "rejected">("pending");
+  const [previewJob, setPreviewJob] = useState<AdminJob | null>(null);
 
   const [contactInquiries, setContactInquiries] = useState<ContactInquiry[]>([]);
   const [contactState, setContactState] = useState<"loading" | "ready" | "not_configured" | "error">("loading");
@@ -105,11 +114,13 @@ export default function AdminPageClient() {
 
       const variants: JobsQueryVariant[] = [
         {
-          fields: "id,restaurant_name,apply_email,title,city,state,active,status,created_at",
+          fields:
+            "id,restaurant_name,apply_email,title,city,state,active,status,description,pay_range,employment_type,how_to_apply,created_at",
           includesStatus: true,
         },
         {
-          fields: "id,restaurant_name,apply_email,title,city,state,active,created_at",
+          fields:
+            "id,restaurant_name,apply_email,title,city,state,active,description,pay_range,employment_type,how_to_apply,created_at",
           includesStatus: false,
         },
       ];
@@ -154,6 +165,10 @@ export default function AdminPageClient() {
               state: typeof row.state === "string" ? row.state : null,
               active: Boolean(row.active),
               status: selectedVariant.includesStatus && typeof row.status === "string" ? row.status : null,
+              description: typeof row.description === "string" ? row.description : null,
+              pay_range: typeof row.pay_range === "string" ? row.pay_range : null,
+              employment_type: typeof row.employment_type === "string" ? row.employment_type : null,
+              how_to_apply: typeof row.how_to_apply === "string" ? row.how_to_apply : null,
               created_at: String(row.created_at ?? ""),
             }))
           );
@@ -246,20 +261,26 @@ export default function AdminPageClient() {
     return Array.from(map.values()).sort((a, b) => new Date(b.latest).getTime() - new Date(a.latest).getTime());
   }, [jobs]);
 
-  async function approveJob(jobId: string) {
-    if (busyJobId) return;
+  function getAdminReadableStatus(job: AdminJob): AdminJobStatus {
+    const normalized = normalizePersistedStatus(job.status);
+    if (normalized === "rejected") return "Rejected";
+    return dashboardStatusForJob(job.status, job.active);
+  }
+
+  async function updateJobStatus(jobId: string, action: "approve" | "reject") {
+    if (busyJobAction) return;
 
     const previousJob = jobs.find((job) => job.id === jobId) ?? null;
     if (!previousJob) return;
 
     setJobsError(null);
     setJobsActionMessage(null);
-    setBusyJobId(jobId);
-    setJobs((prev) =>
-      prev.map((job) => (job.id === jobId ? { ...job, active: true, status: statusColumnAvailable ? "active" : job.status } : job))
-    );
+    setBusyJobAction({ id: jobId, action });
+    const optimisticStatus = action === "approve" ? "active" : "rejected";
+    const optimisticActive = action === "approve";
+    setJobs((prev) => prev.map((job) => (job.id === jobId ? { ...job, active: optimisticActive, status: statusColumnAvailable ? optimisticStatus : job.status } : job)));
 
-    const response = await fetch(`/api/admin/jobs/${encodeURIComponent(jobId)}/approve`, {
+    const response = await fetch(`/api/admin/jobs/${encodeURIComponent(jobId)}/${action}`, {
       method: "POST",
       credentials: "include",
     });
@@ -267,7 +288,7 @@ export default function AdminPageClient() {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
 
     if (!response.ok) {
-      setJobsError(body?.error || "Approval update failed.");
+      setJobsError(body?.error || `${action === "approve" ? "Approval" : "Rejection"} update failed.`);
       setJobs((prev) =>
         prev.map((job) =>
           job.id === jobId
@@ -280,11 +301,39 @@ export default function AdminPageClient() {
         )
       );
     } else {
-      setJobsActionMessage("Job approved and now eligible for public listings.");
+      setJobsActionMessage(
+        action === "approve"
+          ? "Job approved and now eligible for public listings."
+          : "Job rejected and removed from public visibility."
+      );
     }
 
-    setBusyJobId(null);
+    setBusyJobAction(null);
   }
+
+  const filteredJobs = useMemo(
+    () =>
+      jobs.filter((job) => {
+        const status = getAdminReadableStatus(job);
+        if (jobFilter === "pending") return status === "Pending";
+        if (jobFilter === "approved") return status === "Active";
+        if (jobFilter === "paused") return status === "Paused";
+        return status === "Rejected";
+      }),
+    [jobs, jobFilter]
+  );
+
+  const filterCount = useMemo(() => {
+    const counts = { pending: 0, approved: 0, paused: 0, rejected: 0 };
+    for (const job of jobs) {
+      const status = getAdminReadableStatus(job);
+      if (status === "Pending") counts.pending += 1;
+      if (status === "Active") counts.approved += 1;
+      if (status === "Paused") counts.paused += 1;
+      if (status === "Rejected") counts.rejected += 1;
+    }
+    return counts;
+  }, [jobs]);
 
   const container: React.CSSProperties = {
     maxWidth: 1160,
@@ -450,6 +499,23 @@ export default function AdminPageClient() {
               <p style={{ marginTop: 0, marginBottom: 14, color: homeTheme.muted, fontWeight: 700 }}>
                 Approval marks a listing public only when both status is active and active is true{statusColumnAvailable ? "." : " (legacy fallback: active = true)."}
               </p>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+                {[
+                  { key: "pending", label: "Pending", count: filterCount.pending },
+                  { key: "approved", label: "Approved", count: filterCount.approved },
+                  { key: "paused", label: "Paused", count: filterCount.paused },
+                  { key: "rejected", label: "Rejected", count: filterCount.rejected },
+                ].map((filter) => (
+                  <button
+                    key={filter.key}
+                    type="button"
+                    onClick={() => setJobFilter(filter.key as typeof jobFilter)}
+                    style={tabBtn(jobFilter === filter.key)}
+                  >
+                    {filter.label} ({filter.count})
+                  </button>
+                ))}
+              </div>
 
               {jobsError && (
                 <div
@@ -489,6 +555,10 @@ export default function AdminPageClient() {
                 <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
                   No jobs submitted yet. When employers post jobs, this approval queue will populate.
                 </div>
+              ) : filteredJobs.length === 0 ? (
+                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                  No jobs in the <strong>{jobFilter}</strong> queue right now.
+                </div>
               ) : (
                 <div style={tableWrap}>
                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -499,37 +569,71 @@ export default function AdminPageClient() {
                         <th style={thTdCommon}>Location</th>
                         <th style={thTdCommon}>Status</th>
                         <th style={thTdCommon}>Date Submitted</th>
-                        <th style={thTdCommon}>Action</th>
+                        <th style={thTdCommon}>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {jobs.map((job) => {
-                        const readableStatus = dashboardStatusForJob(job.status, job.active);
+                      {filteredJobs.map((job, index) => {
+                        const readableStatus = getAdminReadableStatus(job);
                         const isApproved = readableStatus === "Active";
+                        const isRejected = readableStatus === "Rejected";
+                        const isPending = readableStatus === "Pending";
+                        const isBusy = busyJobAction?.id === job.id;
                         return (
-                          <tr key={job.id}>
-                            <td style={thTdCommon}>{(job.restaurant_name ?? "").trim() || "Unknown restaurant"}</td>
-                            <td style={thTdCommon}>{job.title || "Untitled job"}</td>
-                            <td style={thTdCommon}>{[job.city, job.state].filter(Boolean).join(", ") || "—"}</td>
-                            <td style={thTdCommon}>
+                          <tr
+                            key={job.id}
+                            style={{
+                              backgroundColor: isPending ? "rgba(227,160,8,0.08)" : index % 2 ? "rgba(0,0,0,0.02)" : "#fff",
+                              boxShadow: isPending ? "inset 4px 0 0 rgba(227,160,8,0.8)" : undefined,
+                            }}
+                          >
+                            <td style={{ ...thTdCommon, fontWeight: 800 }}>{(job.restaurant_name ?? "").trim() || "Unknown restaurant"}</td>
+                            <td style={{ ...thTdCommon, whiteSpace: "normal", minWidth: 180 }}>{job.title || "Untitled job"}</td>
+                            <td style={{ ...thTdCommon, color: homeTheme.muted }}>{[job.city, job.state].filter(Boolean).join(", ") || "—"}</td>
+                            <td style={{ ...thTdCommon, textAlign: "center" }}>
                               <span style={statusPillStyle(readableStatus)}>{readableStatus}</span>
                             </td>
                             <td style={thTdCommon}>{formatDate(job.created_at)}</td>
                             <td style={thTdCommon}>
-                              <button
-                                type="button"
-                                onClick={() => approveJob(job.id)}
-                                style={{
-                                  ...homePrimaryButton,
-                                  padding: "8px 12px",
-                                  fontSize: 12,
-                                  opacity: isApproved || busyJobId === job.id ? 0.6 : 1,
-                                  cursor: isApproved || busyJobId === job.id ? "not-allowed" : "pointer",
-                                }}
-                                disabled={isApproved || busyJobId === job.id}
-                              >
-                                {isApproved ? "Approved" : busyJobId === job.id ? "Approving…" : "Approve"}
-                              </button>
+                              <div style={{ display: "flex", gap: 8 }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setPreviewJob(job)}
+                                  style={{ ...homeSecondaryButton, padding: "8px 12px", fontSize: 12 }}
+                                >
+                                  Preview
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateJobStatus(job.id, "approve")}
+                                  style={{
+                                    ...homePrimaryButton,
+                                    padding: "8px 12px",
+                                    fontSize: 12,
+                                    opacity: isApproved || isBusy ? 0.6 : 1,
+                                    cursor: isApproved || isBusy ? "not-allowed" : "pointer",
+                                  }}
+                                  disabled={isApproved || isBusy}
+                                >
+                                  {isApproved ? "Approved" : isBusy && busyJobAction?.action === "approve" ? "Approving…" : "Approve"}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateJobStatus(job.id, "reject")}
+                                  style={{
+                                    ...homeSecondaryButton,
+                                    padding: "8px 12px",
+                                    fontSize: 12,
+                                    borderColor: "rgba(173,67,67,.28)",
+                                    color: "#8a2f2f",
+                                    opacity: isRejected || isBusy ? 0.6 : 1,
+                                    cursor: isRejected || isBusy ? "not-allowed" : "pointer",
+                                  }}
+                                  disabled={isRejected || isBusy}
+                                >
+                                  {isRejected ? "Rejected" : isBusy && busyJobAction?.action === "reject" ? "Rejecting…" : "Reject"}
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         );
@@ -602,6 +706,63 @@ export default function AdminPageClient() {
           </section>
         )}
       </div>
+      {previewJob && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0,0,0,.45)",
+            display: "grid",
+            placeItems: "center",
+            padding: 16,
+            zIndex: 40,
+          }}
+          onClick={() => setPreviewJob(null)}
+        >
+          <div
+            style={{
+              ...homeCardStyle,
+              width: "min(780px, 100%)",
+              maxHeight: "86vh",
+              overflow: "auto",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
+              <h3 style={{ margin: 0, color: homeTheme.green, fontSize: 28 }}>{previewJob.title || "Untitled job"}</h3>
+              <button type="button" onClick={() => setPreviewJob(null)} style={homeSecondaryButton}>
+                Close
+              </button>
+            </div>
+            <p style={{ marginTop: 8, marginBottom: 4, color: homeTheme.text, fontWeight: 800 }}>
+              {(previewJob.restaurant_name ?? "").trim() || "Unknown restaurant"} •{" "}
+              {[previewJob.city, previewJob.state].filter(Boolean).join(", ") || "No location provided"}
+            </p>
+            <p style={{ marginTop: 0, marginBottom: 12, color: homeTheme.muted, fontWeight: 700 }}>
+              Submitted {formatDate(previewJob.created_at)} • <span style={statusPillStyle(getAdminReadableStatus(previewJob))}>{getAdminReadableStatus(previewJob)}</span>
+            </p>
+            <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
+              <div><strong>Employment Type:</strong> {previewJob.employment_type || "—"}</div>
+              <div><strong>Pay Range:</strong> {previewJob.pay_range || "—"}</div>
+              <div><strong>Apply Contact:</strong> {previewJob.apply_email || "—"}</div>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <h4 style={{ margin: "0 0 6px" }}>Description</h4>
+              <p style={{ margin: 0, whiteSpace: "pre-wrap", color: homeTheme.text }}>
+                {(previewJob.description ?? "").trim() || "No description provided."}
+              </p>
+            </div>
+            <div>
+              <h4 style={{ margin: "0 0 6px" }}>How to apply</h4>
+              <p style={{ margin: 0, whiteSpace: "pre-wrap", color: homeTheme.text }}>
+                {(previewJob.how_to_apply ?? "").trim() || "No application instructions provided."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
