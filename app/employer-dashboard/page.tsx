@@ -9,7 +9,11 @@ import {
   homeSecondaryButton,
   homeTheme,
 } from "../styles/homepageDesignSystem";
-import { dashboardStatusForJob, isMissingStatusColumnError } from "../../lib/jobStatus";
+import {
+  dashboardStatusForJob,
+  isMissingStatusColumnError,
+  isMissingViewsColumnError,
+} from "../../lib/jobStatus";
 
 type DashboardJob = {
   id: string;
@@ -21,6 +25,12 @@ type DashboardJob = {
   created_at: string;
   views: number;
   dashboard_status: "Active" | "Pending" | "Draft" | "Paused";
+};
+
+type JobsQueryVariant = {
+  fields: string;
+  includesStatus: boolean;
+  includesViews: boolean;
 };
 
 const MOCK_JOBS: DashboardJob[] = [
@@ -138,20 +148,57 @@ export default function EmployerDashboardPage() {
         return;
       }
 
-      const liveQueryWithStatus = await client
-        .from("jobs")
-        .select("id,title,city,state,active,status,created_at")
-        .eq("apply_email", email)
-        .order("created_at", { ascending: false });
+      const variants: JobsQueryVariant[] = [
+        {
+          fields: "id,title,city,state,active,status,created_at,views",
+          includesStatus: true,
+          includesViews: true,
+        },
+        {
+          fields: "id,title,city,state,active,status,created_at",
+          includesStatus: true,
+          includesViews: false,
+        },
+        {
+          fields: "id,title,city,state,active,created_at,views",
+          includesStatus: false,
+          includesViews: true,
+        },
+        {
+          fields: "id,title,city,state,active,created_at",
+          includesStatus: false,
+          includesViews: false,
+        },
+      ];
 
-      const { data: liveJobs, error } =
-        isMissingStatusColumnError(liveQueryWithStatus.error)
-          ? await client
-              .from("jobs")
-              .select("id,title,city,state,active,created_at")
-              .eq("apply_email", email)
-              .order("created_at", { ascending: false })
-          : liveQueryWithStatus;
+      let liveJobs: Array<Record<string, unknown>> | null = null;
+      let error: { code?: string; message?: string } | null = null;
+      let selectedVariant: JobsQueryVariant | null = null;
+
+      for (const variant of variants) {
+        const result = await client
+          .from("jobs")
+          .select(variant.fields)
+          .eq("apply_email", email)
+          .order("created_at", { ascending: false });
+
+        if (!result.error) {
+          liveJobs = result.data as Array<Record<string, unknown>>;
+          selectedVariant = variant;
+          error = null;
+          break;
+        }
+
+        const missingStatus = isMissingStatusColumnError(result.error);
+        const missingViews = isMissingViewsColumnError(result.error);
+        if (missingStatus || missingViews) {
+          error = result.error;
+          continue;
+        }
+
+        error = result.error;
+        break;
+      }
 
       if (error || !liveJobs || liveJobs.length === 0) {
         if (mounted) {
@@ -162,10 +209,22 @@ export default function EmployerDashboardPage() {
         return;
       }
 
-      const hydratedJobs: DashboardJob[] = liveJobs.map((job, index) => ({
-        ...job,
-        views: 32 + index * 18,
-        dashboard_status: dashboardStatusForJob(job.status, job.active),
+      const hydratedJobs: DashboardJob[] = liveJobs.map((job) => ({
+        id: String(job.id ?? ""),
+        title: String(job.title ?? ""),
+        city: typeof job.city === "string" ? job.city : null,
+        state: typeof job.state === "string" ? job.state : null,
+        active: Boolean(job.active),
+        status: selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null,
+        created_at: String(job.created_at ?? ""),
+        views:
+          selectedVariant?.includesViews && typeof job.views === "number" && Number.isFinite(job.views)
+            ? job.views
+            : 0,
+        dashboard_status: dashboardStatusForJob(
+          selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null,
+          Boolean(job.active)
+        ),
       }));
 
       if (mounted) {
@@ -458,7 +517,12 @@ export default function EmployerDashboardPage() {
                         <td>{job.views}</td>
                         <td>
                           <div className="rn-dashboard-actions">
-                            <Link href={`/jobs/${job.id}`} style={homeSecondaryButton} className="rn-btn-secondary">
+                            <Link
+                              href={`/jobs/${job.id}`}
+                              prefetch={false}
+                              style={homeSecondaryButton}
+                              className="rn-btn-secondary"
+                            >
                               View
                             </Link>
                             <Link
@@ -505,7 +569,12 @@ export default function EmployerDashboardPage() {
                       Posted {formatDate(job.created_at)} • {job.views} views
                     </p>
                     <div className="rn-dashboard-actions" style={{ marginTop: 12 }}>
-                      <Link href={`/jobs/${job.id}`} style={homeSecondaryButton} className="rn-btn-secondary">
+                      <Link
+                        href={`/jobs/${job.id}`}
+                        prefetch={false}
+                        style={homeSecondaryButton}
+                        className="rn-btn-secondary"
+                      >
                         View
                       </Link>
                       <Link

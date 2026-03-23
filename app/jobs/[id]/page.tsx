@@ -1,6 +1,11 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { supabase } from "../../../lib/supabase";
-import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../../../lib/jobStatus";
+import {
+  isMissingStatusColumnError,
+  isMissingViewsColumnError,
+  isPubliclyVisibleJob,
+} from "../../../lib/jobStatus";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -21,6 +26,7 @@ type Job = {
   how_to_apply: string | null;
   company_website?: string | null;
   role_category?: string | null;
+  views?: number | null;
 };
 
 export default async function JobDetailsPage({
@@ -35,25 +41,58 @@ export default async function JobDetailsPage({
     ? await supabase
         .from("jobs")
         .select(
-          "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category"
+          "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views"
         )
         .eq("id", id)
         .limit(1)
     : { data: null, error: null };
+  const missingStatus = id && isMissingStatusColumnError(initialResult.error);
+  const missingViews = id && isMissingViewsColumnError(initialResult.error);
 
-  const { data, error } = id && isMissingStatusColumnError(initialResult.error)
-    ? await supabase
-        .from("jobs")
-        .select(
-          "id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category"
-        )
-        .eq("id", id)
-        .limit(1)
-    : initialResult;
+  const retryFields = [
+    !missingStatus && "status",
+    !missingViews && "views",
+  ]
+    .filter(Boolean)
+    .join(",");
 
-  const job: Job | undefined = (data?.[0] as Job | undefined) ?? undefined;
+  const fallbackResult =
+    id && initialResult.error && (missingStatus || missingViews)
+      ? await supabase
+          .from("jobs")
+          .select(
+            `id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category${retryFields ? `,${retryFields}` : ""}`
+          )
+          .eq("id", id)
+          .limit(1)
+      : initialResult;
+
+  const { data, error } = fallbackResult;
+
+  let job: Job | undefined = (data?.[0] as Job | undefined) ?? undefined;
 
   const notFound = !id || !!error || !job || !isPubliclyVisibleJob(job.status, job.active);
+
+  if (!notFound && !missingViews && job) {
+    const requestHeaders = await headers();
+    const referer = requestHeaders.get("referer") ?? "";
+    const fromEmployerDashboard = referer.includes("/employer-dashboard");
+
+    if (!fromEmployerDashboard) {
+      const currentViews = typeof job.views === "number" && Number.isFinite(job.views) ? job.views : 0;
+      const { data: updatedViewData } = await supabase
+        .from("jobs")
+        .update({ views: currentViews + 1 })
+        .eq("id", job.id)
+        .select("views")
+        .limit(1);
+
+      const updatedViews = updatedViewData?.[0]?.views;
+      if (typeof updatedViews === "number" && Number.isFinite(updatedViews)) {
+        job = { ...job, views: updatedViews };
+      }
+    }
+  }
 
   const locationText =
     job?.city && job?.state ? `${job.city}, ${job.state}` : "";
