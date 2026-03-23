@@ -5,7 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
-import { dashboardStatusForJob, isMissingStatusColumnError, normalizePersistedStatus } from "../../lib/jobStatus";
+import {
+  adminFilterForJob,
+  adminReadableStatusForJob,
+  type AdminJobFilter,
+  type AdminReadableStatus,
+  isMissingStatusColumnError,
+} from "../../lib/jobStatus";
 
 type AdminJob = {
   id: string;
@@ -55,13 +61,10 @@ function formatDate(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
-type AdminJobStatus = "Active" | "Pending" | "Paused" | "Rejected" | "Draft";
-
-function statusPillStyle(status: AdminJobStatus) {
+function statusPillStyle(status: AdminReadableStatus) {
   const statusMap: Record<typeof status, { bg: string; text: string; border: string }> = {
     Active: { bg: "rgba(53,128,110,0.10)", text: "#1d5b4d", border: "rgba(53,128,110,0.24)" },
     Pending: { bg: "rgba(227,160,8,0.12)", text: "#7a5600", border: "rgba(227,160,8,0.28)" },
-    Draft: { bg: "rgba(101,115,126,0.12)", text: "#3f4c56", border: "rgba(101,115,126,0.24)" },
     Paused: { bg: "rgba(173,67,67,0.10)", text: "#8a2f2f", border: "rgba(173,67,67,0.24)" },
     Rejected: { bg: "rgba(120,34,98,0.10)", text: "#6f1f59", border: "rgba(120,34,98,0.30)" },
   };
@@ -90,7 +93,7 @@ export default function AdminPageClient() {
   const [jobsActionMessage, setJobsActionMessage] = useState<string | null>(null);
   const [busyJobAction, setBusyJobAction] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
   const [statusColumnAvailable, setStatusColumnAvailable] = useState(true);
-  const [jobFilter, setJobFilter] = useState<"pending" | "approved" | "paused" | "rejected">("pending");
+  const [jobFilter, setJobFilter] = useState<AdminJobFilter>("pending");
   const [previewJob, setPreviewJob] = useState<AdminJob | null>(null);
 
   const [contactInquiries, setContactInquiries] = useState<ContactInquiry[]>([]);
@@ -261,10 +264,8 @@ export default function AdminPageClient() {
     return Array.from(map.values()).sort((a, b) => new Date(b.latest).getTime() - new Date(a.latest).getTime());
   }, [jobs]);
 
-  function getAdminReadableStatus(job: AdminJob): AdminJobStatus {
-    const normalized = normalizePersistedStatus(job.status);
-    if (normalized === "rejected") return "Rejected";
-    return dashboardStatusForJob(job.status, job.active);
+  function getAdminReadableStatus(job: AdminJob): AdminReadableStatus {
+    return adminReadableStatusForJob(job.status, job.active);
   }
 
   async function updateJobStatus(jobId: string, action: "approve" | "reject") {
@@ -285,7 +286,16 @@ export default function AdminPageClient() {
       credentials: "include",
     });
 
-    const body = (await response.json().catch(() => null)) as { error?: string } | null;
+    const body = (await response.json().catch(() => null)) as
+      | {
+          error?: string;
+          job?: {
+            id: string;
+            active: boolean;
+            status?: string | null;
+          };
+        }
+      | null;
 
     if (!response.ok) {
       setJobsError(body?.error || `${action === "approve" ? "Approval" : "Rejection"} update failed.`);
@@ -301,6 +311,22 @@ export default function AdminPageClient() {
         )
       );
     } else {
+      if (body?.job) {
+        setJobs((prev) =>
+          prev.map((job) =>
+            job.id === jobId
+              ? {
+                  ...job,
+                  active: Boolean(body.job?.active),
+                  status:
+                    statusColumnAvailable && typeof body.job?.status === "string"
+                      ? body.job.status
+                      : job.status,
+                }
+              : job
+          )
+        );
+      }
       setJobsActionMessage(
         action === "approve"
           ? "Job approved and now eligible for public listings."
@@ -313,24 +339,15 @@ export default function AdminPageClient() {
 
   const filteredJobs = useMemo(
     () =>
-      jobs.filter((job) => {
-        const status = getAdminReadableStatus(job);
-        if (jobFilter === "pending") return status === "Pending";
-        if (jobFilter === "approved") return status === "Active";
-        if (jobFilter === "paused") return status === "Paused";
-        return status === "Rejected";
-      }),
+      jobs.filter((job) => adminFilterForJob(job.status, job.active) === jobFilter),
     [jobs, jobFilter]
   );
 
   const filterCount = useMemo(() => {
     const counts = { pending: 0, approved: 0, paused: 0, rejected: 0 };
     for (const job of jobs) {
-      const status = getAdminReadableStatus(job);
-      if (status === "Pending") counts.pending += 1;
-      if (status === "Active") counts.approved += 1;
-      if (status === "Paused") counts.paused += 1;
-      if (status === "Rejected") counts.rejected += 1;
+      const filter = adminFilterForJob(job.status, job.active);
+      counts[filter] += 1;
     }
     return counts;
   }, [jobs]);
