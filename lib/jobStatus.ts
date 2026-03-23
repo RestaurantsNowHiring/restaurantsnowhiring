@@ -98,12 +98,32 @@ export function isMissingStatusColumnError(error: { code?: string; message?: str
   if (!error) return false;
 
   const message = (error.message ?? "").toLowerCase();
-  return error.code === "PGRST204" || message.includes("status") && message.includes("column");
+  if (error.code === "PGRST204" || error.code === "42703") {
+    return true;
+  }
+
+  if (!message.includes("status")) return false;
+
+  return (
+    message.includes("could not find the 'status' column") ||
+    message.includes("column \"status\" does not exist") ||
+    message.includes("jobs.status does not exist")
+  );
 }
 
 export function isMissingViewsColumnError(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
 
   const message = (error.message ?? "").toLowerCase();
-  return error.code === "PGRST204" || message.includes("views") && message.includes("column");
+  if (error.code === "PGRST204" || error.code === "42703") {
+    return true;
+  }
+
+  if (!message.includes("views")) return false;
+
+  return (
+    message.includes("could not find the 'views' column") ||
+    message.includes("column \"views\" does not exist") ||
+    message.includes("jobs.views does not exist")
+  );
 }
