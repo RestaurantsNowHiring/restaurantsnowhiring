@@ -61,6 +61,30 @@ function parseLocationInput(location: string) {
   return { city, state };
 }
 
+const editFieldStyle: React.CSSProperties = {
+  width: "100%",
+  marginTop: 6,
+  minHeight: 48,
+  padding: "10px 12px",
+  borderRadius: 12,
+  border: `1px solid ${homeTheme.border}`,
+  backgroundColor: "#ffffff",
+  color: homeTheme.text,
+  fontFamily: "var(--font-body)",
+  fontSize: 15,
+  fontWeight: 700,
+  lineHeight: 1.4,
+  boxShadow: "0 8px 18px rgba(0,0,0,.05)",
+  transition: "border-color 160ms ease, box-shadow 160ms ease, background-color 160ms ease",
+};
+
+const editTextareaStyle: React.CSSProperties = {
+  ...editFieldStyle,
+  minHeight: 126,
+  padding: "12px 12px",
+  resize: "vertical",
+};
+
 export default async function EmployerJobEditPage({
   params,
   searchParams,
@@ -242,7 +266,8 @@ export default async function EmployerJobEditPage({
                         name="title"
                         defaultValue={job.title || ""}
                         required
-                        style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${homeTheme.border}`, fontFamily: "var(--font-body)" }}
+                        className="rn-edit-field"
+                        style={editFieldStyle}
                       />
                     </label>
 
@@ -251,7 +276,8 @@ export default async function EmployerJobEditPage({
                       <input
                         name="role_category"
                         defaultValue={job.role_category || ""}
-                        style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${homeTheme.border}`, fontFamily: "var(--font-body)" }}
+                        className="rn-edit-field"
+                        style={editFieldStyle}
                       />
                     </label>
 
@@ -260,7 +286,8 @@ export default async function EmployerJobEditPage({
                       <input
                         name="employment_type"
                         defaultValue={job.employment_type || ""}
-                        style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${homeTheme.border}`, fontFamily: "var(--font-body)" }}
+                        className="rn-edit-field"
+                        style={editFieldStyle}
                       />
                     </label>
 
@@ -269,7 +296,8 @@ export default async function EmployerJobEditPage({
                       <input
                         name="pay_range"
                         defaultValue={job.pay_range || ""}
-                        style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${homeTheme.border}`, fontFamily: "var(--font-body)" }}
+                        className="rn-edit-field"
+                        style={editFieldStyle}
                       />
                     </label>
 
@@ -279,7 +307,8 @@ export default async function EmployerJobEditPage({
                         name="location"
                         defaultValue={[job.city, job.state].filter(Boolean).join(", ")}
                         placeholder="City, State"
-                        style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${homeTheme.border}`, fontFamily: "var(--font-body)" }}
+                        className="rn-edit-field"
+                        style={editFieldStyle}
                       />
                     </label>
 
@@ -289,7 +318,8 @@ export default async function EmployerJobEditPage({
                         name="schedule"
                         defaultValue={parsedDescription.schedule}
                         placeholder="e.g., Weeknights and weekends"
-                        style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${homeTheme.border}`, fontFamily: "var(--font-body)" }}
+                        className="rn-edit-field"
+                        style={editFieldStyle}
                       />
                     </label>
 
@@ -299,7 +329,8 @@ export default async function EmployerJobEditPage({
                         name="description"
                         defaultValue={parsedDescription.description}
                         rows={5}
-                        style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${homeTheme.border}`, resize: "vertical", fontFamily: "var(--font-body)" }}
+                        className="rn-edit-field"
+                        style={editTextareaStyle}
                       />
                     </label>
 
@@ -309,7 +340,8 @@ export default async function EmployerJobEditPage({
                         name="benefits"
                         defaultValue={parsedDescription.benefits}
                         placeholder="e.g., Health insurance, PTO"
-                        style={{ width: "100%", marginTop: 6, padding: "10px 12px", borderRadius: 10, border: `1px solid ${homeTheme.border}`, fontFamily: "var(--font-body)" }}
+                        className="rn-edit-field"
+                        style={editFieldStyle}
                       />
                     </label>
                   </div>
@@ -347,6 +379,25 @@ export default async function EmployerJobEditPage({
           </Link>
         </section>
       </div>
+      <style>{`
+        .rn-edit-field::placeholder {
+          color: rgba(0,0,0,.46);
+          font-weight: 600;
+        }
+
+        .rn-edit-field:hover {
+          border-color: rgba(53,128,110,.34) !important;
+          background-color: #ffffff !important;
+        }
+
+        .rn-edit-field:focus,
+        .rn-edit-field:focus-visible {
+          border-color: rgba(53,128,110,.48) !important;
+          box-shadow: 0 0 0 3px rgba(53,128,110,.18), 0 8px 18px rgba(0,0,0,.05) !important;
+          outline: none !important;
+          background-color: #ffffff !important;
+        }
+      `}</style>
     </main>
   );
 }
