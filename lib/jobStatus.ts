@@ -44,6 +44,29 @@ export function dashboardStatusForJob(status: string | null | undefined, active:
   return active ? "Active" : "Pending";
 }
 
+export type AdminReadableStatus = "Active" | "Pending" | "Paused" | "Rejected";
+export type AdminJobFilter = "pending" | "approved" | "paused" | "rejected";
+
+export function adminReadableStatusForJob(status: string | null | undefined, active: boolean): AdminReadableStatus {
+  const normalized = normalizePersistedStatus(status);
+
+  if (normalized === "active") return active ? "Active" : "Paused";
+  if (normalized === "paused") return "Paused";
+  if (normalized === "rejected") return "Rejected";
+  if (normalized === "pending" || normalized === "draft" || normalized === "archived") return "Pending";
+
+  // Legacy fallback where status may be missing.
+  return active ? "Active" : "Pending";
+}
+
+export function adminFilterForJob(status: string | null | undefined, active: boolean): AdminJobFilter {
+  const readable = adminReadableStatusForJob(status, active);
+  if (readable === "Active") return "approved";
+  if (readable === "Paused") return "paused";
+  if (readable === "Rejected") return "rejected";
+  return "pending";
+}
+
 export function canEmployerPauseResume(status: string | null | undefined): boolean {
   const normalized = normalizePersistedStatus(status);
   if (!normalized) return true;
