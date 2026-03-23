@@ -10,7 +10,9 @@ import {
   homeTheme,
 } from "../styles/homepageDesignSystem";
 import {
+  canEmployerPauseResume,
   dashboardStatusForJob,
+  getEmployerPauseResumeUpdate,
   isMissingStatusColumnError,
   isMissingViewsColumnError,
 } from "../../lib/jobStatus";
@@ -243,9 +245,10 @@ export default function EmployerDashboardPage() {
 
   async function handlePauseToggle(job: DashboardJob) {
     if (busyJobId) return;
+    if (!canEmployerPauseResume(job.status)) return;
 
-    const isPaused = job.dashboard_status === "Paused";
-    const nextStatus: DashboardJob["dashboard_status"] = isPaused ? "Active" : "Paused";
+    const { nextActive, nextStatus } = getEmployerPauseResumeUpdate(job.status, job.active);
+    const nextDashboardStatus = dashboardStatusForJob(nextStatus, nextActive);
 
     setBusyJobId(job.id);
     setJobs((prev) =>
@@ -253,9 +256,9 @@ export default function EmployerDashboardPage() {
         item.id === job.id
           ? {
               ...item,
-              active: !isPaused,
-              status: isPaused ? "active" : "paused",
-              dashboard_status: nextStatus,
+              active: nextActive,
+              status: nextStatus,
+              dashboard_status: nextDashboardStatus,
             }
           : item
       )
@@ -270,11 +273,11 @@ export default function EmployerDashboardPage() {
 
       const updateWithStatus = await client
         .from("jobs")
-        .update({ active: isPaused, status: isPaused ? "active" : "paused" })
+        .update({ active: nextActive, status: nextStatus })
         .eq("id", job.id);
 
       const { error } = isMissingStatusColumnError(updateWithStatus.error)
-        ? await client.from("jobs").update({ active: isPaused }).eq("id", job.id)
+        ? await client.from("jobs").update({ active: nextActive }).eq("id", job.id)
         : updateWithStatus;
 
       if (error) {
@@ -537,10 +540,12 @@ export default function EmployerDashboardPage() {
                               style={homeSecondaryButton}
                               className="rn-btn-secondary"
                               onClick={() => handlePauseToggle(job)}
-                              disabled={busyJobId === job.id}
+                              disabled={busyJobId === job.id || !canEmployerPauseResume(job.status)}
                             >
                               {busyJobId === job.id
                                 ? "Saving..."
+                                : !canEmployerPauseResume(job.status)
+                                  ? "Unavailable"
                                 : job.dashboard_status === "Paused"
                                   ? "Resume"
                                   : "Pause"}
@@ -589,10 +594,12 @@ export default function EmployerDashboardPage() {
                         style={homeSecondaryButton}
                         className="rn-btn-secondary"
                         onClick={() => handlePauseToggle(job)}
-                        disabled={busyJobId === job.id}
+                        disabled={busyJobId === job.id || !canEmployerPauseResume(job.status)}
                       >
                         {busyJobId === job.id
                           ? "Saving..."
+                          : !canEmployerPauseResume(job.status)
+                            ? "Unavailable"
                           : job.dashboard_status === "Paused"
                             ? "Resume"
                             : "Pause"}
