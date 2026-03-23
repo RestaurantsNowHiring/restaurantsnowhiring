@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { headers } from "next/headers";
+import { createClient } from "@supabase/supabase-js";
 import { supabase } from "../../../lib/supabase";
 import {
   isMissingStatusColumnError,
@@ -36,6 +36,14 @@ export default async function JobDetailsPage({
 }) {
   const resolvedParams = await Promise.resolve(params);
   const id = resolvedParams?.id;
+
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const serviceRoleClient =
+    serviceRoleKey && process.env.NEXT_PUBLIC_SUPABASE_URL
+      ? createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, serviceRoleKey, {
+          auth: { persistSession: false, autoRefreshToken: false },
+        })
+      : null;
 
   const queryVariants = [
     {
@@ -104,27 +112,22 @@ export default async function JobDetailsPage({
   const notFound = !id || !!error || !job || !isPubliclyVisibleJob(job.status, job.active);
 
   if (!notFound && !missingViews && job) {
-    const requestHeaders = await headers();
-    const referer = requestHeaders.get("referer") ?? "";
-    const fromEmployerDashboard = referer.includes("/employer-dashboard");
+    const currentViews = typeof job.views === "number" && Number.isFinite(job.views) ? job.views : 0;
+    const viewUpdateClient = serviceRoleClient ?? supabase;
+    const { data: updatedViewData, error: updateViewsError } = await viewUpdateClient
+      .from("jobs")
+      .update({ views: currentViews + 1 })
+      .eq("id", job.id)
+      .select("views")
+      .limit(1);
 
-    if (!fromEmployerDashboard) {
-      const currentViews = typeof job.views === "number" && Number.isFinite(job.views) ? job.views : 0;
-      const { data: updatedViewData, error: updateViewsError } = await supabase
-        .from("jobs")
-        .update({ views: currentViews + 1 })
-        .eq("id", job.id)
-        .select("views")
-        .limit(1);
+    if (isMissingViewsColumnError(updateViewsError)) {
+      missingViews = true;
+    }
 
-      if (isMissingViewsColumnError(updateViewsError)) {
-        missingViews = true;
-      }
-
-      const updatedViews = updatedViewData?.[0]?.views;
-      if (typeof updatedViews === "number" && Number.isFinite(updatedViews)) {
-        job = { ...job, views: updatedViews };
-      }
+    const updatedViews = updatedViewData?.[0]?.views;
+    if (typeof updatedViews === "number" && Number.isFinite(updatedViews)) {
+      job = { ...job, views: updatedViews };
     }
   }
 
