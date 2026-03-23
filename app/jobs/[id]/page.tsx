@@ -37,37 +37,67 @@ export default async function JobDetailsPage({
   const resolvedParams = await Promise.resolve(params);
   const id = resolvedParams?.id;
 
-  const initialResult = id
-    ? await supabase
+  const queryVariants = [
+    {
+      fields:
+        "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+      includesStatus: true,
+      includesViews: true,
+    },
+    {
+      fields:
+        "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+      includesStatus: true,
+      includesViews: false,
+    },
+    {
+      fields:
+        "id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+      includesStatus: false,
+      includesViews: true,
+    },
+    {
+      fields:
+        "id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+      includesStatus: false,
+      includesViews: false,
+    },
+  ] as const;
+
+  let data: Array<Record<string, unknown>> | null = null;
+  let error: { code?: string; message?: string } | null = null;
+  let missingStatus = false;
+  let missingViews = false;
+
+  if (id) {
+    for (const variant of queryVariants) {
+      const result = await supabase
         .from("jobs")
-        .select(
-          "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views"
-        )
+        .select(variant.fields)
         .eq("id", id)
-        .limit(1)
-    : { data: null, error: null };
-  const missingStatus = id && isMissingStatusColumnError(initialResult.error);
-  const missingViews = id && isMissingViewsColumnError(initialResult.error);
+        .limit(1);
 
-  const retryFields = [
-    !missingStatus && "status",
-    !missingViews && "views",
-  ]
-    .filter(Boolean)
-    .join(",");
+      if (!result.error) {
+        data = result.data as Array<Record<string, unknown>>;
+        error = null;
+        missingStatus = !variant.includesStatus;
+        missingViews = !variant.includesViews;
+        break;
+      }
 
-  const fallbackResult =
-    id && initialResult.error && (missingStatus || missingViews)
-      ? await supabase
-          .from("jobs")
-          .select(
-            `id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category${retryFields ? `,${retryFields}` : ""}`
-          )
-          .eq("id", id)
-          .limit(1)
-      : initialResult;
+      const statusMissing = isMissingStatusColumnError(result.error);
+      const viewsMissing = isMissingViewsColumnError(result.error);
+      if (statusMissing || viewsMissing) {
+        missingStatus = missingStatus || statusMissing;
+        missingViews = missingViews || viewsMissing;
+        error = result.error;
+        continue;
+      }
 
-  const { data, error } = fallbackResult;
+      error = result.error;
+      break;
+    }
+  }
 
   let job: Job | undefined = (data?.[0] as Job | undefined) ?? undefined;
 
@@ -80,12 +110,16 @@ export default async function JobDetailsPage({
 
     if (!fromEmployerDashboard) {
       const currentViews = typeof job.views === "number" && Number.isFinite(job.views) ? job.views : 0;
-      const { data: updatedViewData } = await supabase
+      const { data: updatedViewData, error: updateViewsError } = await supabase
         .from("jobs")
         .update({ views: currentViews + 1 })
         .eq("id", job.id)
         .select("views")
         .limit(1);
+
+      if (isMissingViewsColumnError(updateViewsError)) {
+        missingViews = true;
+      }
 
       const updatedViews = updatedViewData?.[0]?.views;
       if (typeof updatedViews === "number" && Number.isFinite(updatedViews)) {
