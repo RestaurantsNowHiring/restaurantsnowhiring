@@ -296,39 +296,32 @@ export default function EmployerDashboardPage() {
       return;
     }
 
-    const { data, error } = await supabase
+    const { count, error } = await supabase
       .from("jobs")
-      .update({ active: nextActive, status: nextStatus })
+      .update({ active: nextActive, status: nextStatus }, { count: "exact" })
       .eq("id", job.id)
-      .eq(jobOwnerFilter.column, jobOwnerFilter.value)
-      .select("id,active,status")
-      .single();
+      .eq(jobOwnerFilter.column, jobOwnerFilter.value);
 
-    if (error || !data) {
-      setActionError(error?.message || "We could not save this job status. Please refresh and try again.");
+    if (error) {
+      setActionError(error.message || "We could not save this job status. Please refresh and try again.");
       setBusyJobId(null);
       return;
     }
 
-    const persistedActive = Boolean(data.active);
-    const persistedStatus = typeof data.status === "string" ? data.status : null;
-
-    if (persistedActive !== nextActive || persistedStatus !== nextStatus) {
-      setActionError("Supabase saved a different job status than requested. Please refresh and try again.");
+    if (count === 0) {
+      setActionError("We could not find that exact job for your employer account. Please refresh and try again.");
       setBusyJobId(null);
       return;
     }
-
-    const persistedDashboardStatus = dashboardStatusForJob(persistedStatus, persistedActive);
 
     setJobs((prev) =>
       prev.map((item) =>
         item.id === job.id
           ? {
               ...item,
-              active: persistedActive,
-              status: persistedStatus,
-              dashboard_status: persistedDashboardStatus,
+              active: nextActive,
+              status: nextStatus,
+              dashboard_status: dashboardStatusForJob(nextStatus, nextActive),
             }
           : item
       )
