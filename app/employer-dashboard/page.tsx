@@ -16,6 +16,10 @@ import {
   isMissingViewsColumnError,
 } from "../../lib/jobStatus";
 
+type JobOwnerFilter =
+  | { column: "employer_id"; value: string }
+  | { column: "apply_email"; value: string; employerIdForLink?: string; requireUnlinkedEmployer?: boolean };
+
 type DashboardJob = {
   id: string;
   title: string;
@@ -32,6 +36,12 @@ type JobsQueryVariant = {
   fields: string;
   includesStatus: boolean;
   includesViews: boolean;
+};
+
+type JobsQueryResult = {
+  liveJobs: Array<Record<string, unknown>> | null;
+  selectedVariant: JobsQueryVariant | null;
+  error: { code?: string; message?: string } | null;
 };
 
 type DashboardSource = "live" | "mock" | "empty";
@@ -120,27 +130,29 @@ export default function EmployerDashboardPage() {
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [source, setSource] = useState<DashboardSource>("empty");
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
-  const [jobOwnerFilter, setJobOwnerFilter] = useState<
-    { column: "employer_id" | "apply_email"; value: string } | null
-  >(null);
+  const [jobOwnerFilter, setJobOwnerFilter] = useState<JobOwnerFilter | null>(null);
+  const [hasEmployerIdColumn, setHasEmployerIdColumn] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    async function loadEmployerJobs(
-      ownerFilter: { column: "employer_id"; value: string } | { column: "apply_email"; value: string }
-    ) {
+    async function loadEmployerJobs(ownerFilter: JobOwnerFilter): Promise<JobsQueryResult> {
       let liveJobs: Array<Record<string, unknown>> | null = null;
       let error: { code?: string; message?: string } | null = null;
       let selectedVariant: JobsQueryVariant | null = null;
 
       for (const variant of JOB_QUERY_VARIANTS) {
-        const result = await supabase
+        let query = supabase
           .from("jobs")
           .select(variant.fields)
-          .eq(ownerFilter.column, ownerFilter.value)
-          .order("created_at", { ascending: false });
+          .eq(ownerFilter.column, ownerFilter.value);
+
+        if (ownerFilter.column === "apply_email" && ownerFilter.requireUnlinkedEmployer) {
+          query = query.is("employer_id", null);
+        }
+
+        const result = await query.order("created_at", { ascending: false });
 
         if (!result.error) {
           liveJobs = result.data as unknown as Array<Record<string, unknown>>;
@@ -171,6 +183,7 @@ export default function EmployerDashboardPage() {
           setJobs(MOCK_JOBS);
           setSource("mock");
           setJobOwnerFilter(null);
+          setHasEmployerIdColumn(true);
           setActionError(null);
           setAuthStatus("allowed");
         }
@@ -185,6 +198,7 @@ export default function EmployerDashboardPage() {
           setJobs([]);
           setSource("empty");
           setJobOwnerFilter(null);
+          setHasEmployerIdColumn(true);
           setAuthStatus("allowed");
           setActionError("Your employer session is missing an email address. Please sign out and sign back in.");
         }
@@ -209,18 +223,41 @@ export default function EmployerDashboardPage() {
         employerIdResult.liveJobs.length === 0;
 
       const ownerFilter = shouldUseApplyEmailFallback
-        ? ({ column: "apply_email", value: email } as const)
+        ? ({
+            column: "apply_email",
+            value: email,
+            employerIdForLink: userId,
+            requireUnlinkedEmployer: !employerIdColumnMissing,
+          } as const)
         : ({ column: "employer_id", value: userId } as const);
 
-      const jobsResult = shouldUseApplyEmailFallback
+      const fallbackJobsResult = shouldUseApplyEmailFallback
         ? await loadEmployerJobs(ownerFilter)
-        : employerIdResult;
+        : null;
+      const applyEmailUnlinkedFilterFailed =
+        !!fallbackJobsResult?.error?.message &&
+        ownerFilter.column === "apply_email" &&
+        ownerFilter.requireUnlinkedEmployer &&
+        (fallbackJobsResult.error.message.includes("employer_id") ||
+          fallbackJobsResult.error.message.includes("Could not find") ||
+          fallbackJobsResult.error.message.includes("does not exist"));
+
+      const jobsResult: JobsQueryResult = applyEmailUnlinkedFilterFailed
+        ? await loadEmployerJobs({ column: "apply_email", value: email })
+        : shouldUseApplyEmailFallback
+          ? fallbackJobsResult ?? { liveJobs: null, selectedVariant: null, error: { message: "Missing fallback owner query." } }
+          : employerIdResult;
+      const resolvedOwnerFilter: JobOwnerFilter = applyEmailUnlinkedFilterFailed
+        ? { column: "apply_email", value: email }
+        : ownerFilter;
+      const resolvedHasEmployerIdColumn = !employerIdColumnMissing && !applyEmailUnlinkedFilterFailed;
 
       if (jobsResult.error || !jobsResult.liveJobs || !jobsResult.selectedVariant) {
         if (mounted) {
           setJobs([]);
           setSource("empty");
           setJobOwnerFilter(null);
+          setHasEmployerIdColumn(resolvedHasEmployerIdColumn);
           setAuthStatus("allowed");
           setActionError(jobsResult.error?.message || "Could not load your employer listings from Supabase.");
         }
@@ -247,7 +284,8 @@ export default function EmployerDashboardPage() {
 
       if (mounted) {
         setJobs(hydratedJobs);
-        setJobOwnerFilter(ownerFilter);
+        setJobOwnerFilter(resolvedOwnerFilter);
+        setHasEmployerIdColumn(resolvedHasEmployerIdColumn);
         setSource(hydratedJobs.length > 0 ? "live" : "empty");
         setAuthStatus("allowed");
       }
@@ -296,11 +334,22 @@ export default function EmployerDashboardPage() {
       return;
     }
 
-    const { count, error } = await supabase
+    let updateQuery = supabase
       .from("jobs")
-      .update({ active: nextActive, status: nextStatus }, { count: "exact" })
+      .update(
+        jobOwnerFilter.column === "apply_email" && hasEmployerIdColumn
+          ? { active: nextActive, status: nextStatus, employer_id: jobOwnerFilter.employerIdForLink }
+          : { active: nextActive, status: nextStatus },
+        { count: "exact" }
+      )
       .eq("id", job.id)
       .eq(jobOwnerFilter.column, jobOwnerFilter.value);
+
+    if (jobOwnerFilter.column === "apply_email" && jobOwnerFilter.requireUnlinkedEmployer) {
+      updateQuery = updateQuery.is("employer_id", null);
+    }
+
+    const { count, error } = await updateQuery;
 
     if (error) {
       setActionError(error.message || "We could not save this job status. Please refresh and try again.");
