@@ -47,6 +47,36 @@ type JobsQueryResult = {
   error: { code?: string; message?: string } | null;
 };
 
+type SupabaseActionError = {
+  code?: string;
+  message?: string;
+  details?: string;
+  hint?: string;
+};
+
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+const PAUSE_RESUME_RETURN_FIELDS = "id,active,status,employer_user_id,employer_email";
+
+function formatSupabaseActionError(error: SupabaseActionError) {
+  const parts = [
+    error.message,
+    error.code ? `code: ${error.code}` : null,
+    error.details ? `details: ${error.details}` : null,
+    error.hint ? `hint: ${error.hint}` : null,
+  ].filter(Boolean);
+
+  return parts.join(" | ");
+}
+
+function pauseResumeFailureMessage(fallback: string, error?: SupabaseActionError | null) {
+  if (!isDevelopment) return fallback;
+  if (!error) return fallback;
+
+  const formattedError = formatSupabaseActionError(error);
+  return formattedError ? `${fallback} Supabase error: ${formattedError}` : fallback;
+}
+
 
 const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   {
@@ -297,39 +327,60 @@ export default function EmployerDashboardPage() {
       matchedOwnership,
       ...(matchedOwnership === "employer_user_id" ? ["employer_email" as const] : ["employer_user_id" as const]),
     ];
-    let updateError: { message?: string } | null = null;
-    let updateSucceeded = false;
+    let updateError: SupabaseActionError | null = null;
+    let updatedJob: Pick<DashboardJob, "active" | "status" | "employer_user_id" | "employer_email"> | null = null;
     let matchedBy: OwnershipMatch | null = null;
 
     for (const ownershipField of updateAttempts) {
       const ownerValue = ownershipField === "employer_user_id" ? currentOwner.userId : currentOwner.email;
       const result = await supabase
         .from("jobs")
-        .update(updatePayload, { count: "exact" })
+        .update(updatePayload)
         .eq("id", job.id)
-        .eq(ownershipField, ownerValue);
+        .eq(ownershipField, ownerValue)
+        .select(PAUSE_RESUME_RETURN_FIELDS)
+        .maybeSingle();
 
       if (result.error) {
         updateError = result.error;
         continue;
       }
 
-      if (typeof result.count === "number" && result.count > 0) {
-        updateSucceeded = true;
+      if (result.data) {
+        updatedJob = {
+          active: Boolean(result.data.active),
+          status: typeof result.data.status === "string" ? result.data.status : null,
+          employer_user_id:
+            typeof result.data.employer_user_id === "string" && result.data.employer_user_id.trim()
+              ? result.data.employer_user_id.trim()
+              : null,
+          employer_email:
+            typeof result.data.employer_email === "string" && result.data.employer_email.trim()
+              ? result.data.employer_email.trim()
+              : null,
+        };
         matchedBy = ownershipField;
         break;
       }
     }
 
-    if (updateError && !updateSucceeded) {
-      setActionError(updateError.message || "We could not save this job status. Please refresh and try again.");
+    if (updateError && !updatedJob) {
+      setActionError(
+        pauseResumeFailureMessage("We could not save this job status. Please refresh and try again.", updateError)
+      );
       setBusyJobId(null);
       return;
     }
 
-    if (!updateSucceeded) {
+    if (!updatedJob) {
       setActionError(
-        "This job still appears linked to your employer account, but Supabase did not update the row. Please refresh and try again."
+        pauseResumeFailureMessage(
+          "This job still appears linked to your employer account, but Supabase did not update the row. Please refresh and try again.",
+          {
+            message:
+              "No row was returned by the authenticated update. This usually means the jobs UPDATE RLS policy blocked the row or the ownership filter did not match at write time.",
+          }
+        )
       );
       setBusyJobId(null);
       return;
@@ -341,10 +392,12 @@ export default function EmployerDashboardPage() {
         item.id === job.id
           ? {
               ...item,
-              active: nextActive,
-              status: nextStatus,
+              active: updatedJob.active,
+              status: updatedJob.status,
+              employer_user_id: updatedJob.employer_user_id,
+              employer_email: updatedJob.employer_email,
               ownership_match: matchedBy ?? item.ownership_match,
-              dashboard_status: dashboardStatusForJob(nextStatus, nextActive),
+              dashboard_status: dashboardStatusForJob(updatedJob.status, updatedJob.active),
             }
           : item
       )
