@@ -160,6 +160,21 @@ export default function AdminLoginPage() {
               />
             </label>
 
+            <div style={{ marginTop: -4, textAlign: "right" }}>
+              <Link
+                href="/forgot-password?type=admin"
+                style={{
+                  color: homeTheme.green,
+                  fontFamily: "var(--font-body)",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  textDecoration: "none",
+                }}
+              >
+                Forgot password?
+              </Link>
+            </div>
+
             {message && (
               <div
                 role="status"

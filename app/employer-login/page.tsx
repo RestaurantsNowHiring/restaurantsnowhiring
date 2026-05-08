@@ -477,6 +477,21 @@ export default function EmployerLoginPage() {
                   />
                 </div>
 
+                <div style={{ marginTop: -6, textAlign: "right" }}>
+                  <Link
+                    href="/forgot-password?type=employer"
+                    style={{
+                      color: GREEN,
+                      fontFamily: "var(--font-body)",
+                      fontSize: 13,
+                      fontWeight: 900,
+                      textDecoration: "none",
+                    }}
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+
                 <button
                   type="submit"
                   disabled={isSubmitting}
