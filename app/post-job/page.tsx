@@ -16,7 +16,7 @@ type PayMode = "range" | "minimum" | "maximum" | "rate";
 export default function PostJobPage() {
   const router = useRouter();
 
-  const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
+  const [authStatus, setAuthStatus] = useState<"loading" | "allowed" | "unconfirmed">("loading");
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -144,6 +144,13 @@ export default function PostJobPage() {
           const sessionEmail = data.session.user.email.trim();
           setWorkEmail((currentEmail) => currentEmail.trim() || sessionEmail);
         }
+
+        if (!data.session?.user.email_confirmed_at) {
+          setMessage("Please confirm your email before posting a job.");
+          setAuthStatus("unconfirmed");
+          return;
+        }
+
         setAuthStatus("allowed");
       }
     }
@@ -278,6 +285,13 @@ export default function PostJobPage() {
     if (userError || !employerUserId || !employerEmail) {
       setIsSubmitting(false);
       setMessage("Please sign in again before posting this job so we can link it to your employer account.");
+      return;
+    }
+
+    if (!currentUser.email_confirmed_at) {
+      setIsSubmitting(false);
+      setAuthStatus("unconfirmed");
+      setMessage("Please confirm your email before posting a job.");
       return;
     }
 
@@ -473,6 +487,76 @@ export default function PostJobPage() {
         }}
       >
         Loading…
+      </main>
+    );
+  }
+
+  if (authStatus === "unconfirmed") {
+    return (
+      <main style={pageWrap}>
+        <div style={{ ...container, maxWidth: 760 }}>
+          <section style={{ ...mainCard, textAlign: "center" }}>
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "7px 12px",
+                borderRadius: 999,
+                border: "1px solid rgba(53,128,110,0.18)",
+                backgroundColor: "rgba(53,128,110,0.08)",
+                color: GREEN,
+                fontWeight: 900,
+                fontFamily: "var(--font-body)",
+                fontSize: 12,
+                marginBottom: 16,
+              }}
+            >
+              EMAIL CONFIRMATION REQUIRED
+            </div>
+            <h1
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-heading)",
+                fontSize: 46,
+                lineHeight: 1,
+                color: GREEN,
+              }}
+            >
+              Please confirm your email before posting a job.
+            </h1>
+            <p
+              style={{
+                margin: "16px auto 0",
+                maxWidth: 560,
+                color: MUTED,
+                fontWeight: 700,
+                fontFamily: "var(--font-body)",
+                lineHeight: 1.6,
+              }}
+            >
+              Check your inbox for the Supabase confirmation link. Once your email is confirmed, return here to create
+              job ads for your restaurant.
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginTop: 24 }}>
+              <Link
+                href={`/check-email?email=${encodeURIComponent(authUserEmail ?? "")}`}
+                style={homePrimaryButton}
+                className="rn-btn-primary"
+              >
+                Check email page
+              </Link>
+              <Link href="/employer-login?next=/post-job" style={homeSecondaryButton} className="rn-btn-secondary">
+                Return to login
+              </Link>
+            </div>
+            {message && (
+              <div style={{ marginTop: 18, color: ERROR, fontWeight: 900, fontFamily: "var(--font-body)" }}>
+                {message}
+              </div>
+            )}
+          </section>
+        </div>
       </main>
     );
   }

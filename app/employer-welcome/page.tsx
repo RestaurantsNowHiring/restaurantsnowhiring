@@ -1,22 +1,29 @@
 "use client";
 
+import type React from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import {
+  homeCardStyle,
+  homePrimaryButton,
+  homeSecondaryButton,
+  homeTheme,
+} from "../styles/homepageDesignSystem";
 
 export default function EmployerWelcomePage() {
   const router = useRouter();
-
-  const BANNER_HEIGHT = 50; // your fixed TopBanner
-  const HERO_HEIGHT = 320;
+  const searchParams = useSearchParams();
+  const emailFromUrl = searchParams.get("email") ?? "";
 
   const [loading, setLoading] = useState(true);
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(emailFromUrl);
   const [confirmed, setConfirmed] = useState(false);
-
   const [resendMsg, setResendMsg] = useState<string | null>(null);
   const [isResending, setIsResending] = useState(false);
+
+  const displayEmail = useMemo(() => email.trim().toLowerCase(), [email]);
 
   useEffect(() => {
     let mounted = true;
@@ -25,36 +32,28 @@ export default function EmployerWelcomePage() {
       setLoading(true);
       setResendMsg(null);
 
-      const { data, error } = await supabase.auth.getSession();
-      if (error) console.error("WELCOME getSession error:", error);
-
-      const session = data?.session;
-
-      // If logged out, go to login
-      if (!session?.user) {
-        router.replace("/employer-login");
-        return;
-      }
-
-      const user = session.user;
-      const userEmail = (user.email ?? "").toLowerCase();
-      const isConfirmed = !!user.email_confirmed_at;
+      const { data } = await supabase.auth.getSession();
+      const user = data.session?.user;
 
       if (!mounted) return;
 
-      setEmail(userEmail);
+      if (user?.email) {
+        setEmail(user.email.toLowerCase());
+      } else if (emailFromUrl) {
+        setEmail(emailFromUrl.toLowerCase());
+      }
+
+      const isConfirmed = !!user?.email_confirmed_at;
       setConfirmed(isConfirmed);
       setLoading(false);
 
-      // If they ARE confirmed, they shouldn't be here anymore
       if (isConfirmed) {
-        router.replace("/");
+        router.replace("/post-job");
       }
     }
 
     load();
 
-    // If auth state changes (confirm link signs them in / out), re-check
     const { data: listener } = supabase.auth.onAuthStateChange(() => {
       load();
     });
@@ -63,30 +62,25 @@ export default function EmployerWelcomePage() {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [router]);
+  }, [emailFromUrl, router]);
 
   async function resendConfirmation() {
     setResendMsg(null);
 
-    if (!email) {
-      setResendMsg("Missing email — please log out and log back in.");
+    if (!displayEmail) {
+      setResendMsg("Enter your email address above, then resend the confirmation email.");
       return;
     }
 
     setIsResending(true);
 
     try {
-      // Supabase JS v2 supports: supabase.auth.resend()
-      const anyAuth = supabase.auth as any;
-
-      if (typeof anyAuth.resend !== "function") {
-        setResendMsg("Resend not available in this Supabase client.");
-        return;
-      }
-
-      const { error } = await anyAuth.resend({
+      const { error } = await supabase.auth.resend({
         type: "signup",
-        email,
+        email: displayEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/check-email`,
+        },
       });
 
       if (error) {
@@ -94,245 +88,165 @@ export default function EmployerWelcomePage() {
         return;
       }
 
-      setResendMsg("Confirmation email sent. Check your inbox (and spam).");
-    } catch (err: any) {
-      setResendMsg(`Error: ${err?.message ?? "Unknown error"}`);
+      setResendMsg("Confirmation email sent. Check your inbox and spam folder.");
     } finally {
       setIsResending(false);
     }
   }
 
-  return (
-    <main style={{ backgroundColor: "#000", minHeight: "100vh" }}>
-      {/* HERO (fixed under banner) */}
-      <section
-        style={{
-          position: "fixed",
-          top: BANNER_HEIGHT,
-          left: 0,
-          width: "100vw",
-          height: HERO_HEIGHT,
-          zIndex: 900,
-          backgroundImage: "url('/hero.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center right",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background:
-              "linear-gradient(90deg, rgba(0,0,0,.78) 0%, rgba(0,0,0,.55) 25%, rgba(0,0,0,.18) 45%, rgba(0,0,0,0) 70%)",
-          }}
-        />
+  const labelStyle: React.CSSProperties = {
+    display: "block",
+    marginBottom: 8,
+    fontSize: 12,
+    fontWeight: 900,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
+    color: homeTheme.muted,
+    fontFamily: "var(--font-body)",
+  };
 
-        <div
-          style={{
-            position: "relative",
-            height: "100%",
-            maxWidth: 1200,
-            margin: "0 auto",
-            padding: "42px 18px",
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
-          }}
-        >
+  const inputStyle: React.CSSProperties = {
+    width: "100%",
+    height: 52,
+    borderRadius: 14,
+    border: `1px solid ${homeTheme.border}`,
+    padding: "0 14px",
+    outline: "none",
+    backgroundColor: "#fff",
+    color: homeTheme.text,
+    fontSize: 15,
+    fontFamily: "var(--font-body)",
+    fontWeight: 700,
+  };
+
+  return (
+    <main style={{ minHeight: "100vh", backgroundColor: homeTheme.bg, paddingTop: 110, paddingBottom: 80 }}>
+      <div style={{ maxWidth: 960, margin: "0 auto", padding: "0 18px" }}>
+        <section style={{ ...homeCardStyle, maxWidth: 680, margin: "0 auto", textAlign: "center" }}>
+          <div
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 12px",
+              borderRadius: 999,
+              border: "1px solid rgba(53,128,110,0.18)",
+              backgroundColor: "rgba(53,128,110,0.08)",
+              color: homeTheme.green,
+              fontWeight: 900,
+              fontFamily: "var(--font-body)",
+              fontSize: 12,
+              marginBottom: 16,
+            }}
+          >
+            EMPLOYER ACCOUNT
+          </div>
+
           <h1
             style={{
               margin: 0,
-              fontSize: 65,
-              fontWeight: 900,
-              color: "#fff",
-              lineHeight: 1.05,
-              fontFamily: "var(--font-coldsmith)",
-              letterSpacing: 1,
-              textShadow: "0px 4px 12px rgba(0,0,0,0.65)",
-              textTransform: "uppercase",
+              fontFamily: "var(--font-heading)",
+              fontSize: 50,
+              lineHeight: 1,
+              color: homeTheme.green,
             }}
           >
-            {loading ? "Welcome" : confirmed ? "All set" : "Confirm your email"}
+            Check your email
           </h1>
 
           <p
             style={{
-              marginTop: 10,
-              marginBottom: 0,
-              maxWidth: 820,
-              color: "rgba(255,255,255,.92)",
-              lineHeight: 1.6,
-              fontSize: 16,
-              fontFamily: "var(--font-coldsmith)",
+              margin: "16px auto 0",
+              maxWidth: 560,
+              color: homeTheme.text,
+              fontWeight: 800,
+              fontFamily: "var(--font-body)",
+              fontSize: 18,
+              lineHeight: 1.5,
             }}
           >
-            {loading
-              ? "Loading your account…"
-              : confirmed
-              ? "Redirecting you to the homepage…"
-              : "Before you can post or manage jobs, please confirm your email address."}
+            Please confirm your email before posting a job.
           </p>
 
-          <div style={{ display: "flex", gap: 12, marginTop: 18 }}>
-            <Link
-              href="/"
-              className="hero-button"
-              style={{
-                backgroundColor: "#000000",
-                border: "2px solid #000000",
-                color: "#ffffff",
-                padding: "10px 20px",
-                fontWeight: 800,
-                borderRadius: 6,
-                textDecoration: "none",
-                fontSize: 20,
-                fontFamily: "var(--font-coldsmith)",
-                letterSpacing: 1,
-                textTransform: "uppercase",
-              }}
-            >
-              Homepage
-            </Link>
-          </div>
-        </div>
-      </section>
+          <p
+            style={{
+              margin: "10px auto 0",
+              maxWidth: 590,
+              color: homeTheme.muted,
+              fontWeight: 700,
+              fontFamily: "var(--font-body)",
+              lineHeight: 1.6,
+            }}
+          >
+            Supabase has sent a confirmation link{displayEmail ? ` to ${displayEmail}` : ""}. Click that link to
+            unlock job posting for your employer account. If you already confirmed, sign in again and continue to post a
+            job.
+          </p>
 
-      <div style={{ height: BANNER_HEIGHT + HERO_HEIGHT }} />
-
-      {/* Background */}
-      <div
-        style={{
-          backgroundImage: "url('/background.jpg')",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "repeat",
-          width: "100%",
-          minHeight: "100vh",
-        }}
-      >
-        <div style={{ backgroundColor: "rgba(0,0,0,0.10)", width: "100%" }}>
-          <section style={{ width: "100vw", padding: "40px 0 80px" }}>
-            <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
-              {/* ✅ THE GATE BANNER */}
-              {!loading && !confirmed && (
-                <div
-                  style={{
-                    backgroundColor: "rgba(255,255,255,.90)",
-                    borderRadius: 14,
-                    padding: 18,
-                    boxShadow: "0 16px 40px rgba(0,0,0,.35)",
-                    border: "2px solid #ff7a00",
-                    marginBottom: 16,
-                  }}
-                >
-                  <div
-                    style={{
-                      fontFamily: "var(--font-coldsmith)",
-                      fontWeight: 900,
-                      letterSpacing: 1,
-                      textTransform: "uppercase",
-                      fontSize: 18,
-                      color: "rgba(0,0,0,.88)",
-                    }}
-                  >
-                    Action required: confirm your email
-                  </div>
-
-                  <div
-                    style={{
-                      marginTop: 8,
-                      fontFamily: "var(--font-coldsmith)",
-                      fontWeight: 700,
-                      color: "rgba(0,0,0,.78)",
-                      lineHeight: 1.6,
-                    }}
-                  >
-                    We sent a confirmation email to{" "}
-                    <span style={{ fontWeight: 900 }}>{email}</span>. Please click the link in that email to unlock your
-                    employer account.
-                  </div>
-
-                  <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-                    <button
-                      type="button"
-                      onClick={resendConfirmation}
-                      disabled={isResending}
-                      className="hero-button"
-                      style={{
-                        height: 46,
-                        padding: "0 16px",
-                        borderRadius: 10,
-                        border: "2px solid #000",
-                        backgroundColor: isResending ? "rgba(0,0,0,.20)" : "#ff7a00",
-                        color: "#000",
-                        fontWeight: 900,
-                        cursor: isResending ? "not-allowed" : "pointer",
-                        fontFamily: "var(--font-coldsmith)",
-                        letterSpacing: 1,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      {isResending ? "Sending…" : "Resend Email"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => window.location.reload()}
-                      className="hero-button"
-                      style={{
-                        height: 46,
-                        padding: "0 16px",
-                        borderRadius: 10,
-                        border: "2px solid #000",
-                        backgroundColor: "rgba(0,0,0,.08)",
-                        color: "#000",
-                        fontWeight: 900,
-                        cursor: "pointer",
-                        fontFamily: "var(--font-coldsmith)",
-                        letterSpacing: 1,
-                        textTransform: "uppercase",
-                      }}
-                    >
-                      I Confirmed — Refresh
-                    </button>
-                  </div>
-
-                  {resendMsg && (
-                    <div
-                      style={{
-                        marginTop: 10,
-                        fontFamily: "var(--font-coldsmith)",
-                        fontWeight: 900,
-                        color: resendMsg.startsWith("Error") ? "#b00020" : "rgba(0,0,0,.85)",
-                      }}
-                    >
-                      {resendMsg}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* ✅ Hide everything else until confirmed */}
-              {!loading && confirmed && (
-                <div
-                  style={{
-                    backgroundColor: "rgba(255,255,255,.85)",
-                    borderRadius: 14,
-                    padding: "22px 22px 26px",
-                    boxShadow: "0 16px 40px rgba(0,0,0,.35)",
-                    border: "1px solid rgba(0,0,0,.10)",
-                    fontFamily: "var(--font-coldsmith)",
-                    fontWeight: 900,
-                    textTransform: "uppercase",
-                    letterSpacing: 1,
-                  }}
-                >
-                  Email confirmed — redirecting…
-                </div>
-              )}
+          <div
+            style={{
+              marginTop: 24,
+              padding: 18,
+              borderRadius: 18,
+              border: `1px solid ${homeTheme.border}`,
+              backgroundColor: "#fff",
+              textAlign: "left",
+            }}
+          >
+            <label style={labelStyle}>Email address for resend</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              style={inputStyle}
+              placeholder="you@restaurant.com"
+            />
+            <div style={{ display: "flex", gap: 12, marginTop: 14, flexWrap: "wrap" }}>
+              <button
+                type="button"
+                onClick={resendConfirmation}
+                disabled={isResending}
+                style={{
+                  ...homePrimaryButton,
+                  opacity: isResending ? 0.7 : 1,
+                  cursor: isResending ? "not-allowed" : "pointer",
+                }}
+              >
+                {isResending ? "Sending…" : "Resend confirmation"}
+              </button>
+              <Link href="/employer-login?next=/post-job" style={homeSecondaryButton}>
+                Return to login
+              </Link>
             </div>
-          </section>
-        </div>
+
+            {resendMsg && (
+              <div
+                style={{
+                  marginTop: 12,
+                  color: resendMsg.startsWith("Error") ? "#b00020" : homeTheme.text,
+                  fontWeight: 800,
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                {resendMsg}
+              </div>
+            )}
+          </div>
+
+          <div
+            style={{
+              marginTop: 18,
+              color: homeTheme.muted,
+              fontWeight: 700,
+              fontFamily: "var(--font-body)",
+              fontSize: 13,
+            }}
+          >
+            {loading && "Checking your account status…"}
+            {!loading && confirmed && "Email confirmed — redirecting you to post a job…"}
+            {!loading && !confirmed && "You will not be able to create job posts until your email is confirmed."}
+          </div>
+        </section>
       </div>
     </main>
   );

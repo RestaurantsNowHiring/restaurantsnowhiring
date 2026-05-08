@@ -46,9 +46,14 @@ export default function EmployerLoginPage() {
 
     async function checkSession() {
       const { data } = await supabase.auth.getSession();
-      if (mounted && data?.session) {
-        router.replace(nextUrl);
+      if (!mounted || !data?.session) return;
+
+      if (!data.session.user.email_confirmed_at) {
+        router.replace(`/check-email?email=${encodeURIComponent(data.session.user.email ?? "")}`);
+        return;
       }
+
+      router.replace(nextUrl);
     }
 
     checkSession();
@@ -95,13 +100,23 @@ export default function EmployerLoginPage() {
     setIsSubmitting(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
 
       if (error) {
-        setMessage(`Error: ${error.message}`);
+        const emailNotConfirmed = error.message.toLowerCase().includes("email not confirmed");
+        setMessage(
+          emailNotConfirmed
+            ? "Please confirm your email before posting a job. Check your inbox for the confirmation link."
+            : `Error: ${error.message}`
+        );
+        return;
+      }
+
+      if (!data.user?.email_confirmed_at) {
+        router.replace(`/check-email?email=${encodeURIComponent(data.user?.email ?? email.trim())}`);
         return;
       }
 
@@ -128,10 +143,12 @@ export default function EmployerLoginPage() {
         return;
       }
 
+      const signupEmail = email.trim();
       const { data, error } = await supabase.auth.signUp({
-        email: email.trim(),
+        email: signupEmail,
         password,
         options: {
+          emailRedirectTo: `${window.location.origin}/check-email`,
           data: {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
@@ -148,16 +165,12 @@ export default function EmployerLoginPage() {
         return;
       }
 
-      const userId = data?.user?.id;
-
-      if (!userId) {
-        setMessage("Account created, but we couldn't finish setup. Please log in.");
+      if (data.user?.email_confirmed_at) {
+        router.replace(nextUrl);
         return;
       }
 
-      // If you want to insert into your employers table later, do it here.
-
-      router.replace("/employer-welcome");
+      router.replace(`/check-email?email=${encodeURIComponent(signupEmail)}`);
     } finally {
       setIsSubmitting(false);
     }
