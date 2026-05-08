@@ -45,3 +45,19 @@ export const homeSecondaryButton: React.CSSProperties = {
   backgroundColor: "#ffffff",
   color: "rgba(0,0,0,.75)",
 };
+
+export const homeInputStyle: React.CSSProperties = {
+  width: "100%",
+  height: 48,
+  borderRadius: 12,
+  border: `1px solid ${homeTheme.border}`,
+  padding: "0 14px",
+  outline: "none",
+  backgroundColor: "#ffffff",
+  color: homeTheme.text,
+  colorScheme: "light",
+  fontSize: 15,
+  fontFamily: "var(--font-body)",
+  fontWeight: 700,
+  boxShadow: "0 8px 18px rgba(0,0,0,.05)",
+};
