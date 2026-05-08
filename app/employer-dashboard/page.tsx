@@ -263,7 +263,12 @@ export default function EmployerDashboardPage() {
     setBusyJobId(job.id);
     setActionError(null);
 
-    if (!owner) {
+    const { data, error: authError } = await supabase.auth.getUser();
+    const authUser = data?.user;
+    const sessionOwner = authUser?.id && authUser.email?.trim() ? { userId: authUser.id, email: authUser.email.trim() } : null;
+    const currentOwner = sessionOwner ?? owner;
+
+    if (authError || !currentOwner) {
       setActionError("We could not update this job because the employer session is unavailable. Please refresh and try again.");
       setBusyJobId(null);
       return;
@@ -277,70 +282,69 @@ export default function EmployerDashboardPage() {
       return;
     }
 
+    const matchedOwnership = getJobOwnershipMatch(job, currentOwner);
+
+    if (!matchedOwnership) {
+      setActionError(
+        "This job is linked to a different employer account than your current session. Please refresh or sign in with the employer account that owns this listing."
+      );
+      setBusyJobId(null);
+      return;
+    }
+
     const updatePayload = { active: nextActive, status: nextStatus };
-    const updateAttempts: OwnershipMatch[] = ["employer_user_id", "employer_email"];
+    const updateAttempts: OwnershipMatch[] = [
+      matchedOwnership,
+      ...(matchedOwnership === "employer_user_id" ? ["employer_email" as const] : ["employer_user_id" as const]),
+    ];
     let updateError: { message?: string } | null = null;
-    let updatedJob: Record<string, unknown> | null = null;
+    let updateSucceeded = false;
     let matchedBy: OwnershipMatch | null = null;
 
     for (const ownershipField of updateAttempts) {
-      const ownerValue = ownershipField === "employer_user_id" ? owner.userId : owner.email;
+      const ownerValue = ownershipField === "employer_user_id" ? currentOwner.userId : currentOwner.email;
       const result = await supabase
         .from("jobs")
-        .update(updatePayload)
+        .update(updatePayload, { count: "exact" })
         .eq("id", job.id)
-        .eq(ownershipField, ownerValue)
-        .select("id,active,status,employer_user_id,employer_email")
-        .maybeSingle();
+        .eq(ownershipField, ownerValue);
 
       if (result.error) {
         updateError = result.error;
         continue;
       }
 
-      if (result.data) {
-        updatedJob = result.data as Record<string, unknown>;
+      if (typeof result.count === "number" && result.count > 0) {
+        updateSucceeded = true;
         matchedBy = ownershipField;
         break;
       }
     }
 
-    if (updateError && !updatedJob) {
+    if (updateError && !updateSucceeded) {
       setActionError(updateError.message || "We could not save this job status. Please refresh and try again.");
       setBusyJobId(null);
       return;
     }
 
-    if (!updatedJob) {
+    if (!updateSucceeded) {
       setActionError(
-        "This job is no longer linked to your employer_user_id or employer_email. Please refresh or ask support to reassign the listing to your employer account."
+        "This job still appears linked to your employer account, but Supabase did not update the row. Please refresh and try again."
       );
       setBusyJobId(null);
       return;
     }
 
-    const persistedActive = typeof updatedJob.active === "boolean" ? updatedJob.active : nextActive;
-    const persistedStatus = typeof updatedJob.status === "string" ? updatedJob.status : nextStatus;
-    const employerUserId =
-      typeof updatedJob.employer_user_id === "string" && updatedJob.employer_user_id.trim()
-        ? updatedJob.employer_user_id.trim()
-        : job.employer_user_id;
-    const employerEmail =
-      typeof updatedJob.employer_email === "string" && updatedJob.employer_email.trim()
-        ? updatedJob.employer_email.trim()
-        : job.employer_email;
-
+    setOwner(currentOwner);
     setJobs((prev) =>
       prev.map((item) =>
         item.id === job.id
           ? {
               ...item,
-              active: persistedActive,
-              status: persistedStatus,
-              employer_user_id: employerUserId,
-              employer_email: employerEmail,
+              active: nextActive,
+              status: nextStatus,
               ownership_match: matchedBy ?? item.ownership_match,
-              dashboard_status: dashboardStatusForJob(persistedStatus, persistedActive),
+              dashboard_status: dashboardStatusForJob(nextStatus, nextActive),
             }
           : item
       )
