@@ -748,6 +748,34 @@ export default function EmployerLoginPage() {
                       />
                     </div>
 
+                    <p
+                      style={{
+                        margin: 0,
+                        maxWidth: "none",
+                        color: MUTED,
+                        fontFamily: "var(--font-body)",
+                        fontSize: 13,
+                        fontWeight: 750,
+                        lineHeight: 1.55,
+                      }}
+                    >
+                      By creating an account, you agree to our{" "}
+                      <Link
+                        href="/terms"
+                        style={{ color: GREEN, fontWeight: 900, textDecoration: "underline" }}
+                      >
+                        Terms & Conditions
+                      </Link>{" "}
+                      and{" "}
+                      <Link
+                        href="/privacy"
+                        style={{ color: GREEN, fontWeight: 900, textDecoration: "underline" }}
+                      >
+                        Privacy Policy
+                      </Link>
+                      .
+                    </p>
+
                     <div style={{ display: "flex", gap: 10 }}>
                       <button
                         type="button"
