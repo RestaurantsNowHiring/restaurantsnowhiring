@@ -18,6 +18,7 @@ export default function PostJobPage() {
 
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -140,6 +141,7 @@ export default function PostJobPage() {
 
       if (mounted) {
         setAuthUserId(data.session?.user.id ?? null);
+        setAuthUserEmail(data.session?.user.email?.trim() ?? null);
         if (data.session?.user.email) {
           const sessionEmail = data.session.user.email.trim();
           setWorkEmail((currentEmail) => currentEmail.trim() || sessionEmail);
@@ -239,7 +241,7 @@ export default function PostJobPage() {
     setCompanyName("");
     setEmployeeCount("");
     setContactName("");
-    setWorkEmail("");
+    setWorkEmail(authUserEmail ?? "");
 
     setRestaurantType("");
     setJobTitle("");
@@ -270,6 +272,17 @@ export default function PostJobPage() {
 
     setIsSubmitting(true);
 
+    const { data: userData, error: userError } = await supabase.auth.getUser();
+    const currentUser = userData?.user;
+    const employerUserId = currentUser?.id ?? authUserId;
+    const employerEmail = currentUser?.email?.trim() ?? authUserEmail;
+
+    if (userError || !employerUserId || !employerEmail) {
+      setIsSubmitting(false);
+      setMessage("Please sign in again before posting this job so we can link it to your employer account.");
+      return;
+    }
+
     const roleCategoryForDb = roleCategories[0] || "Other";
 
     const combinedDescription = [
@@ -297,23 +310,16 @@ export default function PostJobPage() {
       how_to_apply: howToApply.trim() || null,
       description: combinedDescription,
       active: false,
+      employer_email: employerEmail,
+      employer_user_id: employerUserId,
     };
 
-    const payloadWithEmployerId = authUserId ? { ...jobPayload, employer_id: authUserId } : jobPayload;
-    const insertResult = await supabase.from("jobs").insert([payloadWithEmployerId]);
-    const employerIdColumnMissing =
-      !!insertResult.error?.message &&
-      (insertResult.error.message.includes("employer_id") ||
-        insertResult.error.message.includes("Could not find") ||
-        insertResult.error.message.includes("does not exist"));
-    const fallbackInsertResult = employerIdColumnMissing
-      ? await supabase.from("jobs").insert([jobPayload])
-      : insertResult;
+    const insertResult = await supabase.from("jobs").insert([jobPayload]);
 
     setIsSubmitting(false);
 
-    if (fallbackInsertResult.error) {
-      setMessage(`Error: ${fallbackInsertResult.error.message}`);
+    if (insertResult.error) {
+      setMessage(`Error: ${insertResult.error.message}`);
       return;
     }
 
@@ -1314,7 +1320,6 @@ export default function PostJobPage() {
       )}
 
       <style
-        // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{
           __html: `
             .rn-two-col {
