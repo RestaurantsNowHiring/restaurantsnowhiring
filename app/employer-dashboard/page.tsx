@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { supabase } from "../../lib/supabase";
 import {
   homeCardStyle,
   homePrimaryButton,
@@ -33,6 +33,22 @@ type JobsQueryVariant = {
   includesStatus: boolean;
   includesViews: boolean;
 };
+
+type DashboardSource = "live" | "mock" | "empty";
+
+const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
+  {
+    fields: "id,title,city,state,active,status,created_at,views",
+    includesStatus: true,
+    includesViews: true,
+  },
+  {
+    fields: "id,title,city,state,active,status,created_at",
+    includesStatus: true,
+    includesViews: false,
+  },
+];
+
 
 const MOCK_JOBS: DashboardJob[] = [
   {
@@ -68,14 +84,6 @@ const MOCK_JOBS: DashboardJob[] = [
 ];
 
 
-function getSupabaseClient(): SupabaseClient | null {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!url || !key) return null;
-  return createClient(url, key);
-}
-
 function formatDate(isoDate: string) {
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -110,69 +118,28 @@ function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSPro
 export default function EmployerDashboardPage() {
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
-  const [source, setSource] = useState<"live" | "mock" | "empty">("empty");
+  const [source, setSource] = useState<DashboardSource>("empty");
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
-  const [employerEmail, setEmployerEmail] = useState<string | null>(null);
+  const [jobOwnerFilter, setJobOwnerFilter] = useState<
+    { column: "employer_id" | "apply_email"; value: string } | null
+  >(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    async function loadDashboard() {
-      const client = getSupabaseClient();
-      if (!client) {
-        if (mounted) {
-          setJobs(MOCK_JOBS);
-          setSource("mock");
-          setAuthStatus("allowed");
-        }
-        return;
-      }
-
-      const { data } = await client.auth.getSession();
-      const session = data?.session;
-
-      if (!session) {
-        if (mounted) {
-          setJobs(MOCK_JOBS);
-          setSource("mock");
-          setAuthStatus("allowed");
-        }
-        return;
-      }
-
-      const email = session.user.email;
-      if (!email) {
-        if (mounted) {
-          setJobs(MOCK_JOBS);
-          setSource("mock");
-          setAuthStatus("allowed");
-        }
-        return;
-      }
-
-      const variants: JobsQueryVariant[] = [
-        {
-          fields: "id,title,city,state,active,status,created_at,views",
-          includesStatus: true,
-          includesViews: true,
-        },
-        {
-          fields: "id,title,city,state,active,status,created_at",
-          includesStatus: true,
-          includesViews: false,
-        },
-      ];
-
+    async function loadEmployerJobs(
+      ownerFilter: { column: "employer_id"; value: string } | { column: "apply_email"; value: string }
+    ) {
       let liveJobs: Array<Record<string, unknown>> | null = null;
       let error: { code?: string; message?: string } | null = null;
       let selectedVariant: JobsQueryVariant | null = null;
 
-      for (const variant of variants) {
-        const result = await client
+      for (const variant of JOB_QUERY_VARIANTS) {
+        const result = await supabase
           .from("jobs")
           .select(variant.fields)
-          .eq("apply_email", email)
+          .eq(ownerFilter.column, ownerFilter.value)
           .order("created_at", { ascending: false });
 
         if (!result.error) {
@@ -192,45 +159,109 @@ export default function EmployerDashboardPage() {
         break;
       }
 
-      if (error || !liveJobs || liveJobs.length === 0) {
+      return { liveJobs, selectedVariant, error };
+    }
+
+    async function loadDashboard() {
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session;
+
+      if (!session) {
         if (mounted) {
           setJobs(MOCK_JOBS);
           setSource("mock");
+          setJobOwnerFilter(null);
+          setActionError(null);
           setAuthStatus("allowed");
         }
         return;
       }
 
-      const hydratedJobs: DashboardJob[] = liveJobs.map((job) => ({
+      const email = session.user.email?.trim();
+      const userId = session.user.id;
+
+      if (!email) {
+        if (mounted) {
+          setJobs([]);
+          setSource("empty");
+          setJobOwnerFilter(null);
+          setAuthStatus("allowed");
+          setActionError("Your employer session is missing an email address. Please sign out and sign back in.");
+        }
+        return;
+      }
+
+      setActionError(null);
+
+      const employerIdResult = userId
+        ? await loadEmployerJobs({ column: "employer_id", value: userId })
+        : { liveJobs: null, selectedVariant: null, error: { message: "Missing employer user id." } };
+
+      const employerIdColumnMissing =
+        !!employerIdResult.error?.message &&
+        (employerIdResult.error.message.includes("employer_id") ||
+          employerIdResult.error.message.includes("Could not find") ||
+          employerIdResult.error.message.includes("does not exist"));
+
+      const shouldUseApplyEmailFallback =
+        employerIdColumnMissing ||
+        !employerIdResult.liveJobs ||
+        employerIdResult.liveJobs.length === 0;
+
+      const ownerFilter = shouldUseApplyEmailFallback
+        ? ({ column: "apply_email", value: email } as const)
+        : ({ column: "employer_id", value: userId } as const);
+
+      const jobsResult = shouldUseApplyEmailFallback
+        ? await loadEmployerJobs(ownerFilter)
+        : employerIdResult;
+
+      if (jobsResult.error || !jobsResult.liveJobs || !jobsResult.selectedVariant) {
+        if (mounted) {
+          setJobs([]);
+          setSource("empty");
+          setJobOwnerFilter(null);
+          setAuthStatus("allowed");
+          setActionError(jobsResult.error?.message || "Could not load your employer listings from Supabase.");
+        }
+        return;
+      }
+
+      const hydratedJobs: DashboardJob[] = jobsResult.liveJobs.map((job) => ({
         id: String(job.id ?? ""),
         title: String(job.title ?? ""),
         city: typeof job.city === "string" ? job.city : null,
         state: typeof job.state === "string" ? job.state : null,
         active: Boolean(job.active),
-        status: selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null,
+        status: jobsResult.selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null,
         created_at: String(job.created_at ?? ""),
         views:
-          selectedVariant?.includesViews && typeof job.views === "number" && Number.isFinite(job.views)
+          jobsResult.selectedVariant?.includesViews && typeof job.views === "number" && Number.isFinite(job.views)
             ? job.views
             : 0,
         dashboard_status: dashboardStatusForJob(
-          selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null,
+          jobsResult.selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null,
           Boolean(job.active)
         ),
       }));
 
       if (mounted) {
         setJobs(hydratedJobs);
-        setEmployerEmail(email);
-        setSource("live");
+        setJobOwnerFilter(ownerFilter);
+        setSource(hydratedJobs.length > 0 ? "live" : "empty");
         setAuthStatus("allowed");
       }
     }
 
     loadDashboard();
 
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      loadDashboard();
+    });
+
     return () => {
       mounted = false;
+      listener.subscription.unsubscribe();
     };
   }, []);
 
@@ -259,18 +290,17 @@ export default function EmployerDashboardPage() {
       return;
     }
 
-    const client = getSupabaseClient();
-    if (!client || !employerEmail) {
+    if (!jobOwnerFilter) {
       setActionError("We could not update this job because the employer session is unavailable. Please refresh and try again.");
       setBusyJobId(null);
       return;
     }
 
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from("jobs")
       .update({ active: nextActive, status: nextStatus })
       .eq("id", job.id)
-      .eq("apply_email", employerEmail)
+      .eq(jobOwnerFilter.column, jobOwnerFilter.value)
       .select("id,active,status")
       .single();
 
@@ -463,9 +493,9 @@ export default function EmployerDashboardPage() {
                   fontFamily: "var(--font-body)",
                 }}
               >
-                {source === "live"
-                  ? "Showing your current posted jobs."
-                  : "Showing placeholder dashboard data until employer-linked listings are available."}
+                {source === "mock"
+                  ? "Showing preview dashboard data. Sign in to load real employer listings."
+                  : "Showing your current posted jobs."}
               </p>
             </div>
             <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
