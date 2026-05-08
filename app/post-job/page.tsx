@@ -17,6 +17,7 @@ export default function PostJobPage() {
   const router = useRouter();
 
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
+  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -137,7 +138,14 @@ export default function PostJobPage() {
         return;
       }
 
-      if (mounted) setAuthStatus("allowed");
+      if (mounted) {
+        setAuthUserId(data.session?.user.id ?? null);
+        if (data.session?.user.email) {
+          const sessionEmail = data.session.user.email.trim();
+          setWorkEmail((currentEmail) => currentEmail.trim() || sessionEmail);
+        }
+        setAuthStatus("allowed");
+      }
     }
 
     checkAuth();
@@ -275,28 +283,37 @@ export default function PostJobPage() {
       .filter(Boolean)
       .join("\n\n");
 
-    const { error } = await supabase.from("jobs").insert([
-      {
-        restaurant_name: companyName.trim(),
-        title: jobTitle.trim(),
-        role_category: roleCategoryForDb,
-        city: city.trim(),
-        state: stateVal.trim().toUpperCase(),
-        apply_email: workEmail.trim(),
-        company_website: companyWebsite.trim() || null,
-        employment_type: employmentType || null,
-        pay_range: computedPay || null,
-        address: address.trim() || null,
-        how_to_apply: howToApply.trim() || null,
-        description: combinedDescription,
-        active: false,
-      },
-    ]);
+    const jobPayload = {
+      restaurant_name: companyName.trim(),
+      title: jobTitle.trim(),
+      role_category: roleCategoryForDb,
+      city: city.trim(),
+      state: stateVal.trim().toUpperCase(),
+      apply_email: workEmail.trim(),
+      company_website: companyWebsite.trim() || null,
+      employment_type: employmentType || null,
+      pay_range: computedPay || null,
+      address: address.trim() || null,
+      how_to_apply: howToApply.trim() || null,
+      description: combinedDescription,
+      active: false,
+    };
+
+    const payloadWithEmployerId = authUserId ? { ...jobPayload, employer_id: authUserId } : jobPayload;
+    const insertResult = await supabase.from("jobs").insert([payloadWithEmployerId]);
+    const employerIdColumnMissing =
+      !!insertResult.error?.message &&
+      (insertResult.error.message.includes("employer_id") ||
+        insertResult.error.message.includes("Could not find") ||
+        insertResult.error.message.includes("does not exist"));
+    const fallbackInsertResult = employerIdColumnMissing
+      ? await supabase.from("jobs").insert([jobPayload])
+      : insertResult;
 
     setIsSubmitting(false);
 
-    if (error) {
-      setMessage(`Error: ${error.message}`);
+    if (fallbackInsertResult.error) {
+      setMessage(`Error: ${fallbackInsertResult.error.message}`);
       return;
     }
 
