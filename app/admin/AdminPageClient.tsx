@@ -4,7 +4,12 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
+import {
+  homeCardStyle,
+  homePrimaryButton,
+  homeSecondaryButton,
+  homeTheme,
+} from "../styles/homepageDesignSystem";
 import {
   adminFilterForJob,
   adminReadableStatusForJob,
@@ -38,6 +43,13 @@ type ContactInquiry = {
   created_at: string;
 };
 
+type AdminUser = {
+  email: string;
+  source: "bootstrap" | "database";
+  created_at: string | null;
+  created_by_email: string | null;
+};
+
 type JobsQueryVariant = {
   fields: string;
   includesStatus: boolean;
@@ -62,11 +74,30 @@ function formatDate(isoDate: string) {
 }
 
 function statusPillStyle(status: AdminReadableStatus) {
-  const statusMap: Record<typeof status, { bg: string; text: string; border: string }> = {
-    Active: { bg: "rgba(53,128,110,0.10)", text: "#1d5b4d", border: "rgba(53,128,110,0.24)" },
-    Pending: { bg: "rgba(227,160,8,0.12)", text: "#7a5600", border: "rgba(227,160,8,0.28)" },
-    Paused: { bg: "rgba(173,67,67,0.10)", text: "#8a2f2f", border: "rgba(173,67,67,0.24)" },
-    Rejected: { bg: "rgba(120,34,98,0.10)", text: "#6f1f59", border: "rgba(120,34,98,0.30)" },
+  const statusMap: Record<
+    typeof status,
+    { bg: string; text: string; border: string }
+  > = {
+    Active: {
+      bg: "rgba(53,128,110,0.10)",
+      text: "#1d5b4d",
+      border: "rgba(53,128,110,0.24)",
+    },
+    Pending: {
+      bg: "rgba(227,160,8,0.12)",
+      text: "#7a5600",
+      border: "rgba(227,160,8,0.28)",
+    },
+    Paused: {
+      bg: "rgba(173,67,67,0.10)",
+      text: "#8a2f2f",
+      border: "rgba(173,67,67,0.24)",
+    },
+    Rejected: {
+      bg: "rgba(120,34,98,0.10)",
+      text: "#6f1f59",
+      border: "rgba(120,34,98,0.30)",
+    },
   };
 
   return {
@@ -86,20 +117,40 @@ function statusPillStyle(status: AdminReadableStatus) {
 
 export default function AdminPageClient() {
   const router = useRouter();
-  const [tab, setTab] = useState<"jobs" | "contacts">("jobs");
+  const [tab, setTab] = useState<"jobs" | "contacts" | "admins">("jobs");
   const [jobs, setJobs] = useState<AdminJob[]>([]);
-  const [jobsState, setJobsState] = useState<"loading" | "ready" | "error">("loading");
+  const [jobsState, setJobsState] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
   const [jobsError, setJobsError] = useState<string | null>(null);
-  const [jobsActionMessage, setJobsActionMessage] = useState<string | null>(null);
-  const [busyJobAction, setBusyJobAction] = useState<{ id: string; action: "approve" | "reject" } | null>(null);
+  const [jobsActionMessage, setJobsActionMessage] = useState<string | null>(
+    null,
+  );
+  const [busyJobAction, setBusyJobAction] = useState<{
+    id: string;
+    action: "approve" | "reject";
+  } | null>(null);
   const [statusColumnAvailable, setStatusColumnAvailable] = useState(true);
   const [jobFilter, setJobFilter] = useState<AdminJobFilter>("pending");
   const [previewJob, setPreviewJob] = useState<AdminJob | null>(null);
 
-  const [contactInquiries, setContactInquiries] = useState<ContactInquiry[]>([]);
-  const [contactState, setContactState] = useState<"loading" | "ready" | "not_configured" | "error">("loading");
+  const [contactInquiries, setContactInquiries] = useState<ContactInquiry[]>(
+    [],
+  );
+  const [contactState, setContactState] = useState<
+    "loading" | "ready" | "not_configured" | "error"
+  >("loading");
   const [contactSource, setContactSource] = useState<string | null>(null);
   const [contactError, setContactError] = useState<string | null>(null);
+
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [adminUsersState, setAdminUsersState] = useState<
+    "loading" | "ready" | "error"
+  >("loading");
+  const [adminUsersError, setAdminUsersError] = useState<string | null>(null);
+  const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [adminAddState, setAdminAddState] = useState<"idle" | "saving">("idle");
+  const [adminAddMessage, setAdminAddMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -111,6 +162,8 @@ export default function AdminPageClient() {
           setJobsState("error");
           setJobsError("Supabase environment variables are missing.");
           setContactState("not_configured");
+          setAdminUsersState("error");
+          setAdminUsersError("Supabase environment variables are missing.");
         }
         return;
       }
@@ -133,11 +186,14 @@ export default function AdminPageClient() {
       let jobsErr: { message?: string } | null = null;
 
       for (const variant of variants) {
-        const result = await client.from("jobs").select(variant.fields).order("created_at", { ascending: false });
+        const result = await client
+          .from("jobs")
+          .select(variant.fields)
+          .order("created_at", { ascending: false });
 
         if (!result.error) {
           selectedVariant = variant;
-          jobsRows = result.data as Array<Record<string, unknown>>;
+          jobsRows = result.data as unknown as Array<Record<string, unknown>>;
           jobsErr = null;
           break;
         }
@@ -155,32 +211,52 @@ export default function AdminPageClient() {
         if (jobsErr || !jobsRows || !selectedVariant) {
           setJobs([]);
           setJobsState("error");
-          setJobsError(jobsErr?.message ?? "Could not load job submissions for admin review.");
+          setJobsError(
+            jobsErr?.message ??
+              "Could not load job submissions for admin review.",
+          );
         } else {
           setStatusColumnAvailable(selectedVariant.includesStatus);
           setJobs(
             jobsRows.map((row) => ({
               id: String(row.id ?? ""),
-              restaurant_name: typeof row.restaurant_name === "string" ? row.restaurant_name : null,
-              apply_email: typeof row.apply_email === "string" ? row.apply_email : null,
+              restaurant_name:
+                typeof row.restaurant_name === "string"
+                  ? row.restaurant_name
+                  : null,
+              apply_email:
+                typeof row.apply_email === "string" ? row.apply_email : null,
               title: String(row.title ?? ""),
               city: typeof row.city === "string" ? row.city : null,
               state: typeof row.state === "string" ? row.state : null,
               active: Boolean(row.active),
-              status: selectedVariant.includesStatus && typeof row.status === "string" ? row.status : null,
-              description: typeof row.description === "string" ? row.description : null,
-              pay_range: typeof row.pay_range === "string" ? row.pay_range : null,
-              employment_type: typeof row.employment_type === "string" ? row.employment_type : null,
-              how_to_apply: typeof row.how_to_apply === "string" ? row.how_to_apply : null,
+              status:
+                selectedVariant.includesStatus && typeof row.status === "string"
+                  ? row.status
+                  : null,
+              description:
+                typeof row.description === "string" ? row.description : null,
+              pay_range:
+                typeof row.pay_range === "string" ? row.pay_range : null,
+              employment_type:
+                typeof row.employment_type === "string"
+                  ? row.employment_type
+                  : null,
+              how_to_apply:
+                typeof row.how_to_apply === "string" ? row.how_to_apply : null,
               created_at: String(row.created_at ?? ""),
-            }))
+            })),
           );
           setJobsState("ready");
           setJobsError(null);
         }
       }
 
-      const contactTables = ["contact_inquiries", "contact_messages", "inquiries"];
+      const contactTables = [
+        "contact_inquiries",
+        "contact_messages",
+        "inquiries",
+      ];
       const contactFieldVariants = [
         "id,name,email,subject,message,created_at",
         "id,name,email,message,created_at",
@@ -199,14 +275,17 @@ export default function AdminPageClient() {
           if (!result.error) {
             if (mounted) {
               setContactInquiries(
-                ((result.data as Array<Record<string, unknown>>) ?? []).map((row) => ({
+                (
+                  (result.data as unknown as Array<Record<string, unknown>>) ??
+                  []
+                ).map((row) => ({
                   id: String(row.id ?? ""),
                   name: typeof row.name === "string" ? row.name : null,
                   email: typeof row.email === "string" ? row.email : null,
                   subject: typeof row.subject === "string" ? row.subject : null,
                   message: typeof row.message === "string" ? row.message : null,
                   created_at: String(row.created_at ?? ""),
-                }))
+                })),
               );
               setContactSource(tableName);
               setContactState("ready");
@@ -225,8 +304,29 @@ export default function AdminPageClient() {
         setContactSource(null);
         setContactState("not_configured");
         setContactError(
-          "No readable contact inquiry table was found. Create one and store submissions from /contact to see entries here."
+          "No readable contact inquiry table was found. Create one and store submissions from /contact to see entries here.",
         );
+      }
+
+      const adminUsersResponse = await fetch("/api/admin/users", {
+        credentials: "include",
+      });
+      const adminUsersBody = (await adminUsersResponse
+        .json()
+        .catch(() => null)) as { admins?: AdminUser[]; error?: string } | null;
+
+      if (mounted) {
+        if (!adminUsersResponse.ok) {
+          setAdminUsers([]);
+          setAdminUsersState("error");
+          setAdminUsersError(
+            adminUsersBody?.error || "Could not load admin users.",
+          );
+        } else {
+          setAdminUsers(adminUsersBody?.admins ?? []);
+          setAdminUsersState("ready");
+          setAdminUsersError(null);
+        }
       }
     }
 
@@ -238,17 +338,24 @@ export default function AdminPageClient() {
   }, []);
 
   const employerRows = useMemo(() => {
-    const map = new Map<string, { employer: string; email: string; adCount: number; latest: string }>();
+    const map = new Map<
+      string,
+      { employer: string; email: string; adCount: number; latest: string }
+    >();
 
     for (const job of jobs) {
-      const employerName = (job.restaurant_name ?? "").trim() || "Unknown restaurant";
+      const employerName =
+        (job.restaurant_name ?? "").trim() || "Unknown restaurant";
       const email = (job.apply_email ?? "").trim() || "—";
       const key = `${employerName}::${email}`;
 
       const existing = map.get(key);
       if (existing) {
         existing.adCount += 1;
-        if (new Date(job.created_at).getTime() > new Date(existing.latest).getTime()) {
+        if (
+          new Date(job.created_at).getTime() >
+          new Date(existing.latest).getTime()
+        ) {
           existing.latest = job.created_at;
         }
       } else {
@@ -261,7 +368,9 @@ export default function AdminPageClient() {
       }
     }
 
-    return Array.from(map.values()).sort((a, b) => new Date(b.latest).getTime() - new Date(a.latest).getTime());
+    return Array.from(map.values()).sort(
+      (a, b) => new Date(b.latest).getTime() - new Date(a.latest).getTime(),
+    );
   }, [jobs]);
 
   function getAdminReadableStatus(job: AdminJob): AdminReadableStatus {
@@ -279,26 +388,40 @@ export default function AdminPageClient() {
     setBusyJobAction({ id: jobId, action });
     const optimisticStatus = action === "approve" ? "active" : "rejected";
     const optimisticActive = action === "approve";
-    setJobs((prev) => prev.map((job) => (job.id === jobId ? { ...job, active: optimisticActive, status: statusColumnAvailable ? optimisticStatus : job.status } : job)));
+    setJobs((prev) =>
+      prev.map((job) =>
+        job.id === jobId
+          ? {
+              ...job,
+              active: optimisticActive,
+              status: statusColumnAvailable ? optimisticStatus : job.status,
+            }
+          : job,
+      ),
+    );
 
-    const response = await fetch(`/api/admin/jobs/${encodeURIComponent(jobId)}/${action}`, {
-      method: "POST",
-      credentials: "include",
-    });
+    const response = await fetch(
+      `/api/admin/jobs/${encodeURIComponent(jobId)}/${action}`,
+      {
+        method: "POST",
+        credentials: "include",
+      },
+    );
 
-    const body = (await response.json().catch(() => null)) as
-      | {
-          error?: string;
-          job?: {
-            id: string;
-            active: boolean;
-            status?: string | null;
-          };
-        }
-      | null;
+    const body = (await response.json().catch(() => null)) as {
+      error?: string;
+      job?: {
+        id: string;
+        active: boolean;
+        status?: string | null;
+      };
+    } | null;
 
     if (!response.ok) {
-      setJobsError(body?.error || `${action === "approve" ? "Approval" : "Rejection"} update failed.`);
+      setJobsError(
+        body?.error ||
+          `${action === "approve" ? "Approval" : "Rejection"} update failed.`,
+      );
       setJobs((prev) =>
         prev.map((job) =>
           job.id === jobId
@@ -307,8 +430,8 @@ export default function AdminPageClient() {
                 active: previousJob.active,
                 status: previousJob.status,
               }
-            : job
-        )
+            : job,
+        ),
       );
     } else {
       if (body?.job) {
@@ -319,28 +442,65 @@ export default function AdminPageClient() {
                   ...job,
                   active: Boolean(body.job?.active),
                   status:
-                    statusColumnAvailable && typeof body.job?.status === "string"
+                    statusColumnAvailable &&
+                    typeof body.job?.status === "string"
                       ? body.job.status
                       : job.status,
                 }
-              : job
-          )
+              : job,
+          ),
         );
       }
       setJobsActionMessage(
         action === "approve"
           ? "Job approved and now eligible for public listings."
-          : "Job rejected and removed from public visibility."
+          : "Job rejected and removed from public visibility.",
       );
     }
 
     setBusyJobAction(null);
   }
 
+  async function addAdminUser(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (adminAddState === "saving") return;
+
+    const normalizedEmail = newAdminEmail.trim().toLowerCase();
+    setAdminUsersError(null);
+    setAdminAddMessage(null);
+    setAdminAddState("saving");
+
+    const response = await fetch("/api/admin/users", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: normalizedEmail }),
+    });
+
+    const body = (await response.json().catch(() => null)) as {
+      admin?: AdminUser;
+      error?: string;
+    } | null;
+
+    if (!response.ok) {
+      setAdminUsersError(body?.error || "Could not add admin user.");
+    } else if (body?.admin) {
+      setAdminUsers((prev) => [...prev, body.admin as AdminUser]);
+      setNewAdminEmail("");
+      setAdminAddMessage(
+        `${body.admin.email} can now access admin after signing in.`,
+      );
+    }
+
+    setAdminAddState("idle");
+  }
+
   const filteredJobs = useMemo(
     () =>
-      jobs.filter((job) => adminFilterForJob(job.status, job.active) === jobFilter),
-    [jobs, jobFilter]
+      jobs.filter(
+        (job) => adminFilterForJob(job.status, job.active) === jobFilter,
+      ),
+    [jobs, jobFilter],
   );
 
   const filterCount = useMemo(() => {
@@ -363,7 +523,9 @@ export default function AdminPageClient() {
     borderColor: active ? "rgba(53,128,110,.45)" : homeTheme.border,
     backgroundColor: active ? "rgba(53,128,110,.10)" : "#fff",
     color: active ? "#1d5b4d" : "rgba(0,0,0,.75)",
-    boxShadow: active ? "0 12px 24px rgba(53,128,110,.12)" : "0 10px 22px rgba(0,0,0,.08)",
+    boxShadow: active
+      ? "0 12px 24px rgba(53,128,110,.12)"
+      : "0 10px 22px rgba(0,0,0,.08)",
     padding: "10px 14px",
   });
 
@@ -421,15 +583,24 @@ export default function AdminPageClient() {
                   fontFamily: "var(--font-body)",
                 }}
               >
-                Internal review workspace for submitted job ads and incoming contact inquiries.
+                Internal review workspace for submitted job ads and incoming
+                contact inquiries.
               </p>
             </div>
 
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <Link href="/" style={homeSecondaryButton} className="rn-btn-secondary">
+              <Link
+                href="/"
+                style={homeSecondaryButton}
+                className="rn-btn-secondary"
+              >
                 Home
               </Link>
-              <Link href="/employer-dashboard" style={homeSecondaryButton} className="rn-btn-secondary">
+              <Link
+                href="/employer-dashboard"
+                style={homeSecondaryButton}
+                className="rn-btn-secondary"
+              >
                 Employer Dashboard
               </Link>
               <button
@@ -437,7 +608,10 @@ export default function AdminPageClient() {
                 style={homeSecondaryButton}
                 className="rn-btn-secondary"
                 onClick={async () => {
-                  await fetch("/api/admin/session", { method: "DELETE", credentials: "include" });
+                  await fetch("/api/admin/session", {
+                    method: "DELETE",
+                    credentials: "include",
+                  });
                   router.replace("/admin/login");
                 }}
               >
@@ -459,17 +633,33 @@ export default function AdminPageClient() {
               fontFamily: "var(--font-body)",
             }}
           >
-            Access is restricted to approved admins via Supabase auth + server-side allowlist checks.
+            Access is restricted to approved admins via Supabase auth,
+            server-side allowlist checks, and the admin_users table.
           </div>
         </section>
 
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
           <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-            <button type="button" onClick={() => setTab("jobs")} style={tabBtn(tab === "jobs")}>
+            <button
+              type="button"
+              onClick={() => setTab("jobs")}
+              style={tabBtn(tab === "jobs")}
+            >
               Job Approvals
             </button>
-            <button type="button" onClick={() => setTab("contacts")} style={tabBtn(tab === "contacts")}>
+            <button
+              type="button"
+              onClick={() => setTab("contacts")}
+              style={tabBtn(tab === "contacts")}
+            >
               Contact Inquiries
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab("admins")}
+              style={tabBtn(tab === "admins")}
+            >
+              Admin Management
             </button>
           </div>
         </section>
@@ -477,13 +667,24 @@ export default function AdminPageClient() {
         {tab === "jobs" ? (
           <>
             <section style={{ ...homeCardStyle, marginBottom: 16 }}>
-              <h2 style={{ marginTop: 0, marginBottom: 12, color: homeTheme.text }}>Employers with submitted jobs</h2>
+              <h2
+                style={{
+                  marginTop: 0,
+                  marginBottom: 12,
+                  color: homeTheme.text,
+                }}
+              >
+                Employers with submitted jobs
+              </h2>
 
               {jobsState === "loading" ? (
-                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>Loading employer submissions…</div>
+                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                  Loading employer submissions…
+                </div>
               ) : employerRows.length === 0 ? (
                 <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
-                  No employer submissions found yet. Once employers post jobs, they will show up here.
+                  No employer submissions found yet. Once employers post jobs,
+                  they will show up here.
                 </div>
               ) : (
                 <div style={tableWrap}>
@@ -512,16 +713,54 @@ export default function AdminPageClient() {
             </section>
 
             <section style={homeCardStyle}>
-              <h2 style={{ marginTop: 0, marginBottom: 12, color: homeTheme.text }}>Job ad review</h2>
-              <p style={{ marginTop: 0, marginBottom: 14, color: homeTheme.muted, fontWeight: 700 }}>
-                Approval marks a listing public only when both status is active and active is true{statusColumnAvailable ? "." : " (legacy fallback: active = true)."}
+              <h2
+                style={{
+                  marginTop: 0,
+                  marginBottom: 12,
+                  color: homeTheme.text,
+                }}
+              >
+                Job ad review
+              </h2>
+              <p
+                style={{
+                  marginTop: 0,
+                  marginBottom: 14,
+                  color: homeTheme.muted,
+                  fontWeight: 700,
+                }}
+              >
+                Approval marks a listing public only when both status is active
+                and active is true
+                {statusColumnAvailable
+                  ? "."
+                  : " (legacy fallback: active = true)."}
               </p>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginBottom: 12,
+                }}
+              >
                 {[
-                  { key: "pending", label: "Pending", count: filterCount.pending },
-                  { key: "approved", label: "Approved", count: filterCount.approved },
+                  {
+                    key: "pending",
+                    label: "Pending",
+                    count: filterCount.pending,
+                  },
+                  {
+                    key: "approved",
+                    label: "Approved",
+                    count: filterCount.approved,
+                  },
                   { key: "paused", label: "Paused", count: filterCount.paused },
-                  { key: "rejected", label: "Rejected", count: filterCount.rejected },
+                  {
+                    key: "rejected",
+                    label: "Rejected",
+                    count: filterCount.rejected,
+                  },
                 ].map((filter) => (
                   <button
                     key={filter.key}
@@ -567,10 +806,13 @@ export default function AdminPageClient() {
               )}
 
               {jobsState === "loading" ? (
-                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>Loading job ads…</div>
+                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                  Loading job ads…
+                </div>
               ) : jobs.length === 0 ? (
                 <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
-                  No jobs submitted yet. When employers post jobs, this approval queue will populate.
+                  No jobs submitted yet. When employers post jobs, this approval
+                  queue will populate.
                 </div>
               ) : filteredJobs.length === 0 ? (
                 <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
@@ -600,43 +842,86 @@ export default function AdminPageClient() {
                           <tr
                             key={job.id}
                             style={{
-                              backgroundColor: isPending ? "rgba(227,160,8,0.08)" : index % 2 ? "rgba(0,0,0,0.02)" : "#fff",
-                              boxShadow: isPending ? "inset 4px 0 0 rgba(227,160,8,0.8)" : undefined,
+                              backgroundColor: isPending
+                                ? "rgba(227,160,8,0.08)"
+                                : index % 2
+                                  ? "rgba(0,0,0,0.02)"
+                                  : "#fff",
+                              boxShadow: isPending
+                                ? "inset 4px 0 0 rgba(227,160,8,0.8)"
+                                : undefined,
                             }}
                           >
-                            <td style={{ ...thTdCommon, fontWeight: 800 }}>{(job.restaurant_name ?? "").trim() || "Unknown restaurant"}</td>
-                            <td style={{ ...thTdCommon, whiteSpace: "normal", minWidth: 180 }}>{job.title || "Untitled job"}</td>
-                            <td style={{ ...thTdCommon, color: homeTheme.muted }}>{[job.city, job.state].filter(Boolean).join(", ") || "—"}</td>
-                            <td style={{ ...thTdCommon, textAlign: "center" }}>
-                              <span style={statusPillStyle(readableStatus)}>{readableStatus}</span>
+                            <td style={{ ...thTdCommon, fontWeight: 800 }}>
+                              {(job.restaurant_name ?? "").trim() ||
+                                "Unknown restaurant"}
                             </td>
-                            <td style={thTdCommon}>{formatDate(job.created_at)}</td>
+                            <td
+                              style={{
+                                ...thTdCommon,
+                                whiteSpace: "normal",
+                                minWidth: 180,
+                              }}
+                            >
+                              {job.title || "Untitled job"}
+                            </td>
+                            <td
+                              style={{ ...thTdCommon, color: homeTheme.muted }}
+                            >
+                              {[job.city, job.state]
+                                .filter(Boolean)
+                                .join(", ") || "—"}
+                            </td>
+                            <td style={{ ...thTdCommon, textAlign: "center" }}>
+                              <span style={statusPillStyle(readableStatus)}>
+                                {readableStatus}
+                              </span>
+                            </td>
+                            <td style={thTdCommon}>
+                              {formatDate(job.created_at)}
+                            </td>
                             <td style={thTdCommon}>
                               <div style={{ display: "flex", gap: 8 }}>
                                 <button
                                   type="button"
                                   onClick={() => setPreviewJob(job)}
-                                  style={{ ...homeSecondaryButton, padding: "8px 12px", fontSize: 12 }}
+                                  style={{
+                                    ...homeSecondaryButton,
+                                    padding: "8px 12px",
+                                    fontSize: 12,
+                                  }}
                                 >
                                   Preview
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => updateJobStatus(job.id, "approve")}
+                                  onClick={() =>
+                                    updateJobStatus(job.id, "approve")
+                                  }
                                   style={{
                                     ...homePrimaryButton,
                                     padding: "8px 12px",
                                     fontSize: 12,
                                     opacity: isApproved || isBusy ? 0.6 : 1,
-                                    cursor: isApproved || isBusy ? "not-allowed" : "pointer",
+                                    cursor:
+                                      isApproved || isBusy
+                                        ? "not-allowed"
+                                        : "pointer",
                                   }}
                                   disabled={isApproved || isBusy}
                                 >
-                                  {isApproved ? "Approved" : isBusy && busyJobAction?.action === "approve" ? "Approving…" : "Approve"}
+                                  {isApproved
+                                    ? "Approved"
+                                    : isBusy &&
+                                        busyJobAction?.action === "approve"
+                                      ? "Approving…"
+                                      : "Approve"}
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => updateJobStatus(job.id, "reject")}
+                                  onClick={() =>
+                                    updateJobStatus(job.id, "reject")
+                                  }
                                   style={{
                                     ...homeSecondaryButton,
                                     padding: "8px 12px",
@@ -644,11 +929,19 @@ export default function AdminPageClient() {
                                     borderColor: "rgba(173,67,67,.28)",
                                     color: "#8a2f2f",
                                     opacity: isRejected || isBusy ? 0.6 : 1,
-                                    cursor: isRejected || isBusy ? "not-allowed" : "pointer",
+                                    cursor:
+                                      isRejected || isBusy
+                                        ? "not-allowed"
+                                        : "pointer",
                                   }}
                                   disabled={isRejected || isBusy}
                                 >
-                                  {isRejected ? "Rejected" : isBusy && busyJobAction?.action === "reject" ? "Rejecting…" : "Reject"}
+                                  {isRejected
+                                    ? "Rejected"
+                                    : isBusy &&
+                                        busyJobAction?.action === "reject"
+                                      ? "Rejecting…"
+                                      : "Reject"}
                                 </button>
                               </div>
                             </td>
@@ -661,12 +954,18 @@ export default function AdminPageClient() {
               )}
             </section>
           </>
-        ) : (
+        ) : tab === "contacts" ? (
           <section style={homeCardStyle}>
-            <h2 style={{ marginTop: 0, marginBottom: 12, color: homeTheme.text }}>Contact inquiries</h2>
+            <h2
+              style={{ marginTop: 0, marginBottom: 12, color: homeTheme.text }}
+            >
+              Contact inquiries
+            </h2>
 
             {contactState === "loading" ? (
-              <div style={{ color: homeTheme.muted, fontWeight: 700 }}>Loading contact inquiries…</div>
+              <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                Loading contact inquiries…
+              </div>
             ) : contactState === "not_configured" ? (
               <div
                 style={{
@@ -682,14 +981,23 @@ export default function AdminPageClient() {
                 {contactError}
               </div>
             ) : contactState === "error" ? (
-              <div style={{ color: "#8a2f2f", fontWeight: 700 }}>{contactError || "Could not load contact inquiries."}</div>
+              <div style={{ color: "#8a2f2f", fontWeight: 700 }}>
+                {contactError || "Could not load contact inquiries."}
+              </div>
             ) : contactInquiries.length === 0 ? (
               <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
                 No contact inquiries have been received yet.
               </div>
             ) : (
               <>
-                <p style={{ marginTop: 0, marginBottom: 14, color: homeTheme.muted, fontWeight: 700 }}>
+                <p
+                  style={{
+                    marginTop: 0,
+                    marginBottom: 14,
+                    color: homeTheme.muted,
+                    fontWeight: 700,
+                  }}
+                >
                   Source table: <strong>{contactSource}</strong>
                 </p>
                 <div style={tableWrap}>
@@ -709,16 +1017,155 @@ export default function AdminPageClient() {
                           <td style={thTdCommon}>{inquiry.name || "—"}</td>
                           <td style={thTdCommon}>{inquiry.email || "—"}</td>
                           <td style={thTdCommon}>{inquiry.subject || "—"}</td>
-                          <td style={{ ...thTdCommon, whiteSpace: "normal", minWidth: 280 }}>
-                            {(inquiry.message ?? "").trim().slice(0, 130) || "—"}
+                          <td
+                            style={{
+                              ...thTdCommon,
+                              whiteSpace: "normal",
+                              minWidth: 280,
+                            }}
+                          >
+                            {(inquiry.message ?? "").trim().slice(0, 130) ||
+                              "—"}
                           </td>
-                          <td style={thTdCommon}>{formatDate(inquiry.created_at)}</td>
+                          <td style={thTdCommon}>
+                            {formatDate(inquiry.created_at)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </>
+            )}
+          </section>
+        ) : (
+          <section style={homeCardStyle}>
+            <h2
+              style={{ marginTop: 0, marginBottom: 12, color: homeTheme.text }}
+            >
+              Admin Management
+            </h2>
+            <p
+              style={{
+                marginTop: 0,
+                marginBottom: 14,
+                color: homeTheme.muted,
+                fontWeight: 700,
+              }}
+            >
+              Existing admins can add future admins without changing code or
+              environment variables. Emails are trimmed and lowercased before
+              saving.
+            </p>
+
+            <form
+              onSubmit={addAdminUser}
+              style={{
+                display: "flex",
+                gap: 10,
+                flexWrap: "wrap",
+                marginBottom: 16,
+              }}
+            >
+              <input
+                type="email"
+                value={newAdminEmail}
+                onChange={(event) => setNewAdminEmail(event.target.value)}
+                placeholder="new-admin@example.com"
+                aria-label="New admin email"
+                style={{
+                  flex: "1 1 280px",
+                  border: `1px solid ${homeTheme.border}`,
+                  borderRadius: 12,
+                  padding: "12px 14px",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 15,
+                  color: homeTheme.text,
+                  backgroundColor: "#fff",
+                }}
+              />
+              <button
+                type="submit"
+                style={homePrimaryButton}
+                disabled={adminAddState === "saving"}
+              >
+                {adminAddState === "saving" ? "Adding…" : "Add Admin"}
+              </button>
+            </form>
+
+            {adminUsersError && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(173,67,67,.24)",
+                  color: "#8a2f2f",
+                  backgroundColor: "rgba(173,67,67,.08)",
+                  fontWeight: 700,
+                }}
+              >
+                {adminUsersError}
+              </div>
+            )}
+
+            {adminAddMessage && (
+              <div
+                style={{
+                  marginBottom: 12,
+                  padding: "10px 12px",
+                  borderRadius: 10,
+                  border: "1px solid rgba(53,128,110,.24)",
+                  color: homeTheme.green,
+                  backgroundColor: "rgba(53,128,110,.08)",
+                  fontWeight: 700,
+                }}
+              >
+                {adminAddMessage}
+              </div>
+            )}
+
+            {adminUsersState === "loading" ? (
+              <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                Loading admins…
+              </div>
+            ) : adminUsers.length === 0 ? (
+              <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                No admins found.
+              </div>
+            ) : (
+              <div style={tableWrap}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ backgroundColor: "rgba(0,0,0,.03)" }}>
+                      <th style={thTdCommon}>Email</th>
+                      <th style={thTdCommon}>Source</th>
+                      <th style={thTdCommon}>Added By</th>
+                      <th style={thTdCommon}>Added Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adminUsers.map((adminUser) => (
+                      <tr key={`${adminUser.source}-${adminUser.email}`}>
+                        <td style={thTdCommon}>{adminUser.email}</td>
+                        <td style={thTdCommon}>
+                          {adminUser.source === "bootstrap"
+                            ? "Bootstrap allowlist"
+                            : "Admin table"}
+                        </td>
+                        <td style={thTdCommon}>
+                          {adminUser.created_by_email || "—"}
+                        </td>
+                        <td style={thTdCommon}>
+                          {adminUser.created_at
+                            ? formatDate(adminUser.created_at)
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
         )}
@@ -747,34 +1194,88 @@ export default function AdminPageClient() {
             }}
             onClick={(event) => event.stopPropagation()}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center" }}>
-              <h3 style={{ margin: 0, color: homeTheme.green, fontSize: 28 }}>{previewJob.title || "Untitled job"}</h3>
-              <button type="button" onClick={() => setPreviewJob(null)} style={homeSecondaryButton}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "center",
+              }}
+            >
+              <h3 style={{ margin: 0, color: homeTheme.green, fontSize: 28 }}>
+                {previewJob.title || "Untitled job"}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setPreviewJob(null)}
+                style={homeSecondaryButton}
+              >
                 Close
               </button>
             </div>
-            <p style={{ marginTop: 8, marginBottom: 4, color: homeTheme.text, fontWeight: 800 }}>
-              {(previewJob.restaurant_name ?? "").trim() || "Unknown restaurant"} •{" "}
-              {[previewJob.city, previewJob.state].filter(Boolean).join(", ") || "No location provided"}
+            <p
+              style={{
+                marginTop: 8,
+                marginBottom: 4,
+                color: homeTheme.text,
+                fontWeight: 800,
+              }}
+            >
+              {(previewJob.restaurant_name ?? "").trim() ||
+                "Unknown restaurant"}{" "}
+              •{" "}
+              {[previewJob.city, previewJob.state].filter(Boolean).join(", ") ||
+                "No location provided"}
             </p>
-            <p style={{ marginTop: 0, marginBottom: 12, color: homeTheme.muted, fontWeight: 700 }}>
-              Submitted {formatDate(previewJob.created_at)} • <span style={statusPillStyle(getAdminReadableStatus(previewJob))}>{getAdminReadableStatus(previewJob)}</span>
+            <p
+              style={{
+                marginTop: 0,
+                marginBottom: 12,
+                color: homeTheme.muted,
+                fontWeight: 700,
+              }}
+            >
+              Submitted {formatDate(previewJob.created_at)} •{" "}
+              <span style={statusPillStyle(getAdminReadableStatus(previewJob))}>
+                {getAdminReadableStatus(previewJob)}
+              </span>
             </p>
             <div style={{ display: "grid", gap: 8, marginBottom: 12 }}>
-              <div><strong>Employment Type:</strong> {previewJob.employment_type || "—"}</div>
-              <div><strong>Pay Range:</strong> {previewJob.pay_range || "—"}</div>
-              <div><strong>Apply Contact:</strong> {previewJob.apply_email || "—"}</div>
+              <div>
+                <strong>Employment Type:</strong>{" "}
+                {previewJob.employment_type || "—"}
+              </div>
+              <div>
+                <strong>Pay Range:</strong> {previewJob.pay_range || "—"}
+              </div>
+              <div>
+                <strong>Apply Contact:</strong> {previewJob.apply_email || "—"}
+              </div>
             </div>
             <div style={{ marginBottom: 12 }}>
               <h4 style={{ margin: "0 0 6px" }}>Description</h4>
-              <p style={{ margin: 0, whiteSpace: "pre-wrap", color: homeTheme.text }}>
-                {(previewJob.description ?? "").trim() || "No description provided."}
+              <p
+                style={{
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  color: homeTheme.text,
+                }}
+              >
+                {(previewJob.description ?? "").trim() ||
+                  "No description provided."}
               </p>
             </div>
             <div>
               <h4 style={{ margin: "0 0 6px" }}>How to apply</h4>
-              <p style={{ margin: 0, whiteSpace: "pre-wrap", color: homeTheme.text }}>
-                {(previewJob.how_to_apply ?? "").trim() || "No application instructions provided."}
+              <p
+                style={{
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  color: homeTheme.text,
+                }}
+              >
+                {(previewJob.how_to_apply ?? "").trim() ||
+                  "No application instructions provided."}
               </p>
             </div>
           </div>

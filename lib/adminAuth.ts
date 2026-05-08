@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdminClient } from "./supabaseAdmin";
 
 const ADMIN_SESSION_COOKIE = "admin_session";
+const PRIMARY_BOOTSTRAP_ADMIN_EMAIL = "team@restaurantsnowhiring.com";
 
 function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -16,18 +18,49 @@ function getSupabaseConfig() {
 function parseAdminAllowlist(raw: string | undefined) {
   return (raw ?? "")
     .split(",")
-    .map((email) => email.trim().toLowerCase())
-    .filter(Boolean);
+    .map((email) => normalizeAdminEmail(email))
+    .filter(Boolean) as string[];
+}
+
+export function normalizeAdminEmail(email: string | undefined | null) {
+  return email?.trim().toLowerCase() ?? "";
 }
 
 export function getAdminAllowlist() {
-  return parseAdminAllowlist(process.env.ADMIN_ALLOWLIST_EMAILS);
+  return Array.from(
+    new Set([
+      PRIMARY_BOOTSTRAP_ADMIN_EMAIL,
+      ...parseAdminAllowlist(process.env.ADMIN_ALLOWLIST_EMAILS),
+    ]),
+  );
 }
 
 export function isEmailInAdminAllowlist(email: string | undefined | null) {
-  if (!email) return false;
-  const normalized = email.trim().toLowerCase();
+  const normalized = normalizeAdminEmail(email);
+  if (!normalized) return false;
   return getAdminAllowlist().includes(normalized);
+}
+
+export async function isEmailInAdminUsers(email: string | undefined | null) {
+  const normalized = normalizeAdminEmail(email);
+  if (!normalized) return false;
+
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) return false;
+
+  const { data, error } = await supabaseAdmin
+    .from("admin_users")
+    .select("email")
+    .eq("email", normalized)
+    .maybeSingle();
+
+  if (error) return false;
+  return data?.email === normalized;
+}
+
+export async function isAdminEmail(email: string | undefined | null) {
+  if (isEmailInAdminAllowlist(email)) return true;
+  return isEmailInAdminUsers(email);
 }
 
 export async function getAdminUserFromAccessToken(accessToken: string) {
@@ -43,12 +76,12 @@ export async function getAdminUserFromAccessToken(accessToken: string) {
     return { ok: false as const, code: "invalid_session" as const };
   }
 
-  const email = data.user.email?.trim().toLowerCase() ?? null;
+  const email = normalizeAdminEmail(data.user.email);
   if (!email) {
     return { ok: false as const, code: "no_email" as const };
   }
 
-  if (!isEmailInAdminAllowlist(email)) {
+  if (!(await isAdminEmail(email))) {
     return { ok: false as const, code: "not_admin" as const, email };
   }
 
