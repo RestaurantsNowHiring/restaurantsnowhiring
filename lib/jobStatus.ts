@@ -1,6 +1,6 @@
 export type PersistedJobStatus = "active" | "paused" | "pending" | "draft" | "archived" | "rejected";
 
-type DashboardStatus = "Active" | "Pending" | "Draft" | "Paused";
+type DashboardStatus = "Active" | "Pending" | "Draft" | "Paused" | "Rejected";
 
 export function normalizePersistedStatus(status: string | null | undefined): PersistedJobStatus | null {
   if (!status) return null;
@@ -39,7 +39,8 @@ export function dashboardStatusForJob(status: string | null | undefined, active:
   if (normalized === "paused") return "Paused";
   if (normalized === "pending") return "Pending";
   if (normalized === "draft") return "Draft";
-  if (normalized === "archived" || normalized === "rejected") return "Draft";
+  if (normalized === "rejected") return "Rejected";
+  if (normalized === "archived") return "Draft";
 
   return active ? "Active" : "Pending";
 }
