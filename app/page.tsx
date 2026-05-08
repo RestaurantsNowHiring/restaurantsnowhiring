@@ -1,4 +1,5 @@
 // app/page.tsx
+import Image from "next/image";
 import Link from "next/link";
 import { supabase } from "../lib/supabase";
 import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../lib/jobStatus";
@@ -99,6 +100,9 @@ export default async function HomePage() {
     backgroundColor: "#ffffff",
     color: "rgba(0,0,0,.75)",
   };
+
+  // Temporarily disabled for MVP launch; flip to true when sponsor assets/support return.
+  const SHOW_SPONSORS_SECTION = false;
 
   const featureCards = [
     {
@@ -365,84 +369,88 @@ export default async function HomePage() {
         </section>
 
         {/* SPONSORS */}
-        <section style={cardStyle}>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 14,
-              marginBottom: 14,
-            }}
-          >
-            <div style={{ height: 1, width: 160, background: "rgba(0,0,0,.20)" }} />
+        {SHOW_SPONSORS_SECTION ? (
+          <section style={cardStyle}>
             <div
               style={{
-                fontSize: 18,
-                fontWeight: 900,
-                color: TEXT,
-                fontFamily: "var(--font-heading)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 14,
+                marginBottom: 14,
               }}
             >
-              Our Sponsors
-            </div>
-            <div style={{ height: 1, width: 160, background: "rgba(0,0,0,.20)" }} />
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
-              gap: 12,
-            }}
-          >
-            {[
-              { src: "/sponsor-1.png", alt: "Sponsor 1" },
-              { src: "/sponsor-2.png", alt: "Sponsor 2" },
-              { src: "/sponsor-3.png", alt: "Sponsor 3" },
-              { src: "/sponsor-4.png", alt: "Sponsor 4" },
-            ].map((s) => (
+              <div style={{ height: 1, width: 160, background: "rgba(0,0,0,.20)" }} />
               <div
-                key={s.src}
                 style={{
-                  backgroundColor: "#fff",
-                  border: `1px solid ${BORDER}`,
-                  borderRadius: 14,
-                  height: 76,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: 12,
+                  fontSize: 18,
+                  fontWeight: 900,
+                  color: TEXT,
+                  fontFamily: "var(--font-heading)",
                 }}
               >
-                <img
-                  src={s.src}
-                  alt={s.alt}
-                  style={{
-                    maxHeight: 48,
-                    maxWidth: "100%",
-                    width: "auto",
-                    height: "auto",
-                    objectFit: "contain",
-                  }}
-                />
+                Our Sponsors
               </div>
-            ))}
-          </div>
+              <div style={{ height: 1, width: 160, background: "rgba(0,0,0,.20)" }} />
+            </div>
 
-          <div
-            style={{
-              marginTop: 12,
-              textAlign: "center",
-              color: "rgba(0,0,0,.55)",
-              fontSize: 12,
-              fontWeight: 700,
-              fontFamily: "var(--font-body)",
-            }}
-          >
-            Interested in sponsoring RestaurantsNowHiring.com? Contact us to learn more.
-          </div>
-        </section>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+                gap: 12,
+              }}
+            >
+              {[
+                { src: "/sponsor-1.png", alt: "Sponsor 1" },
+                { src: "/sponsor-2.png", alt: "Sponsor 2" },
+                { src: "/sponsor-3.png", alt: "Sponsor 3" },
+                { src: "/sponsor-4.png", alt: "Sponsor 4" },
+              ].map((s) => (
+                <div
+                  key={s.src}
+                  style={{
+                    backgroundColor: "#fff",
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 14,
+                    height: 76,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: 12,
+                  }}
+                >
+                  <Image
+                    src={s.src}
+                    alt={s.alt}
+                    width={160}
+                    height={48}
+                    style={{
+                      maxHeight: 48,
+                      maxWidth: "100%",
+                      width: "auto",
+                      height: "auto",
+                      objectFit: "contain",
+                    }}
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                marginTop: 12,
+                textAlign: "center",
+                color: "rgba(0,0,0,.55)",
+                fontSize: 12,
+                fontWeight: 700,
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              Interested in sponsoring RestaurantsNowHiring.com? Contact us to learn more.
+            </div>
+          </section>
+        ) : null}
 
         {/* FOOTER */}
         <footer
