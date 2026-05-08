@@ -37,6 +37,17 @@ export default function ContactPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErrorMessage(null);
+
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim();
+    const trimmedSubject = subject.trim();
+    const trimmedMessage = message.trim();
+
+    if (!trimmedName || !trimmedEmail || !trimmedSubject || !trimmedMessage) {
+      setErrorMessage("Please fill out your name, email, subject, and message.");
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -46,10 +57,10 @@ export default function ContactPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          name: name.trim(),
-          email: email.trim(),
-          subject: subject.trim(),
-          message: message.trim(),
+          name: trimmedName,
+          email: trimmedEmail,
+          subject: trimmedSubject,
+          message: trimmedMessage,
         }),
       });
 
@@ -396,7 +407,7 @@ export default function ContactPage() {
                     fontFamily: "var(--font-body)",
                   }}
                 >
-                  Team@ReataurantsNOWHiring.com
+                  team@restaurantsnowhiring.com
                 </div>
               </div>
 
@@ -613,7 +624,6 @@ export default function ContactPage() {
       )}
 
       <style
-        // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{
           __html: `
             .rn-contact-hero {

@@ -41,6 +41,8 @@ type ContactInquiry = {
   subject: string | null;
   message: string | null;
   created_at: string;
+  status: string | null;
+  is_read: boolean | null;
 };
 
 type AdminUser = {
@@ -252,60 +254,30 @@ export default function AdminPageClient() {
         }
       }
 
-      const contactTables = [
-        "contact_inquiries",
-        "contact_messages",
-        "inquiries",
-      ];
-      const contactFieldVariants = [
-        "id,name,email,subject,message,created_at",
-        "id,name,email,message,created_at",
-      ];
+      const contactResponse = await fetch("/api/admin/contact-inquiries", {
+        credentials: "include",
+      });
+      const contactBody = (await contactResponse.json().catch(() => null)) as {
+        inquiries?: ContactInquiry[];
+        source?: string;
+        error?: string;
+      } | null;
 
-      let foundContacts = false;
-
-      for (const tableName of contactTables) {
-        for (const fields of contactFieldVariants) {
-          const result = await client
-            .from(tableName)
-            .select(fields)
-            .order("created_at", { ascending: false })
-            .limit(100);
-
-          if (!result.error) {
-            if (mounted) {
-              setContactInquiries(
-                (
-                  (result.data as unknown as Array<Record<string, unknown>>) ??
-                  []
-                ).map((row) => ({
-                  id: String(row.id ?? ""),
-                  name: typeof row.name === "string" ? row.name : null,
-                  email: typeof row.email === "string" ? row.email : null,
-                  subject: typeof row.subject === "string" ? row.subject : null,
-                  message: typeof row.message === "string" ? row.message : null,
-                  created_at: String(row.created_at ?? ""),
-                })),
-              );
-              setContactSource(tableName);
-              setContactState("ready");
-              setContactError(null);
-            }
-            foundContacts = true;
-            break;
-          }
+      if (mounted) {
+        if (!contactResponse.ok) {
+          setContactInquiries([]);
+          setContactSource(null);
+          setContactState("not_configured");
+          setContactError(
+            contactBody?.error ||
+              "No readable contact inquiry table was found. Apply supabase/policies/contact-inquiries.sql in Supabase.",
+          );
+        } else {
+          setContactInquiries(contactBody?.inquiries ?? []);
+          setContactSource(contactBody?.source ?? "contact_inquiries");
+          setContactState("ready");
+          setContactError(null);
         }
-
-        if (foundContacts) break;
-      }
-
-      if (!foundContacts && mounted) {
-        setContactInquiries([]);
-        setContactSource(null);
-        setContactState("not_configured");
-        setContactError(
-          "No readable contact inquiry table was found. Create one and store submissions from /contact to see entries here.",
-        );
       }
 
       const adminUsersResponse = await fetch("/api/admin/users", {
@@ -1009,6 +981,7 @@ export default function AdminPageClient() {
                         <th style={thTdCommon}>Subject</th>
                         <th style={thTdCommon}>Message Preview</th>
                         <th style={thTdCommon}>Date Received</th>
+                        <th style={thTdCommon}>Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1029,6 +1002,9 @@ export default function AdminPageClient() {
                           </td>
                           <td style={thTdCommon}>
                             {formatDate(inquiry.created_at)}
+                          </td>
+                          <td style={thTdCommon}>
+                            {inquiry.status ?? (inquiry.is_read ? "read" : "new")}
                           </td>
                         </tr>
                       ))}
