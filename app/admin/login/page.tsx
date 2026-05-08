@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
-import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../../styles/homepageDesignSystem";
+import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../../styles/homepageDesignSystem";
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -132,13 +132,7 @@ export default function AdminLoginPage() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                style={{
-                  height: 48,
-                  borderRadius: 12,
-                  border: "1px solid rgba(0,0,0,.1)",
-                  padding: "0 14px",
-                  fontSize: 15,
-                }}
+                style={homeInputStyle}
               />
             </label>
 
@@ -150,13 +144,7 @@ export default function AdminLoginPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
-                style={{
-                  height: 48,
-                  borderRadius: 12,
-                  border: "1px solid rgba(0,0,0,.1)",
-                  padding: "0 14px",
-                  fontSize: 15,
-                }}
+                style={homeInputStyle}
               />
             </label>
 

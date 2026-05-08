@@ -114,6 +114,7 @@ export default function EmployerWelcomePage() {
     outline: "none",
     backgroundColor: "#fff",
     color: homeTheme.text,
+    colorScheme: "light",
     fontSize: 15,
     fontFamily: "var(--font-body)",
     fontWeight: 700,

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
+import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
 
 type AccountType = "employer" | "admin";
 
@@ -51,7 +51,7 @@ function ForgotPasswordForm() {
       }
 
       setMessageType("success");
-      setMessage("If an account exists for that email, Supabase will send password reset instructions shortly.");
+      setMessage("If an account exists for that email, we will send password reset instructions shortly.");
     } finally {
       setIsSubmitting(false);
     }
@@ -104,13 +104,7 @@ function ForgotPasswordForm() {
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 required
-                style={{
-                  height: 48,
-                  borderRadius: 12,
-                  border: "1px solid rgba(0,0,0,.1)",
-                  padding: "0 14px",
-                  fontSize: 15,
-                }}
+                style={homeInputStyle}
               />
             </label>
 

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
-import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
+import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
 
 type AccountType = "employer" | "admin";
 
@@ -152,13 +152,7 @@ function ResetPasswordForm() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 required
-                style={{
-                  height: 48,
-                  borderRadius: 12,
-                  border: "1px solid rgba(0,0,0,.1)",
-                  padding: "0 14px",
-                  fontSize: 15,
-                }}
+                style={homeInputStyle}
               />
             </label>
 
@@ -170,13 +164,7 @@ function ResetPasswordForm() {
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
                 required
-                style={{
-                  height: 48,
-                  borderRadius: 12,
-                  border: "1px solid rgba(0,0,0,.1)",
-                  padding: "0 14px",
-                  fontSize: 15,
-                }}
+                style={homeInputStyle}
               />
             </label>
 

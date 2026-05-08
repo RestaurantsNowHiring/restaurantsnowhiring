@@ -238,6 +238,7 @@ export default function EmployerLoginPage() {
     outline: "none",
     backgroundColor: "#fff",
     color: TEXT,
+    colorScheme: "light",
     fontSize: 15,
     fontFamily: "var(--font-body)",
     fontWeight: 700,
