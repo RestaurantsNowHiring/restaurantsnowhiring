@@ -17,7 +17,6 @@ export default function PostJobPage() {
   const router = useRouter();
 
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
-  const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -140,7 +139,6 @@ export default function PostJobPage() {
       }
 
       if (mounted) {
-        setAuthUserId(data.session?.user.id ?? null);
         setAuthUserEmail(data.session?.user.email?.trim() ?? null);
         if (data.session?.user.email) {
           const sessionEmail = data.session.user.email.trim();
@@ -274,8 +272,8 @@ export default function PostJobPage() {
 
     const { data: userData, error: userError } = await supabase.auth.getUser();
     const currentUser = userData?.user;
-    const employerUserId = currentUser?.id ?? authUserId;
-    const employerEmail = currentUser?.email?.trim() ?? authUserEmail;
+    const employerUserId = currentUser?.id;
+    const employerEmail = currentUser?.email?.trim();
 
     if (userError || !employerUserId || !employerEmail) {
       setIsSubmitting(false);

@@ -18,6 +18,7 @@ import {
 } from "../../lib/jobStatus";
 
 type EmployerOwner = { userId: string; email: string };
+type OwnershipMatch = "employer_user_id" | "employer_email";
 
 type DashboardJob = {
   id: string;
@@ -26,6 +27,9 @@ type DashboardJob = {
   state: string | null;
   active: boolean;
   status?: string | null;
+  employer_user_id: string | null;
+  employer_email: string | null;
+  ownership_match: OwnershipMatch | null;
   created_at: string;
   views: number;
   dashboard_status: "Active" | "Pending" | "Draft" | "Paused";
@@ -46,12 +50,12 @@ type JobsQueryResult = {
 
 const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   {
-    fields: "id,title,city,state,active,status,created_at,views",
+    fields: "id,title,city,state,active,status,created_at,views,employer_user_id,employer_email",
     includesStatus: true,
     includesViews: true,
   },
   {
-    fields: "id,title,city,state,active,status,created_at",
+    fields: "id,title,city,state,active,status,created_at,employer_user_id,employer_email",
     includesStatus: true,
     includesViews: false,
   },
@@ -65,6 +69,20 @@ function formatDate(isoDate: string) {
     day: "numeric",
     year: "numeric",
   }).format(new Date(isoDate));
+}
+
+function getJobOwnershipMatch(job: Record<string, unknown>, owner: EmployerOwner): OwnershipMatch | null {
+  const employerUserId = typeof job.employer_user_id === "string" ? job.employer_user_id.trim() : "";
+  const employerEmail = typeof job.employer_email === "string" ? job.employer_email.trim() : "";
+
+  if (employerUserId && employerUserId === owner.userId) return "employer_user_id";
+  if (employerEmail && employerEmail === owner.email) return "employer_email";
+
+  return null;
+}
+
+function hasMissingEmployerOwnership(job: Pick<DashboardJob, "employer_user_id" | "employer_email">) {
+  return !job.employer_user_id && !job.employer_email;
 }
 
 function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSProperties {
@@ -125,7 +143,7 @@ export default function EmployerDashboardPage() {
         if (!variantError) {
           const jobsById = new Map<string, Record<string, unknown>>();
 
-          [...(userIdResult.data ?? []), ...(emailResult.data ?? [])].forEach((job) => {
+          [...(emailResult.data ?? []), ...(userIdResult.data ?? [])].forEach((job) => {
             const jobRecord = job as unknown as Record<string, unknown>;
             const id = String(jobRecord.id ?? "");
             if (id) {
@@ -193,23 +211,30 @@ export default function EmployerDashboardPage() {
         return;
       }
 
-      const hydratedJobs: DashboardJob[] = jobsResult.liveJobs.map((job) => ({
-        id: String(job.id ?? ""),
-        title: String(job.title ?? ""),
-        city: typeof job.city === "string" ? job.city : null,
-        state: typeof job.state === "string" ? job.state : null,
-        active: Boolean(job.active),
-        status: jobsResult.selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null,
-        created_at: String(job.created_at ?? ""),
-        views:
-          jobsResult.selectedVariant?.includesViews && typeof job.views === "number" && Number.isFinite(job.views)
-            ? job.views
-            : 0,
-        dashboard_status: dashboardStatusForJob(
-          jobsResult.selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null,
-          Boolean(job.active)
-        ),
-      }));
+      const hydratedJobs: DashboardJob[] = jobsResult.liveJobs.map((job) => {
+        const status = jobsResult.selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null;
+        const active = Boolean(job.active);
+        const employerUserId = typeof job.employer_user_id === "string" && job.employer_user_id.trim() ? job.employer_user_id.trim() : null;
+        const employerEmail = typeof job.employer_email === "string" && job.employer_email.trim() ? job.employer_email.trim() : null;
+
+        return {
+          id: String(job.id ?? ""),
+          title: String(job.title ?? ""),
+          city: typeof job.city === "string" ? job.city : null,
+          state: typeof job.state === "string" ? job.state : null,
+          active,
+          status,
+          employer_user_id: employerUserId,
+          employer_email: employerEmail,
+          ownership_match: getJobOwnershipMatch(job, currentOwner),
+          created_at: String(job.created_at ?? ""),
+          views:
+            jobsResult.selectedVariant?.includesViews && typeof job.views === "number" && Number.isFinite(job.views)
+              ? job.views
+              : 0,
+          dashboard_status: dashboardStatusForJob(status, active),
+        };
+      });
 
       if (mounted) {
         setJobs(hydratedJobs);
@@ -244,45 +269,78 @@ export default function EmployerDashboardPage() {
       return;
     }
 
+    if (hasMissingEmployerOwnership(job)) {
+      setActionError(
+        "This job is missing employer ownership details (employer_user_id and employer_email), so it cannot be paused or resumed until it is reassigned to your employer account."
+      );
+      setBusyJobId(null);
+      return;
+    }
 
     const updatePayload = { active: nextActive, status: nextStatus };
-    const updateByUserId = await supabase
-      .from("jobs")
-      .update(updatePayload, { count: "exact" })
-      .eq("id", job.id)
-      .eq("employer_user_id", owner.userId);
+    const updateAttempts: OwnershipMatch[] = ["employer_user_id", "employer_email"];
+    let updateError: { message?: string } | null = null;
+    let updatedJob: Record<string, unknown> | null = null;
+    let matchedBy: OwnershipMatch | null = null;
 
-    const updateResult =
-      !updateByUserId.error && updateByUserId.count && updateByUserId.count > 0
-        ? updateByUserId
-        : await supabase
-            .from("jobs")
-            .update(updatePayload, { count: "exact" })
-            .eq("id", job.id)
-            .eq("employer_email", owner.email);
+    for (const ownershipField of updateAttempts) {
+      const ownerValue = ownershipField === "employer_user_id" ? owner.userId : owner.email;
+      const result = await supabase
+        .from("jobs")
+        .update(updatePayload)
+        .eq("id", job.id)
+        .eq(ownershipField, ownerValue)
+        .select("id,active,status,employer_user_id,employer_email")
+        .maybeSingle();
 
-    const { count, error } = updateResult;
+      if (result.error) {
+        updateError = result.error;
+        continue;
+      }
 
-    if (error) {
-      setActionError(error.message || "We could not save this job status. Please refresh and try again.");
+      if (result.data) {
+        updatedJob = result.data as Record<string, unknown>;
+        matchedBy = ownershipField;
+        break;
+      }
+    }
+
+    if (updateError && !updatedJob) {
+      setActionError(updateError.message || "We could not save this job status. Please refresh and try again.");
       setBusyJobId(null);
       return;
     }
 
-    if (count === 0) {
-      setActionError("We could not find that exact job for your employer account. Please refresh and try again.");
+    if (!updatedJob) {
+      setActionError(
+        "This job is no longer linked to your employer_user_id or employer_email. Please refresh or ask support to reassign the listing to your employer account."
+      );
       setBusyJobId(null);
       return;
     }
+
+    const persistedActive = typeof updatedJob.active === "boolean" ? updatedJob.active : nextActive;
+    const persistedStatus = typeof updatedJob.status === "string" ? updatedJob.status : nextStatus;
+    const employerUserId =
+      typeof updatedJob.employer_user_id === "string" && updatedJob.employer_user_id.trim()
+        ? updatedJob.employer_user_id.trim()
+        : job.employer_user_id;
+    const employerEmail =
+      typeof updatedJob.employer_email === "string" && updatedJob.employer_email.trim()
+        ? updatedJob.employer_email.trim()
+        : job.employer_email;
 
     setJobs((prev) =>
       prev.map((item) =>
         item.id === job.id
           ? {
               ...item,
-              active: nextActive,
-              status: nextStatus,
-              dashboard_status: dashboardStatusForJob(nextStatus, nextActive),
+              active: persistedActive,
+              status: persistedStatus,
+              employer_user_id: employerUserId,
+              employer_email: employerEmail,
+              ownership_match: matchedBy ?? item.ownership_match,
+              dashboard_status: dashboardStatusForJob(persistedStatus, persistedActive),
             }
           : item
       )
