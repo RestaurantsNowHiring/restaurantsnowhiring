@@ -62,7 +62,21 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             textAlign: "center",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "center", gap: 14, marginBottom: 8 }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              gap: 14,
+              marginBottom: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <Link href="/terms" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
+              Terms
+            </Link>
+            <Link href="/privacy" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
+              Privacy
+            </Link>
             <Link href="/admin/login" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
               Admin
             </Link>
