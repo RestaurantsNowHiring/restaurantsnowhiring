@@ -32,7 +32,7 @@ type DashboardJob = {
   ownership_match: OwnershipMatch | null;
   created_at: string;
   views: number;
-  dashboard_status: "Active" | "Pending" | "Draft" | "Paused";
+  dashboard_status: "Active" | "Pending" | "Draft" | "Paused" | "Rejected";
 };
 
 type JobsQueryVariant = {
@@ -121,6 +121,7 @@ function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSPro
     Pending: { bg: "rgba(227,160,8,0.12)", text: "#7a5600", border: "rgba(227,160,8,0.28)" },
     Draft: { bg: "rgba(101,115,126,0.12)", text: "#3f4c56", border: "rgba(101,115,126,0.24)" },
     Paused: { bg: "rgba(173,67,67,0.10)", text: "#8a2f2f", border: "rgba(173,67,67,0.24)" },
+    Rejected: { bg: "rgba(173,67,67,0.10)", text: "#8a2f2f", border: "rgba(173,67,67,0.24)" },
   };
 
   return {
@@ -136,6 +137,19 @@ function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSPro
     fontFamily: "var(--font-body)",
     padding: "5px 10px",
   };
+}
+
+function isRejectedJob(job: Pick<DashboardJob, "dashboard_status">) {
+  return job.dashboard_status === "Rejected";
+}
+
+function rejectedJobMessage() {
+  return (
+    <div className="rn-dashboard-status-helper" aria-label="Rejected job details">
+      <p>This listing was not approved for public posting.</p>
+      <p>Please contact team@restaurantsnowhiring.com if you would like additional information.</p>
+    </div>
+  );
 }
 
 export default function EmployerDashboardPage() {
@@ -620,7 +634,10 @@ export default function EmployerDashboardPage() {
                       <tr key={job.id}>
                         <td>{job.title}</td>
                         <td>
-                          <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
+                          <div className="rn-dashboard-status-cell">
+                            <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
+                            {isRejectedJob(job) ? rejectedJobMessage() : null}
+                          </div>
                         </td>
                         <td>{[job.city, job.state].filter(Boolean).join(", ") || "—"}</td>
                         <td>{formatDate(job.created_at)}</td>
@@ -642,21 +659,17 @@ export default function EmployerDashboardPage() {
                             >
                               Edit
                             </Link>
-                            <button
-                              type="button"
-                              style={homeSecondaryButton}
-                              className="rn-btn-secondary"
-                              onClick={() => handlePauseToggle(job)}
-                              disabled={busyJobId === job.id || !canEmployerPauseResume(job.status)}
-                            >
-                              {busyJobId === job.id
-                                ? "Saving..."
-                                : !canEmployerPauseResume(job.status)
-                                  ? "Unavailable"
-                                : job.dashboard_status === "Paused"
-                                  ? "Resume"
-                                  : "Pause"}
-                            </button>
+                            {canEmployerPauseResume(job.status) ? (
+                              <button
+                                type="button"
+                                style={homeSecondaryButton}
+                                className="rn-btn-secondary"
+                                onClick={() => handlePauseToggle(job)}
+                                disabled={busyJobId === job.id}
+                              >
+                                {busyJobId === job.id ? "Saving..." : job.dashboard_status === "Paused" ? "Resume" : "Pause"}
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -672,7 +685,10 @@ export default function EmployerDashboardPage() {
                       <h3 style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
                         {job.title}
                       </h3>
-                      <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
+                      <div className="rn-dashboard-mobile-status">
+                        <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
+                        {isRejectedJob(job) ? rejectedJobMessage() : null}
+                      </div>
                     </div>
                     <p style={{ margin: "8px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
                       {[job.city, job.state].filter(Boolean).join(", ") || "—"}
@@ -696,21 +712,17 @@ export default function EmployerDashboardPage() {
                       >
                         Edit
                       </Link>
-                      <button
-                        type="button"
-                        style={homeSecondaryButton}
-                        className="rn-btn-secondary"
-                        onClick={() => handlePauseToggle(job)}
-                        disabled={busyJobId === job.id || !canEmployerPauseResume(job.status)}
-                      >
-                        {busyJobId === job.id
-                          ? "Saving..."
-                          : !canEmployerPauseResume(job.status)
-                            ? "Unavailable"
-                          : job.dashboard_status === "Paused"
-                            ? "Resume"
-                            : "Pause"}
-                      </button>
+                      {canEmployerPauseResume(job.status) ? (
+                        <button
+                          type="button"
+                          style={homeSecondaryButton}
+                          className="rn-btn-secondary"
+                          onClick={() => handlePauseToggle(job)}
+                          disabled={busyJobId === job.id}
+                        >
+                          {busyJobId === job.id ? "Saving..." : job.dashboard_status === "Paused" ? "Resume" : "Pause"}
+                        </button>
+                      ) : null}
                     </div>
                   </article>
                 ))}
@@ -766,6 +778,32 @@ export default function EmployerDashboardPage() {
           text-transform: uppercase;
           letter-spacing: 0.45px;
           color: ${homeTheme.muted};
+        }
+
+        .rn-dashboard-status-cell,
+        .rn-dashboard-mobile-status {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 6px;
+        }
+
+        .rn-dashboard-status-helper {
+          max-width: 280px;
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.35;
+          white-space: normal;
+        }
+
+        .rn-dashboard-status-helper p {
+          margin: 0;
+        }
+
+        .rn-dashboard-status-helper p + p {
+          margin-top: 3px;
         }
 
         .rn-dashboard-actions {
