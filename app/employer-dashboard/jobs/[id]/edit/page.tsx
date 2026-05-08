@@ -1,6 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
+import { FormEvent, useEffect, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import {
   homeCardStyle,
@@ -8,6 +10,8 @@ import {
   homeSecondaryButton,
   homeTheme,
 } from "../../../../styles/homepageDesignSystem";
+
+type EmployerOwner = { userId: string; email: string };
 
 type JobRecord = {
   id: string;
@@ -61,6 +65,38 @@ function parseLocationInput(location: string) {
   return { city, state };
 }
 
+async function loadOwnedJob(jobId: string, owner: EmployerOwner) {
+  const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at";
+
+  const userIdResult = await supabase
+    .from("jobs")
+    .select(fields)
+    .eq("id", jobId)
+    .eq("employer_user_id", owner.userId)
+    .limit(1);
+
+  if (userIdResult.error) {
+    return { job: null, error: userIdResult.error };
+  }
+
+  if (userIdResult.data?.[0]) {
+    return { job: userIdResult.data[0] as JobRecord, error: null };
+  }
+
+  const emailResult = await supabase
+    .from("jobs")
+    .select(fields)
+    .eq("id", jobId)
+    .eq("employer_email", owner.email)
+    .limit(1);
+
+  if (emailResult.error) {
+    return { job: null, error: emailResult.error };
+  }
+
+  return { job: (emailResult.data?.[0] as JobRecord | undefined) ?? null, error: null };
+}
+
 const editFieldStyle: React.CSSProperties = {
   width: "100%",
   marginTop: 6,
@@ -85,42 +121,83 @@ const editTextareaStyle: React.CSSProperties = {
   resize: "vertical",
 };
 
-export default async function EmployerJobEditPage({
-  params,
-  searchParams,
-}: {
-  params: { id?: string } | Promise<{ id?: string }>;
-  searchParams?:
-    | { status?: string; mode?: string }
-    | Promise<{ status?: string; mode?: string }>;
-}) {
-  const resolvedParams = await Promise.resolve(params);
-  const resolvedSearchParams = await Promise.resolve(searchParams);
-  const jobId = resolvedParams?.id;
+export default function EmployerJobEditPage() {
+  const params = useParams<{ id?: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const jobId = params?.id;
+  const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
+  const [owner, setOwner] = useState<EmployerOwner | null>(null);
+  const [job, setJob] = useState<JobRecord | null>(null);
+  const [notFound, setNotFound] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const { data, error } = jobId
-    ? await supabase
-        .from("jobs")
-        .select(
-          "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at"
-        )
-        .eq("id", jobId)
-        .limit(1)
-    : { data: null, error: null };
+  useEffect(() => {
+    let mounted = true;
 
-  const job = (data?.[0] as JobRecord | undefined) ?? undefined;
-  const notFound = !jobId || !!error || !job;
-  const parsedDescription = parseDescriptionSections(job?.description ?? null);
-  const status = resolvedSearchParams?.status;
-  const mode = resolvedSearchParams?.mode;
+    async function loadJob() {
+      if (!jobId) {
+        if (mounted) {
+          setNotFound(true);
+          setAuthStatus("allowed");
+        }
+        return;
+      }
 
-  async function saveJobListing(formData: FormData) {
-    "use server";
+      const { data, error: authError } = await supabase.auth.getUser();
+      const authUser = data?.user;
 
-    if (!jobId) {
-      redirect("/employer-dashboard/jobs");
+      if (authError || !authUser) {
+        router.replace(`/employer-login?next=${encodeURIComponent(`/employer-dashboard/jobs/${jobId}/edit`)}`);
+        return;
+      }
+
+      const email = authUser.email?.trim();
+      const userId = authUser.id;
+
+      if (!email || !userId) {
+        if (mounted) {
+          setMessage("Your employer session is missing account ownership details. Please sign out and sign back in.");
+          setNotFound(true);
+          setAuthStatus("allowed");
+        }
+        return;
+      }
+
+      const currentOwner = { userId, email };
+      const result = await loadOwnedJob(jobId, currentOwner);
+
+      if (!mounted) return;
+
+      setOwner(currentOwner);
+      setJob(result.job);
+      setNotFound(!!result.error || !result.job);
+      setAuthStatus("allowed");
+      setMessage(result.error?.message ?? null);
     }
 
+    loadJob();
+
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      loadJob();
+    });
+
+    return () => {
+      mounted = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [jobId, router]);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!jobId || !owner) {
+      setMessage("We could not save this listing because the employer session is unavailable. Please refresh and try again.");
+      return;
+    }
+
+    const formData = new FormData(event.currentTarget);
     const title = String(formData.get("title") ?? "").trim();
     const roleCategory = String(formData.get("role_category") ?? "").trim();
     const employmentType = String(formData.get("employment_type") ?? "").trim();
@@ -150,16 +227,60 @@ export default async function EmployerJobEditPage({
       description: composedDescription || null,
     };
 
-    const { error: updateError } = await supabase.from("jobs").update(payload).eq("id", jobId);
+    setIsSaving(true);
+    setMessage(null);
 
-    revalidatePath(`/employer-dashboard/jobs/${jobId}/edit`);
-    revalidatePath(`/jobs/${jobId}`);
+    const updateByUserId = await supabase
+      .from("jobs")
+      .update(payload, { count: "exact" })
+      .eq("id", jobId)
+      .eq("employer_user_id", owner.userId);
 
-    if (updateError) {
-      redirect(`/employer-dashboard/jobs/${jobId}/edit?status=simulated&mode=fallback`);
+    const updateResult =
+      !updateByUserId.error && updateByUserId.count && updateByUserId.count > 0
+        ? updateByUserId
+        : await supabase
+            .from("jobs")
+            .update(payload, { count: "exact" })
+            .eq("id", jobId)
+            .eq("employer_email", owner.email);
+
+    setIsSaving(false);
+
+    if (updateResult.error) {
+      setMessage(updateResult.error.message || "We could not save this listing. Please refresh and try again.");
+      return;
     }
 
-    redirect(`/employer-dashboard/jobs/${jobId}/edit?status=saved&mode=live`);
+    if (updateResult.count === 0) {
+      setMessage("We could not find that exact job for your employer account. Please refresh and try again.");
+      return;
+    }
+
+    const refreshed = await loadOwnedJob(jobId, owner);
+    setJob(refreshed.job);
+    setNotFound(!refreshed.job);
+    setMessage("Changes saved to database.");
+    router.replace(`/employer-dashboard/jobs/${jobId}/edit?status=saved&mode=live`);
+  }
+
+  const parsedDescription = parseDescriptionSections(job?.description ?? null);
+  const status = searchParams.get("status");
+
+  if (authStatus === "loading") {
+    return (
+      <main
+        style={{
+          minHeight: "100vh",
+          paddingTop: 100,
+          backgroundColor: homeTheme.bg,
+          color: homeTheme.text,
+          fontFamily: "var(--font-body)",
+        }}
+      >
+        <div style={{ maxWidth: 980, margin: "0 auto", padding: "0 18px" }}>Loading job editor…</div>
+      </main>
+    );
   }
 
   return (
@@ -211,7 +332,7 @@ export default async function EmployerJobEditPage({
         </section>
 
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
-          {notFound ? (
+          {notFound || !job ? (
             <>
               <h2
                 style={{
@@ -224,8 +345,9 @@ export default async function EmployerJobEditPage({
                 Job not found
               </h2>
               <p style={{ marginTop: 0, color: homeTheme.muted, fontWeight: 600 }}>
-                We could not load this listing. It may have been removed or the link is incorrect.
+                We could not load this listing for your employer account. It may have been removed, owned by another account, or missing ownership details.
               </p>
+              {message ? <p style={{ color: "#8a2f2f", fontWeight: 700 }}>{message}</p> : null}
             </>
           ) : (
             <>
@@ -258,7 +380,7 @@ export default async function EmployerJobEditPage({
                   Status: {job.active ? "Active" : "Pending / Inactive"} • Posted: {formatDate(job.created_at)}
                 </p>
 
-                <form action={saveJobListing}>
+                <form onSubmit={handleSubmit}>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 12 }}>
                     <label style={{ color: homeTheme.text, fontWeight: 700 }}>
                       Job title
@@ -347,16 +469,14 @@ export default async function EmployerJobEditPage({
                   </div>
 
                   <div style={{ marginTop: 14, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                    <button type="submit" style={homePrimaryButton} className="rn-btn-primary">
-                      Save Changes
+                    <button type="submit" style={homePrimaryButton} className="rn-btn-primary" disabled={isSaving}>
+                      {isSaving ? "Saving..." : "Save Changes"}
                     </button>
-                    {status === "saved" ? (
+                    {status === "saved" || message === "Changes saved to database." ? (
                       <span style={{ color: homeTheme.green, fontWeight: 700 }}>Changes saved to database.</span>
                     ) : null}
-                    {status === "simulated" ? (
-                      <span style={{ color: "#7a5600", fontWeight: 700 }}>
-                        Save simulated. Live update could not be completed{mode === "fallback" ? " (missing write access or unsupported schema)." : "."}
-                      </span>
+                    {message && message !== "Changes saved to database." ? (
+                      <span style={{ color: "#8a2f2f", fontWeight: 700 }}>{message}</span>
                     ) : null}
                   </div>
                 </form>

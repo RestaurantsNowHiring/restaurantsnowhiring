@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import {
   homeCardStyle,
@@ -16,9 +17,7 @@ import {
   isMissingViewsColumnError,
 } from "../../lib/jobStatus";
 
-type JobOwnerFilter =
-  | { column: "employer_id"; value: string }
-  | { column: "apply_email"; value: string; employerIdForLink?: string; requireUnlinkedEmployer?: boolean };
+type EmployerOwner = { userId: string; email: string };
 
 type DashboardJob = {
   id: string;
@@ -44,7 +43,6 @@ type JobsQueryResult = {
   error: { code?: string; message?: string } | null;
 };
 
-type DashboardSource = "live" | "mock" | "empty";
 
 const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   {
@@ -59,39 +57,6 @@ const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   },
 ];
 
-
-const MOCK_JOBS: DashboardJob[] = [
-  {
-    id: "mock-1",
-    title: "Line Cook",
-    city: "Austin",
-    state: "TX",
-    active: true,
-    created_at: "2026-02-22T14:14:00.000Z",
-    views: 148,
-    dashboard_status: "Active",
-  },
-  {
-    id: "mock-2",
-    title: "Host",
-    city: "Austin",
-    state: "TX",
-    active: false,
-    created_at: "2026-02-18T09:30:00.000Z",
-    views: 67,
-    dashboard_status: "Pending",
-  },
-  {
-    id: "mock-3",
-    title: "Restaurant Manager",
-    city: "Round Rock",
-    state: "TX",
-    active: false,
-    created_at: "2026-02-10T17:45:00.000Z",
-    views: 0,
-    dashboard_status: "Draft",
-  },
-];
 
 
 function formatDate(isoDate: string) {
@@ -126,48 +91,65 @@ function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSPro
 }
 
 export default function EmployerDashboardPage() {
+  const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
-  const [source, setSource] = useState<DashboardSource>("empty");
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
-  const [jobOwnerFilter, setJobOwnerFilter] = useState<JobOwnerFilter | null>(null);
-  const [hasEmployerIdColumn, setHasEmployerIdColumn] = useState(true);
+  const [owner, setOwner] = useState<EmployerOwner | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
-    async function loadEmployerJobs(ownerFilter: JobOwnerFilter): Promise<JobsQueryResult> {
+    async function loadEmployerJobs(currentOwner: EmployerOwner): Promise<JobsQueryResult> {
       let liveJobs: Array<Record<string, unknown>> | null = null;
       let error: { code?: string; message?: string } | null = null;
       let selectedVariant: JobsQueryVariant | null = null;
 
       for (const variant of JOB_QUERY_VARIANTS) {
-        let query = supabase
-          .from("jobs")
-          .select(variant.fields)
-          .eq(ownerFilter.column, ownerFilter.value);
+        const [userIdResult, emailResult] = await Promise.all([
+          supabase
+            .from("jobs")
+            .select(variant.fields)
+            .eq("employer_user_id", currentOwner.userId)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("jobs")
+            .select(variant.fields)
+            .eq("employer_email", currentOwner.email)
+            .order("created_at", { ascending: false }),
+        ]);
 
-        if (ownerFilter.column === "apply_email" && ownerFilter.requireUnlinkedEmployer) {
-          query = query.is("employer_id", null);
-        }
+        const variantError = userIdResult.error ?? emailResult.error;
 
-        const result = await query.order("created_at", { ascending: false });
+        if (!variantError) {
+          const jobsById = new Map<string, Record<string, unknown>>();
 
-        if (!result.error) {
-          liveJobs = result.data as unknown as Array<Record<string, unknown>>;
+          [...(userIdResult.data ?? []), ...(emailResult.data ?? [])].forEach((job) => {
+            const jobRecord = job as unknown as Record<string, unknown>;
+            const id = String(jobRecord.id ?? "");
+            if (id) {
+              jobsById.set(id, jobRecord);
+            }
+          });
+
+          liveJobs = Array.from(jobsById.values()).sort((a, b) => {
+            const aCreated = new Date(String(a.created_at ?? "")).getTime();
+            const bCreated = new Date(String(b.created_at ?? "")).getTime();
+            return bCreated - aCreated;
+          });
           selectedVariant = variant;
           error = null;
           break;
         }
 
-        const missingViews = isMissingViewsColumnError(result.error);
+        const missingViews = isMissingViewsColumnError(variantError);
         if (missingViews) {
-          error = result.error;
+          error = variantError;
           continue;
         }
 
-        error = result.error;
+        error = variantError;
         break;
       }
 
@@ -175,89 +157,36 @@ export default function EmployerDashboardPage() {
     }
 
     async function loadDashboard() {
-      const { data } = await supabase.auth.getSession();
-      const session = data?.session;
+      const { data, error: authError } = await supabase.auth.getUser();
+      const authUser = data?.user;
 
-      if (!session) {
-        if (mounted) {
-          setJobs(MOCK_JOBS);
-          setSource("mock");
-          setJobOwnerFilter(null);
-          setHasEmployerIdColumn(true);
-          setActionError(null);
-          setAuthStatus("allowed");
-        }
+      if (authError || !authUser) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard")}`);
         return;
       }
 
-      const email = session.user.email?.trim();
-      const userId = session.user.id;
+      const email = authUser.email?.trim();
+      const userId = authUser.id;
 
-      if (!email) {
+      if (!email || !userId) {
         if (mounted) {
           setJobs([]);
-          setSource("empty");
-          setJobOwnerFilter(null);
-          setHasEmployerIdColumn(true);
+          setOwner(null);
           setAuthStatus("allowed");
-          setActionError("Your employer session is missing an email address. Please sign out and sign back in.");
+          setActionError("Your employer session is missing account ownership details. Please sign out and sign back in.");
         }
         return;
       }
 
+      const currentOwner = { userId, email };
       setActionError(null);
 
-      const employerIdResult = userId
-        ? await loadEmployerJobs({ column: "employer_id", value: userId })
-        : { liveJobs: null, selectedVariant: null, error: { message: "Missing employer user id." } };
-
-      const employerIdColumnMissing =
-        !!employerIdResult.error?.message &&
-        (employerIdResult.error.message.includes("employer_id") ||
-          employerIdResult.error.message.includes("Could not find") ||
-          employerIdResult.error.message.includes("does not exist"));
-
-      const shouldUseApplyEmailFallback =
-        employerIdColumnMissing ||
-        !employerIdResult.liveJobs ||
-        employerIdResult.liveJobs.length === 0;
-
-      const ownerFilter = shouldUseApplyEmailFallback
-        ? ({
-            column: "apply_email",
-            value: email,
-            employerIdForLink: userId,
-            requireUnlinkedEmployer: !employerIdColumnMissing,
-          } as const)
-        : ({ column: "employer_id", value: userId } as const);
-
-      const fallbackJobsResult = shouldUseApplyEmailFallback
-        ? await loadEmployerJobs(ownerFilter)
-        : null;
-      const applyEmailUnlinkedFilterFailed =
-        !!fallbackJobsResult?.error?.message &&
-        ownerFilter.column === "apply_email" &&
-        ownerFilter.requireUnlinkedEmployer &&
-        (fallbackJobsResult.error.message.includes("employer_id") ||
-          fallbackJobsResult.error.message.includes("Could not find") ||
-          fallbackJobsResult.error.message.includes("does not exist"));
-
-      const jobsResult: JobsQueryResult = applyEmailUnlinkedFilterFailed
-        ? await loadEmployerJobs({ column: "apply_email", value: email })
-        : shouldUseApplyEmailFallback
-          ? fallbackJobsResult ?? { liveJobs: null, selectedVariant: null, error: { message: "Missing fallback owner query." } }
-          : employerIdResult;
-      const resolvedOwnerFilter: JobOwnerFilter = applyEmailUnlinkedFilterFailed
-        ? { column: "apply_email", value: email }
-        : ownerFilter;
-      const resolvedHasEmployerIdColumn = !employerIdColumnMissing && !applyEmailUnlinkedFilterFailed;
+      const jobsResult = await loadEmployerJobs(currentOwner);
 
       if (jobsResult.error || !jobsResult.liveJobs || !jobsResult.selectedVariant) {
         if (mounted) {
           setJobs([]);
-          setSource("empty");
-          setJobOwnerFilter(null);
-          setHasEmployerIdColumn(resolvedHasEmployerIdColumn);
+          setOwner(currentOwner);
           setAuthStatus("allowed");
           setActionError(jobsResult.error?.message || "Could not load your employer listings from Supabase.");
         }
@@ -284,9 +213,7 @@ export default function EmployerDashboardPage() {
 
       if (mounted) {
         setJobs(hydratedJobs);
-        setJobOwnerFilter(resolvedOwnerFilter);
-        setHasEmployerIdColumn(resolvedHasEmployerIdColumn);
-        setSource(hydratedJobs.length > 0 ? "live" : "empty");
+        setOwner(currentOwner);
         setAuthStatus("allowed");
       }
     }
@@ -301,7 +228,7 @@ export default function EmployerDashboardPage() {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   async function handlePauseToggle(job: DashboardJob) {
     if (busyJobId) return;
@@ -311,45 +238,30 @@ export default function EmployerDashboardPage() {
     setBusyJobId(job.id);
     setActionError(null);
 
-    if (source !== "live") {
-      setJobs((prev) =>
-        prev.map((item) =>
-          item.id === job.id
-            ? {
-                ...item,
-                active: nextActive,
-                status: nextStatus,
-                dashboard_status: dashboardStatusForJob(nextStatus, nextActive),
-              }
-            : item
-        )
-      );
-      setBusyJobId(null);
-      return;
-    }
-
-    if (!jobOwnerFilter) {
+    if (!owner) {
       setActionError("We could not update this job because the employer session is unavailable. Please refresh and try again.");
       setBusyJobId(null);
       return;
     }
 
-    let updateQuery = supabase
+
+    const updatePayload = { active: nextActive, status: nextStatus };
+    const updateByUserId = await supabase
       .from("jobs")
-      .update(
-        jobOwnerFilter.column === "apply_email" && hasEmployerIdColumn
-          ? { active: nextActive, status: nextStatus, employer_id: jobOwnerFilter.employerIdForLink }
-          : { active: nextActive, status: nextStatus },
-        { count: "exact" }
-      )
+      .update(updatePayload, { count: "exact" })
       .eq("id", job.id)
-      .eq(jobOwnerFilter.column, jobOwnerFilter.value);
+      .eq("employer_user_id", owner.userId);
 
-    if (jobOwnerFilter.column === "apply_email" && jobOwnerFilter.requireUnlinkedEmployer) {
-      updateQuery = updateQuery.is("employer_id", null);
-    }
+    const updateResult =
+      !updateByUserId.error && updateByUserId.count && updateByUserId.count > 0
+        ? updateByUserId
+        : await supabase
+            .from("jobs")
+            .update(updatePayload, { count: "exact" })
+            .eq("id", job.id)
+            .eq("employer_email", owner.email);
 
-    const { count, error } = await updateQuery;
+    const { count, error } = updateResult;
 
     if (error) {
       setActionError(error.message || "We could not save this job status. Please refresh and try again.");
@@ -421,21 +333,6 @@ export default function EmployerDashboardPage() {
     >
       <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 18px" }}>
 
-        {source === "mock" ? (
-          <section
-            style={{
-              ...homeCardStyle,
-              marginBottom: 16,
-              border: "1px solid rgba(227,160,8,0.35)",
-              backgroundColor: "rgba(255,248,230,0.9)",
-              boxShadow: "none",
-            }}
-          >
-            <p style={{ margin: 0, color: "#7a5600", fontWeight: 800, fontFamily: "var(--font-body)" }}>
-              Preview mode: sign in to load real employer listings.
-            </p>
-          </section>
-        ) : null}
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
           <p
             style={{
@@ -535,9 +432,7 @@ export default function EmployerDashboardPage() {
                   fontFamily: "var(--font-body)",
                 }}
               >
-                {source === "mock"
-                  ? "Showing preview dashboard data. Sign in to load real employer listings."
-                  : "Showing your current posted jobs."}
+                Showing your current posted jobs.
               </p>
             </div>
             <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
