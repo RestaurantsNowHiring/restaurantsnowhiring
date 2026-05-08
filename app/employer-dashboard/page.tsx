@@ -13,7 +13,6 @@ import {
   canEmployerPauseResume,
   dashboardStatusForJob,
   getEmployerPauseResumeUpdate,
-  isMissingStatusColumnError,
   isMissingViewsColumnError,
 } from "../../lib/jobStatus";
 
@@ -113,6 +112,8 @@ export default function EmployerDashboardPage() {
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [source, setSource] = useState<"live" | "mock" | "empty">("empty");
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
+  const [employerEmail, setEmployerEmail] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -161,16 +162,6 @@ export default function EmployerDashboardPage() {
           includesStatus: true,
           includesViews: false,
         },
-        {
-          fields: "id,title,city,state,active,created_at,views",
-          includesStatus: false,
-          includesViews: true,
-        },
-        {
-          fields: "id,title,city,state,active,created_at",
-          includesStatus: false,
-          includesViews: false,
-        },
       ];
 
       let liveJobs: Array<Record<string, unknown>> | null = null;
@@ -185,15 +176,14 @@ export default function EmployerDashboardPage() {
           .order("created_at", { ascending: false });
 
         if (!result.error) {
-          liveJobs = result.data as Array<Record<string, unknown>>;
+          liveJobs = result.data as unknown as Array<Record<string, unknown>>;
           selectedVariant = variant;
           error = null;
           break;
         }
 
-        const missingStatus = isMissingStatusColumnError(result.error);
         const missingViews = isMissingViewsColumnError(result.error);
-        if (missingStatus || missingViews) {
+        if (missingViews) {
           error = result.error;
           continue;
         }
@@ -231,6 +221,7 @@ export default function EmployerDashboardPage() {
 
       if (mounted) {
         setJobs(hydratedJobs);
+        setEmployerEmail(email);
         setSource("live");
         setAuthStatus("allowed");
       }
@@ -248,54 +239,70 @@ export default function EmployerDashboardPage() {
     if (!canEmployerPauseResume(job.status)) return;
 
     const { nextActive, nextStatus } = getEmployerPauseResumeUpdate(job.status, job.active);
-    const nextDashboardStatus = dashboardStatusForJob(nextStatus, nextActive);
-
     setBusyJobId(job.id);
+    setActionError(null);
+
+    if (source !== "live") {
+      setJobs((prev) =>
+        prev.map((item) =>
+          item.id === job.id
+            ? {
+                ...item,
+                active: nextActive,
+                status: nextStatus,
+                dashboard_status: dashboardStatusForJob(nextStatus, nextActive),
+              }
+            : item
+        )
+      );
+      setBusyJobId(null);
+      return;
+    }
+
+    const client = getSupabaseClient();
+    if (!client || !employerEmail) {
+      setActionError("We could not update this job because the employer session is unavailable. Please refresh and try again.");
+      setBusyJobId(null);
+      return;
+    }
+
+    const { data, error } = await client
+      .from("jobs")
+      .update({ active: nextActive, status: nextStatus })
+      .eq("id", job.id)
+      .eq("apply_email", employerEmail)
+      .select("id,active,status")
+      .single();
+
+    if (error || !data) {
+      setActionError(error?.message || "We could not save this job status. Please refresh and try again.");
+      setBusyJobId(null);
+      return;
+    }
+
+    const persistedActive = Boolean(data.active);
+    const persistedStatus = typeof data.status === "string" ? data.status : null;
+
+    if (persistedActive !== nextActive || persistedStatus !== nextStatus) {
+      setActionError("Supabase saved a different job status than requested. Please refresh and try again.");
+      setBusyJobId(null);
+      return;
+    }
+
+    const persistedDashboardStatus = dashboardStatusForJob(persistedStatus, persistedActive);
+
     setJobs((prev) =>
       prev.map((item) =>
         item.id === job.id
           ? {
               ...item,
-              active: nextActive,
-              status: nextStatus,
-              dashboard_status: nextDashboardStatus,
+              active: persistedActive,
+              status: persistedStatus,
+              dashboard_status: persistedDashboardStatus,
             }
           : item
       )
     );
-
-    if (source === "live") {
-      const client = getSupabaseClient();
-      if (!client) {
-        setBusyJobId(null);
-        return;
-      }
-
-      const updateWithStatus = await client
-        .from("jobs")
-        .update({ active: nextActive, status: nextStatus })
-        .eq("id", job.id);
-
-      const { error } = isMissingStatusColumnError(updateWithStatus.error)
-        ? await client.from("jobs").update({ active: nextActive }).eq("id", job.id)
-        : updateWithStatus;
-
-      if (error) {
-        setJobs((prev) =>
-          prev.map((item) =>
-            item.id === job.id
-              ? {
-                  ...item,
-                  active: job.active,
-                  status: job.status,
-                  dashboard_status: job.dashboard_status,
-                }
-              : item
-          )
-        );
-      }
-    }
-
     setBusyJobId(null);
   }
 
@@ -465,6 +472,24 @@ export default function EmployerDashboardPage() {
               Post New Job
             </Link>
           </div>
+
+          {actionError ? (
+            <div
+              role="alert"
+              style={{
+                marginBottom: 16,
+                borderRadius: 14,
+                border: "1px solid rgba(173,67,67,0.28)",
+                backgroundColor: "rgba(173,67,67,0.08)",
+                color: "#8a2f2f",
+                fontFamily: "var(--font-body)",
+                fontWeight: 800,
+                padding: "12px 14px",
+              }}
+            >
+              {actionError}
+            </div>
+          ) : null}
 
           {jobs.length === 0 ? (
             <div
