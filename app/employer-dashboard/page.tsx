@@ -139,19 +139,6 @@ function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSPro
   };
 }
 
-function isRejectedJob(job: Pick<DashboardJob, "dashboard_status">) {
-  return job.dashboard_status === "Rejected";
-}
-
-function rejectedJobMessage() {
-  return (
-    <div className="rn-dashboard-status-helper" aria-label="Rejected job details">
-      <p>This listing was not approved for public posting.</p>
-      <p>Please contact team@restaurantsnowhiring.com if you would like additional information.</p>
-    </div>
-  );
-}
-
 export default function EmployerDashboardPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -563,6 +550,11 @@ export default function EmployerDashboardPage() {
               >
                 Showing your current posted jobs.
               </p>
+              <p className="rn-dashboard-rejected-note">
+                If your job ad was rejected, please contact{" "}
+                <a href="mailto:team@restaurantsnowhiring.com">team@restaurantsnowhiring.com</a> or use the{" "}
+                <Link href="/contact">Contact page</Link> for additional information.
+              </p>
             </div>
             <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
               Post New Job
@@ -634,10 +626,7 @@ export default function EmployerDashboardPage() {
                       <tr key={job.id}>
                         <td>{job.title}</td>
                         <td>
-                          <div className="rn-dashboard-status-cell">
-                            <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
-                            {isRejectedJob(job) ? rejectedJobMessage() : null}
-                          </div>
+                          <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
                         </td>
                         <td>{[job.city, job.state].filter(Boolean).join(", ") || "—"}</td>
                         <td>{formatDate(job.created_at)}</td>
@@ -685,10 +674,7 @@ export default function EmployerDashboardPage() {
                       <h3 style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
                         {job.title}
                       </h3>
-                      <div className="rn-dashboard-mobile-status">
-                        <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
-                        {isRejectedJob(job) ? rejectedJobMessage() : null}
-                      </div>
+                      <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
                     </div>
                     <p style={{ margin: "8px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
                       {[job.city, job.state].filter(Boolean).join(", ") || "—"}
@@ -748,10 +734,27 @@ export default function EmployerDashboardPage() {
           margin-bottom: 16px;
         }
 
+        .rn-dashboard-rejected-note {
+          margin: 8px 0 0 0;
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.4;
+        }
+
+        .rn-dashboard-rejected-note a {
+          color: ${homeTheme.green};
+          font-weight: 900;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
         .rn-dashboard-table-wrap {
           border: 1px solid ${homeTheme.border};
           border-radius: 14px;
           overflow-x: auto;
+          overflow-y: hidden;
           background: #fff;
         }
 
@@ -763,9 +766,10 @@ export default function EmployerDashboardPage() {
 
         .rn-dashboard-table th,
         .rn-dashboard-table td {
-          padding: 14px;
+          padding: 12px 14px;
           border-bottom: 1px solid rgba(0, 0, 0, 0.06);
           text-align: left;
+          vertical-align: middle;
           color: ${homeTheme.text};
           font-family: var(--font-body);
           font-weight: 700;
@@ -778,32 +782,6 @@ export default function EmployerDashboardPage() {
           text-transform: uppercase;
           letter-spacing: 0.45px;
           color: ${homeTheme.muted};
-        }
-
-        .rn-dashboard-status-cell,
-        .rn-dashboard-mobile-status {
-          display: flex;
-          flex-direction: column;
-          align-items: flex-start;
-          gap: 6px;
-        }
-
-        .rn-dashboard-status-helper {
-          max-width: 280px;
-          color: ${homeTheme.muted};
-          font-family: var(--font-body);
-          font-size: 12px;
-          font-weight: 700;
-          line-height: 1.35;
-          white-space: normal;
-        }
-
-        .rn-dashboard-status-helper p {
-          margin: 0;
-        }
-
-        .rn-dashboard-status-helper p + p {
-          margin-top: 3px;
         }
 
         .rn-dashboard-actions {
