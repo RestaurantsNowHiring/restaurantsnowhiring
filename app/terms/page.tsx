@@ -9,7 +9,8 @@ import {
 
 export const metadata = buildPageMetadata({
   title: "Terms and Conditions",
-  description: "Read the temporary Terms and Conditions for RestaurantsNowHiring.com.",
+  description:
+    "Review the Restaurants Now Hiring terms for restaurant employers, job seekers, listings, moderation, and platform use.",
   path: "/terms",
 });
 

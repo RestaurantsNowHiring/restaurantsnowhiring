@@ -9,7 +9,8 @@ import {
 
 export const metadata = buildPageMetadata({
   title: "Privacy Policy",
-  description: "Read the temporary Privacy Policy for RestaurantsNowHiring.com.",
+  description:
+    "Learn how Restaurants Now Hiring handles employer accounts, job listings, contact messages, and platform data.",
   path: "/privacy",
 });
 

@@ -57,6 +57,14 @@ function safeExternalUrl(value: string | null | undefined) {
   return trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : `https://${trimmed}`;
 }
 
+function stripUndefinedValues<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+}
+
+function serializeJsonLd(value: unknown) {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 function buildJobMetaDescription(job: Job) {
   const location = job.city && job.state ? `${job.city}, ${job.state}` : "restaurant location";
   const pay = job.pay_range ? ` Pay: ${job.pay_range}.` : "";
@@ -73,8 +81,12 @@ function buildJobPostingSchema(job: Job) {
   return {
     "@context": "https://schema.org",
     "@type": "JobPosting",
+    "@id": `${jobUrl}#jobposting`,
+    mainEntityOfPage: jobUrl,
     title: job.title,
-    description: job.description || `${job.restaurant_name} is hiring for ${job.title}${locationName ? ` in ${locationName}` : ""}.`,
+    description:
+      job.description ||
+      `${job.restaurant_name} is hiring for ${job.title}${locationName ? ` in ${locationName}` : ""}.`,
     identifier: {
       "@type": "PropertyValue",
       name: "RestaurantsNowHiring.com",
@@ -82,20 +94,23 @@ function buildJobPostingSchema(job: Job) {
     },
     datePosted: job.created_at,
     employmentType: formatEmploymentType(job.employment_type),
-    hiringOrganization: {
+    industry: "Restaurants",
+    occupationalCategory: job.role_category || undefined,
+    hiringOrganization: stripUndefinedValues({
       "@type": "Organization",
       name: job.restaurant_name,
       sameAs: orgUrl,
-    },
+      logo: absoluteUrl("/logo-star.png"),
+    }),
     jobLocation: {
       "@type": "Place",
-      address: {
+      address: stripUndefinedValues({
         "@type": "PostalAddress",
         streetAddress: job.address || undefined,
         addressLocality: job.city || undefined,
         addressRegion: job.state || undefined,
         addressCountry: "US",
-      },
+      }),
     },
     url: jobUrl,
     directApply: false,
@@ -387,7 +402,7 @@ export default async function JobDetailsPage({
       {jobPostingSchema ? (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(jobPostingSchema) }}
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jobPostingSchema) }}
         />
       ) : null}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
