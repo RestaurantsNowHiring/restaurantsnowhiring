@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { ADMIN_SESSION_COOKIE, getAdminUserFromAccessToken } from "../../../../../../lib/adminAuth";
-import { isMissingStatusColumnError } from "../../../../../../lib/jobStatus";
+import { isMissingApprovedAtColumnError, isMissingStatusColumnError } from "../../../../../../lib/jobStatus";
 import { getSupabaseAdminClient } from "../../../../../../lib/supabaseAdmin";
 
 export async function POST(_: Request, context: { params: Promise<{ id: string }> }) {
@@ -32,11 +32,21 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     );
   }
 
-  const updateWithStatus = await supabaseAdmin.from("jobs").update({ active: true, status: "active" }).eq("id", jobId);
+  const approvedAt = new Date().toISOString();
+  const updateWithStatusAndApprovedAt = await supabaseAdmin
+    .from("jobs")
+    .update({ active: true, status: "active", approved_at: approvedAt })
+    .eq("id", jobId);
 
-  const { error } = isMissingStatusColumnError(updateWithStatus.error)
+  let updateResult = updateWithStatusAndApprovedAt;
+
+  if (isMissingApprovedAtColumnError(updateWithStatusAndApprovedAt.error)) {
+    updateResult = await supabaseAdmin.from("jobs").update({ active: true, status: "active" }).eq("id", jobId);
+  }
+
+  const { error } = isMissingStatusColumnError(updateResult.error)
     ? await supabaseAdmin.from("jobs").update({ active: true }).eq("id", jobId)
-    : updateWithStatus;
+    : updateResult;
 
   if (error) {
     return NextResponse.json({ error: error.message || "Approval update failed." }, { status: 500 });

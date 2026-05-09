@@ -128,3 +128,20 @@ export function isMissingViewsColumnError(error: { code?: string; message?: stri
     message.includes("jobs.views does not exist")
   );
 }
+
+export function isMissingApprovedAtColumnError(error: { code?: string; message?: string } | null): boolean {
+  if (!error) return false;
+
+  const message = (error.message ?? "").toLowerCase();
+  if (error.code === "PGRST204" || error.code === "42703") {
+    return true;
+  }
+
+  if (!message.includes("approved_at")) return false;
+
+  return (
+    message.includes("could not find the 'approved_at' column") ||
+    message.includes('column "approved_at" does not exist') ||
+    message.includes("jobs.approved_at does not exist")
+  );
+}
