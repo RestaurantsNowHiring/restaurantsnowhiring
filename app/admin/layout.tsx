@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import { noIndexRobots } from "../../lib/seo";
+import { buildPageMetadata, noIndexRobots } from "../../lib/seo";
 
-export const metadata = {
+export const metadata = buildPageMetadata({
   title: "Admin",
+  description: "Private Restaurants Now Hiring administration area.",
+  path: "/admin",
   robots: noIndexRobots,
-};
+});
 
 export default function AdminLayout({ children }: { children: ReactNode }) {
   return children;
