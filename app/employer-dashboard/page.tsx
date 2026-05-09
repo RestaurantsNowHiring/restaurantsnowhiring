@@ -57,7 +57,8 @@ type SupabaseActionError = {
 const isDevelopment = process.env.NODE_ENV !== "production";
 
 const PAUSE_RESUME_RETURN_FIELDS = "id,active,status,employer_user_id,employer_email";
-const DELETE_RETURN_FIELDS = "id,employer_user_id,employer_email";
+const DELETE_EMAIL_RETURN_FIELDS = "id,employer_email";
+const DELETE_USER_ID_RETURN_FIELDS = "id,employer_user_id,employer_email";
 const DELETE_CONFIRMATION_MESSAGE =
   "This will permanently delete your job ad. If you want to repost this position later, you will need to complete the Post a Job form again.";
 
@@ -87,8 +88,23 @@ function developmentDeleteFailureMessage(fallback: string, detail: string, error
   return formattedError ? `${fallback} ${detail} Supabase error: ${formattedError}` : `${fallback} ${detail}`;
 }
 
-function employerOwnershipFilter(owner: EmployerOwner) {
-  return `employer_user_id.eq.${owner.userId},employer_email.eq.${owner.email}`;
+function isMissingEmployerUserIdColumnError(error: SupabaseActionError | null | undefined) {
+  if (!error) return false;
+
+  const message = (error.message ?? "").toLowerCase();
+  const details = (error.details ?? "").toLowerCase();
+  const hint = (error.hint ?? "").toLowerCase();
+  const errorText = `${message} ${details} ${hint}`;
+
+  if (!errorText.includes("employer_user_id")) return false;
+
+  return (
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    errorText.includes("could not find the 'employer_user_id' column") ||
+    errorText.includes('column "employer_user_id" does not exist') ||
+    errorText.includes("jobs.employer_user_id does not exist")
+  );
 }
 
 
@@ -451,18 +467,10 @@ export default function EmployerDashboardPage() {
       return;
     }
 
-    if (hasMissingEmployerOwnership(job)) {
-      setDeleteJob(null);
-      setActionError(
-        "This job is missing employer ownership details (employer_user_id and employer_email), so it cannot be deleted until it is reassigned to your employer account."
-      );
-      setBusyJobId(null);
-      return;
-    }
+    const emailMatchesCurrentEmployer = job.employer_email === currentOwner.email;
+    const userIdMatchesCurrentEmployer = job.employer_user_id === currentOwner.userId;
 
-    const matchedOwnership = getJobOwnershipMatch(job, currentOwner);
-
-    if (!matchedOwnership) {
+    if (!emailMatchesCurrentEmployer && !userIdMatchesCurrentEmployer) {
       setDeleteJob(null);
       setActionError(
         "This job is linked to a different employer account than your current session. Please refresh or sign in with the employer account that owns this listing."
@@ -471,53 +479,78 @@ export default function EmployerDashboardPage() {
       return;
     }
 
-    const ownershipFilter = employerOwnershipFilter(currentOwner);
-    const ownershipCheck = await supabase
+    const emailOwnershipCheck = await supabase
       .from("jobs")
-      .select(DELETE_RETURN_FIELDS)
+      .select(DELETE_EMAIL_RETURN_FIELDS)
       .eq("id", job.id)
-      .or(ownershipFilter)
+      .eq("employer_email", currentOwner.email)
       .maybeSingle();
 
-    if (ownershipCheck.error) {
+    if (emailOwnershipCheck.error) {
       setDeleteJob(null);
       setActionError(
         developmentDeleteFailureMessage(
           "We could not verify this job before deleting it. Please refresh and try again.",
-          "Delete verification failed while checking the exact selected job id against employer_user_id OR employer_email.",
-          ownershipCheck.error
+          "Delete verification failed while checking the exact selected job id against employer_email for the signed-in employer.",
+          emailOwnershipCheck.error
         )
       );
       setBusyJobId(null);
       return;
     }
 
-    if (!ownershipCheck.data) {
-      setDeleteJob(null);
-      setActionError(
-        developmentDeleteFailureMessage(
-          "We could not find that exact job for your employer account. Please refresh and try again.",
-          "Ownership mismatch or zero readable rows: the exact selected job id did not match employer_user_id OR employer_email for the signed-in employer."
-        )
-      );
-      setBusyJobId(null);
-      return;
+    let deleteResult: { data: { id: string } | null; error: SupabaseActionError | null } = { data: null, error: null };
+    let userIdFallbackError: SupabaseActionError | null = null;
+    let usedUserIdFallback = false;
+
+    if (emailOwnershipCheck.data) {
+      deleteResult = await supabase
+        .from("jobs")
+        .delete()
+        .eq("id", job.id)
+        .eq("employer_email", currentOwner.email)
+        .select("id")
+        .maybeSingle();
     }
 
-    const deleteResult = await supabase
-      .from("jobs")
-      .delete()
-      .eq("id", job.id)
-      .or(ownershipFilter)
-      .select("id")
-      .maybeSingle();
+    if (!deleteResult.data && userIdMatchesCurrentEmployer) {
+      const userIdOwnershipCheck = await supabase
+        .from("jobs")
+        .select(DELETE_USER_ID_RETURN_FIELDS)
+        .eq("id", job.id)
+        .eq("employer_user_id", currentOwner.userId)
+        .maybeSingle();
+
+      if (userIdOwnershipCheck.error) {
+        if (!isMissingEmployerUserIdColumnError(userIdOwnershipCheck.error)) {
+          userIdFallbackError = userIdOwnershipCheck.error;
+        }
+      } else if (userIdOwnershipCheck.data) {
+        const userIdDeleteResult = await supabase
+          .from("jobs")
+          .delete()
+          .eq("id", job.id)
+          .eq("employer_user_id", currentOwner.userId)
+          .select("id")
+          .maybeSingle();
+
+        if (userIdDeleteResult.error && isMissingEmployerUserIdColumnError(userIdDeleteResult.error)) {
+          userIdFallbackError = null;
+        } else {
+          deleteResult = userIdDeleteResult;
+          usedUserIdFallback = Boolean(userIdDeleteResult.data);
+        }
+      }
+    }
 
     if (deleteResult.error) {
       setDeleteJob(null);
       setActionError(
         developmentDeleteFailureMessage(
           "We could not delete this job ad. Please refresh and try again.",
-          "Delete failed after ownership matched; inspect the Supabase error for a DELETE policy or permissions problem.",
+          usedUserIdFallback
+            ? "Delete failed after employer_user_id ownership matched; inspect the Supabase error for a DELETE policy or permissions problem."
+            : "Delete failed after employer_email ownership matched; inspect the Supabase error for a DELETE policy or permissions problem.",
           deleteResult.error
         )
       );
@@ -530,7 +563,10 @@ export default function EmployerDashboardPage() {
       setActionError(
         developmentDeleteFailureMessage(
           "We could not delete this job ad. Please refresh and try again.",
-          "Ownership matched in the pre-delete check, but DELETE returned zero deleted rows. This usually means the jobs DELETE RLS policy is missing or blocked the row."
+          userIdFallbackError
+            ? "The exact selected job id did not delete by employer_email, and the safe employer_user_id fallback failed."
+            : "The exact selected job id did not match employer_email for the signed-in employer, and no safe employer_user_id fallback deleted the row.",
+          userIdFallbackError
         )
       );
       setBusyJobId(null);
