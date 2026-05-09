@@ -57,6 +57,8 @@ type SupabaseActionError = {
 const isDevelopment = process.env.NODE_ENV !== "production";
 
 const PAUSE_RESUME_RETURN_FIELDS = "id,active,status,employer_user_id,employer_email";
+const DELETE_CONFIRMATION_MESSAGE =
+  "This will permanently delete your job ad. If you want to repost this position later, you will need to complete the Post a Job form again.";
 
 function formatSupabaseActionError(error: SupabaseActionError) {
   const parts = [
@@ -144,8 +146,10 @@ export default function EmployerDashboardPage() {
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
+  const [deleteJob, setDeleteJob] = useState<DashboardJob | null>(null);
   const [owner, setOwner] = useState<EmployerOwner | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -229,6 +233,7 @@ export default function EmployerDashboardPage() {
 
       const currentOwner = { userId, email };
       setActionError(null);
+      setActionSuccess(null);
 
       const jobsResult = await loadEmployerJobs(currentOwner);
 
@@ -293,6 +298,7 @@ export default function EmployerDashboardPage() {
     const { nextActive, nextStatus } = getEmployerPauseResumeUpdate(job.status, job.active);
     setBusyJobId(job.id);
     setActionError(null);
+    setActionSuccess(null);
 
     const { data, error: authError } = await supabase.auth.getUser();
     const authUser = data?.user;
@@ -403,6 +409,99 @@ export default function EmployerDashboardPage() {
           : item
       )
     );
+    setBusyJobId(null);
+  }
+
+  function handleDeleteClick(job: DashboardJob) {
+    if (busyJobId) return;
+    setActionError(null);
+    setActionSuccess(null);
+    setDeleteJob(job);
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteJob || busyJobId) return;
+
+    const job = deleteJob;
+    setBusyJobId(job.id);
+    setActionError(null);
+    setActionSuccess(null);
+
+    const { data, error: authError } = await supabase.auth.getUser();
+    const authUser = data?.user;
+    const sessionOwner = authUser?.id && authUser.email?.trim() ? { userId: authUser.id, email: authUser.email.trim() } : null;
+    const currentOwner = sessionOwner ?? owner;
+
+    if (authError || !currentOwner) {
+      setDeleteJob(null);
+      setActionError("We could not delete this job because the employer session is unavailable. Please refresh and try again.");
+      setBusyJobId(null);
+      return;
+    }
+
+    if (hasMissingEmployerOwnership(job)) {
+      setDeleteJob(null);
+      setActionError(
+        "This job is missing employer ownership details (employer_user_id and employer_email), so it cannot be deleted until it is reassigned to your employer account."
+      );
+      setBusyJobId(null);
+      return;
+    }
+
+    const matchedOwnership = getJobOwnershipMatch(job, currentOwner);
+
+    if (!matchedOwnership) {
+      setDeleteJob(null);
+      setActionError(
+        "This job is linked to a different employer account than your current session. Please refresh or sign in with the employer account that owns this listing."
+      );
+      setBusyJobId(null);
+      return;
+    }
+
+    const deleteAttempts: OwnershipMatch[] = [
+      matchedOwnership,
+      ...(matchedOwnership === "employer_user_id" ? ["employer_email" as const] : ["employer_user_id" as const]),
+    ];
+    let deleteError: SupabaseActionError | null = null;
+    let deleted = false;
+
+    for (const ownershipField of deleteAttempts) {
+      const ownerValue = ownershipField === "employer_user_id" ? currentOwner.userId : currentOwner.email;
+      const result = await supabase
+        .from("jobs")
+        .delete()
+        .eq("id", job.id)
+        .eq(ownershipField, ownerValue)
+        .select("id")
+        .maybeSingle();
+
+      if (result.error) {
+        deleteError = result.error;
+        continue;
+      }
+
+      if (result.data) {
+        deleted = true;
+        break;
+      }
+    }
+
+    if (!deleted) {
+      setDeleteJob(null);
+      setActionError(
+        deleteError
+          ? pauseResumeFailureMessage("We could not delete this job ad. Please refresh and try again.", deleteError)
+          : "We could not find that exact job for your employer account. Please refresh and try again."
+      );
+      setBusyJobId(null);
+      return;
+    }
+
+    setOwner(currentOwner);
+    setJobs((prev) => prev.filter((item) => item.id !== job.id));
+    setDeleteJob(null);
+    setActionSuccess("Job ad deleted successfully.");
     setBusyJobId(null);
   }
 
@@ -579,6 +678,24 @@ export default function EmployerDashboardPage() {
             </div>
           ) : null}
 
+          {actionSuccess ? (
+            <div
+              role="status"
+              style={{
+                marginBottom: 16,
+                borderRadius: 14,
+                border: "1px solid rgba(53,128,110,0.24)",
+                backgroundColor: "rgba(53,128,110,0.10)",
+                color: homeTheme.green,
+                fontFamily: "var(--font-body)",
+                fontWeight: 800,
+                padding: "12px 14px",
+              }}
+            >
+              {actionSuccess}
+            </div>
+          ) : null}
+
           {jobs.length === 0 ? (
             <div
               style={{
@@ -659,6 +776,15 @@ export default function EmployerDashboardPage() {
                                 {busyJobId === job.id ? "Saving..." : job.dashboard_status === "Paused" ? "Resume" : "Pause"}
                               </button>
                             ) : null}
+                            <button
+                              type="button"
+                              style={homeSecondaryButton}
+                              className="rn-btn-secondary rn-btn-delete"
+                              onClick={() => handleDeleteClick(job)}
+                              disabled={busyJobId === job.id}
+                            >
+                              Delete
+                            </button>
                           </div>
                         </td>
                       </tr>
@@ -709,6 +835,15 @@ export default function EmployerDashboardPage() {
                           {busyJobId === job.id ? "Saving..." : job.dashboard_status === "Paused" ? "Resume" : "Pause"}
                         </button>
                       ) : null}
+                      <button
+                        type="button"
+                        style={homeSecondaryButton}
+                        className="rn-btn-secondary rn-btn-delete"
+                        onClick={() => handleDeleteClick(job)}
+                        disabled={busyJobId === job.id}
+                      >
+                        Delete
+                      </button>
                     </div>
                   </article>
                 ))}
@@ -717,6 +852,41 @@ export default function EmployerDashboardPage() {
           )}
         </section>
       </div>
+
+      {deleteJob ? (
+        <div className="rn-delete-modal-backdrop" role="presentation">
+          <div
+            aria-labelledby="delete-job-title"
+            aria-modal="true"
+            className="rn-delete-modal"
+            role="dialog"
+          >
+            <p className="rn-delete-modal-eyebrow">Confirm delete</p>
+            <h2 id="delete-job-title">Delete this job ad?</h2>
+            <p className="rn-delete-modal-job">{deleteJob.title}</p>
+            <p>{DELETE_CONFIRMATION_MESSAGE}</p>
+            <div className="rn-delete-modal-actions">
+              <button
+                type="button"
+                style={homeSecondaryButton}
+                className="rn-btn-secondary"
+                onClick={() => setDeleteJob(null)}
+                disabled={busyJobId === deleteJob.id}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="rn-confirm-delete-button"
+                onClick={handleConfirmDelete}
+                disabled={busyJobId === deleteJob.id}
+              >
+                {busyJobId === deleteJob.id ? "Deleting..." : "Confirm Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <style jsx>{`
         .rn-dashboard-metrics {
@@ -788,6 +958,104 @@ export default function EmployerDashboardPage() {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
+        }
+
+
+        .rn-btn-delete {
+          border-color: rgba(173, 67, 67, 0.28) !important;
+          color: #8a2f2f !important;
+          background: rgba(173, 67, 67, 0.06) !important;
+        }
+
+        .rn-btn-delete:hover {
+          background: rgba(173, 67, 67, 0.10) !important;
+          border-color: rgba(173, 67, 67, 0.40) !important;
+        }
+
+        .rn-delete-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 50;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 18px;
+          background: rgba(25, 35, 32, 0.44);
+        }
+
+        .rn-delete-modal {
+          width: min(100%, 480px);
+          border: 1px solid ${homeTheme.border};
+          border-radius: 20px;
+          background: #fffaf2;
+          box-shadow: 0 22px 70px rgba(0, 0, 0, 0.22);
+          padding: 24px;
+          color: ${homeTheme.text};
+          font-family: var(--font-body);
+        }
+
+        .rn-delete-modal-eyebrow {
+          margin: 0 0 8px 0;
+          color: #8a2f2f;
+          font-size: 12px;
+          font-weight: 900;
+          letter-spacing: 0.45px;
+          text-transform: uppercase;
+        }
+
+        .rn-delete-modal h2 {
+          margin: 0 0 8px 0;
+          color: ${homeTheme.green};
+          font-family: var(--font-heading);
+          font-size: 30px;
+          line-height: 1.1;
+        }
+
+        .rn-delete-modal p {
+          color: ${homeTheme.muted};
+          font-weight: 700;
+          line-height: 1.5;
+        }
+
+        .rn-delete-modal-job {
+          margin: 0 0 12px 0;
+          color: ${homeTheme.text} !important;
+          font-weight: 900 !important;
+        }
+
+        .rn-delete-modal-actions {
+          display: flex;
+          justify-content: flex-end;
+          gap: 10px;
+          flex-wrap: wrap;
+          margin-top: 18px;
+        }
+
+        .rn-confirm-delete-button {
+          border: 1px solid rgba(173, 67, 67, 0.36);
+          border-radius: 999px;
+          background: #8a2f2f;
+          color: #fffaf2;
+          cursor: pointer;
+          font-family: var(--font-body);
+          font-size: 14px;
+          font-weight: 900;
+          padding: 10px 16px;
+          text-decoration: none;
+          transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+        }
+
+        .rn-confirm-delete-button:hover {
+          background: #742828;
+          box-shadow: 0 8px 18px rgba(173, 67, 67, 0.22);
+          transform: translateY(-1px);
+        }
+
+        .rn-confirm-delete-button:disabled,
+        .rn-btn-delete:disabled {
+          cursor: not-allowed;
+          opacity: 0.68;
+          transform: none;
         }
 
         .rn-dashboard-mobile-list {
