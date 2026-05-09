@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buildPageMetadata } from "../../lib/seo";
 import {
   BadgeDollarSign,
   Check,
@@ -7,6 +8,12 @@ import {
   RefreshCcw,
   BriefcaseBusiness,
 } from "lucide-react";
+
+export const metadata = buildPageMetadata({
+  title: "Restaurant Job Posting Pricing",
+  description: "Review simple MVP pricing for posting restaurant jobs on RestaurantsNowHiring.com.",
+  path: "/pricing",
+});
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

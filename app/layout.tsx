@@ -3,7 +3,9 @@ import "./globals.css";
 import Link from "next/link";
 import localFont from "next/font/local";
 import { Inter, Sora } from "next/font/google";
+import type { Metadata, Viewport } from "next";
 import TopBanner from "./components/TopBanner";
+import { getSiteUrl } from "../lib/seo";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,13 +26,57 @@ const coldsmith = localFont({
   display: "swap",
 });
 
-export const metadata = {
+export const metadata: Metadata = {
+  metadataBase: new URL(getSiteUrl()),
+  applicationName: "Restaurants Now Hiring",
   title: {
     default: "Restaurants Now Hiring | Restaurant Jobs Hiring Now",
     template: "%s | Restaurants Now Hiring",
   },
   description:
     "Browse restaurant jobs hiring now or post restaurant openings for review on RestaurantsNowHiring.com.",
+  alternates: {
+    canonical: getSiteUrl(),
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-snippet": -1,
+      "max-image-preview": "large",
+      "max-video-preview": -1,
+    },
+  },
+  openGraph: {
+    type: "website",
+    locale: "en_US",
+    url: getSiteUrl(),
+    siteName: "Restaurants Now Hiring",
+    title: "Restaurants Now Hiring | Restaurant Jobs Hiring Now",
+    description:
+      "Browse restaurant jobs hiring now or post restaurant openings for review on RestaurantsNowHiring.com.",
+    images: [
+      {
+        url: "/logo-star.png",
+        alt: "Restaurants Now Hiring",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Restaurants Now Hiring | Restaurant Jobs Hiring Now",
+    description:
+      "Browse restaurant jobs hiring now or post restaurant openings for review on RestaurantsNowHiring.com.",
+    images: ["/logo-star.png"],
+  },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#35806e",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

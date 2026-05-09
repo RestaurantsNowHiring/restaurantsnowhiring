@@ -1,10 +1,17 @@
 import Link from "next/link";
+import { buildPageMetadata } from "../../lib/seo";
 import {
   homeCardStyle,
   homePrimaryButton,
   homeSecondaryButton,
   homeTheme,
 } from "../styles/homepageDesignSystem";
+
+export const metadata = buildPageMetadata({
+  title: "Terms and Conditions",
+  description: "Read the temporary Terms and Conditions for RestaurantsNowHiring.com.",
+  path: "/terms",
+});
 
 const termsSections = [
   {

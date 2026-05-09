@@ -1,10 +1,17 @@
 import Link from "next/link";
+import { buildPageMetadata } from "../../lib/seo";
 import {
   homeCardStyle,
   homePrimaryButton,
   homeSecondaryButton,
   homeTheme,
 } from "../styles/homepageDesignSystem";
+
+export const metadata = buildPageMetadata({
+  title: "Privacy Policy",
+  description: "Read the temporary Privacy Policy for RestaurantsNowHiring.com.",
+  path: "/privacy",
+});
 
 const privacySections = [
   {

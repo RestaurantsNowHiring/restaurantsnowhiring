@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { buildPageMetadata } from "../../lib/seo";
 import {
   BriefcaseBusiness,
   Search,
@@ -6,6 +7,12 @@ import {
   Users,
   ArrowRight,
 } from "lucide-react";
+
+export const metadata = buildPageMetadata({
+  title: "About Restaurants Now Hiring",
+  description: "Learn about Restaurants Now Hiring, a focused restaurant job board for hospitality employers and job seekers.",
+  path: "/about",
+});
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

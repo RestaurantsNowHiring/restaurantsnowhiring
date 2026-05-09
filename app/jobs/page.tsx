@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../../lib/jobStatus";
@@ -7,11 +8,32 @@ import {
   homeSecondaryButton,
   homeTheme,
 } from "../styles/homepageDesignSystem";
+import { buildPageMetadata } from "../../lib/seo";
 
-export const metadata = {
-  title: "Browse Restaurant Jobs",
-  description: "Search restaurant jobs hiring now by role, location, and employment type on RestaurantsNowHiring.com.",
-};
+type JobsSearchParamsShape = { [key: string]: string | string[] | undefined };
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams?: Promise<JobsSearchParamsShape> | JobsSearchParamsShape;
+}): Promise<Metadata> {
+  const resolvedSearchParams = await Promise.resolve(searchParams);
+  const hasFilters = Object.keys(resolvedSearchParams ?? {}).length > 0;
+
+  return buildPageMetadata({
+    title: "Browse Restaurant Jobs Hiring Now",
+    description:
+      "Search restaurant jobs hiring now by role, location, and employment type on RestaurantsNowHiring.com.",
+    path: "/jobs",
+    robots: hasFilters
+      ? {
+          index: false,
+          follow: true,
+          googleBot: { index: false, follow: true },
+        }
+      : undefined,
+  });
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -33,7 +55,7 @@ type Job = {
   employment_type: string | null;
 };
 
-type SearchParamsShape = { [key: string]: string | string[] | undefined };
+type SearchParamsShape = JobsSearchParamsShape;
 
 export default async function JobsPage({
   searchParams,
