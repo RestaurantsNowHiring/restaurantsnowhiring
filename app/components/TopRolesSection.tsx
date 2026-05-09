@@ -24,7 +24,7 @@ export default function TopRolesSection() {
   const roles: RoleCard[] = [
     {
       title: "Line / Prep Cooks",
-      imageSrc: "/roles/line-cooks.jpg",
+      imageSrc: "/roles/line-cooks.JPG",
       roleFilters: ["Line", "Prep"],
       objectPosition: "center 20%",
       imageScale: 1.03,
