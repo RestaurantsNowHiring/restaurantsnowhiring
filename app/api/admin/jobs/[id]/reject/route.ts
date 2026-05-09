@@ -64,7 +64,7 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     job: {
       id: jobId,
       active: Boolean(writeResult.data?.active ?? false),
-      status: isMissingStatusColumnError(updateWithStatus.error) ? null : "rejected",
+      status: "rejected",
     },
   });
 }
