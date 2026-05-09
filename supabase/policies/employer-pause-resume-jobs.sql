@@ -1,11 +1,11 @@
--- Employer dashboard Pause/Resume RLS support.
+-- Employer dashboard Pause/Resume and Delete RLS support.
 --
--- Apply this in the Supabase SQL editor if authenticated Pause/Resume updates
+-- Apply this in the Supabase SQL editor if authenticated Pause/Resume updates or Delete actions
 -- return no rows after the dashboard ownership check passes.
 --
 -- Security intent:
 -- - only signed-in users can use these policies
--- - employers can read/update only jobs linked to their own auth user id
+-- - employers can read/update/delete only jobs linked to their own auth user id
 -- - MVP fallback permits matching the signed-in user's JWT email when older rows
 --   have employer_email but not employer_user_id
 -- - the app update path only writes status and active for Pause/Resume
@@ -49,3 +49,16 @@ with check (
 -- columns through separate flows:
 -- revoke update on public.jobs from authenticated;
 -- grant update (active, status) on public.jobs to authenticated;
+
+drop policy if exists "Employers can delete their own jobs" on public.jobs;
+create policy "Employers can delete their own jobs"
+on public.jobs
+for delete
+to authenticated
+using (
+  employer_user_id = (select auth.uid())
+  or (
+    employer_email is not null
+    and lower(employer_email) = lower((select auth.jwt() ->> 'email'))
+  )
+);
