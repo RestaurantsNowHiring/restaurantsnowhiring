@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../../../lib/supabase";
 import {
@@ -121,7 +121,7 @@ const editTextareaStyle: React.CSSProperties = {
   resize: "vertical",
 };
 
-export default function EmployerJobEditPage() {
+function EmployerJobEditForm() {
   const params = useParams<{ id?: string }>();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -519,5 +519,13 @@ export default function EmployerJobEditPage() {
         }
       `}</style>
     </main>
+  );
+}
+
+export default function EmployerJobEditPage() {
+  return (
+    <Suspense fallback={null}>
+      <EmployerJobEditForm />
+    </Suspense>
   );
 }
