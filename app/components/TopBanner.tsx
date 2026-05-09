@@ -1,43 +1,25 @@
-"use client";
-
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
-import { supabase } from "../../lib/supabase"; // ✅ if TopBanner is in app/components
+import TopBannerAuth from "./TopBannerAuth";
+
+const navLinkStyle: React.CSSProperties = {
+  color: "#fef5ea",
+  fontWeight: 800,
+  letterSpacing: 0.4,
+  textDecoration: "none",
+  fontSize: 13,
+  whiteSpace: "nowrap",
+};
+
+export function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="banner-link" style={navLinkStyle}>
+      {children}
+    </Link>
+  );
+}
+
 
 export default function TopBanner() {
-  const router = useRouter();
-  const pathname = usePathname();
-
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isReady, setIsReady] = useState(false);
-
-  useEffect(() => {
-    // Initial session check
-    supabase.auth.getSession().then(({ data }) => {
-      setIsLoggedIn(!!data.session);
-      setIsReady(true);
-    });
-
-    // Keep UI updated on auth changes
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsLoggedIn(!!session);
-    });
-
-    return () => {
-      listener.subscription.unsubscribe();
-    };
-  }, []);
-
-  async function handleSignOut() {
-    await supabase.auth.signOut();
-
-    // Optional: If they were on /post-job, send them to login
-    if (pathname === "/post-job") {
-      router.replace("/employer-login");
-    }
-  }
-
   return (
     <div
       style={{
@@ -63,85 +45,15 @@ export default function TopBanner() {
           justifyContent: "space-between",
         }}
       >
-        {/* LEFT SIDE */}
-        <div style={{ display: "flex", gap: 30 }}>
+        <nav aria-label="Primary" style={{ display: "flex", gap: 30 }}>
           <NavLink href="/jobs">AVAILABLE JOBS</NavLink>
+          <TopBannerAuth slot="primary" />
+        </nav>
 
-          {/* If logged out, Post a Job sends them to login with redirect */}
-          {!isLoggedIn ? (
-            <NavLink href="/employer-login?next=/post-job">POST A JOB</NavLink>
-          ) : (
-            <>
-              <NavLink href="/post-job">POST A JOB</NavLink>
-              <NavLink href="/employer-dashboard">DASHBOARD</NavLink>
-            </>
-          )}
-
-          <NavLink href="/about">ABOUT</NavLink>
-          <NavLink href="/contact">CONTACT</NavLink>
-        </div>
-
-        {/* RIGHT SIDE */}
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          {/* Prevent flicker before auth check completes */}
-          {!isReady ? null : !isLoggedIn ? (
-            <Link
-              href="/employer-login"
-              className="banner-link--login"
-              style={{
-                fontFamily: "var(--font-coldsmith)",
-                letterSpacing: 1.1,
-                textTransform: "uppercase",
-                fontSize: 25,
-                textDecoration: "none",
-                fontWeight: 200,
-              }}
-            >
-              EMPLOYER LOGIN / SIGN UP
-            </Link>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="banner-link--login"
-              style={{
-                fontFamily: "var(--font-coldsmith)",
-                letterSpacing: 1.1,
-                textTransform: "uppercase",
-                fontSize: 25,
-                textDecoration: "none",
-                fontWeight: 200,
-                background: "transparent",
-                border: "none",
-                padding: 0,
-                color: "#fff",
-                cursor: "pointer",
-              }}
-            >
-              SIGN OUT
-            </button>
-          )}
-        </div>
+        <nav aria-label="Account" style={{ display: "flex", gap: 20, alignItems: "center" }}>
+          <TopBannerAuth slot="account" />
+        </nav>
       </div>
     </div>
-  );
-}
-
-function NavLink({ href, children }: { href: string; children: React.ReactNode }) {
-  return (
-    <Link
-      href={href}
-      className="banner-link"
-      style={{
-        fontFamily: "var(--font-coldsmith)",
-        letterSpacing: 1.1,
-        textTransform: "uppercase",
-        textDecoration: "none",
-        fontSize: 20,
-        fontWeight: 400,
-      }}
-    >
-      {children}
-    </Link>
   );
 }

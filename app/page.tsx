@@ -146,9 +146,12 @@ export default async function HomePage() {
                 marginBottom: 12,
               }}
             >
-              <img
+              <Image
                 src="/logo-star.png"
                 alt="Restaurants Now Hiring"
+                width={28}
+                height={28}
+                priority
                 style={{ height: 28, width: "auto", display: "block" }}
               />
 
