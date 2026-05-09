@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
@@ -8,7 +8,7 @@ import { supabase } from "../../lib/supabase";
 type Mode = "login" | "signup";
 type SignupStep = 1 | 2 | 3;
 
-function EmployerLoginPageContent() {
+export default function EmployerLoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -900,13 +900,5 @@ function EmployerLoginPageContent() {
         }}
       />
     </main>
-  );
-}
-
-export default function EmployerLoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <EmployerLoginPageContent />
-    </Suspense>
   );
 }

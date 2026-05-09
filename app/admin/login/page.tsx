@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../../styles/homepageDesignSystem";
 
-function AdminLoginPageContent() {
+export default function AdminLoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const nextUrl = searchParams.get("next") || "/admin";
@@ -196,13 +196,5 @@ function AdminLoginPageContent() {
         </section>
       </div>
     </main>
-  );
-}
-
-export default function AdminLoginPage() {
-  return (
-    <Suspense fallback={null}>
-      <AdminLoginPageContent />
-    </Suspense>
   );
 }
