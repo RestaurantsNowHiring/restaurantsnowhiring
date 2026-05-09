@@ -44,7 +44,6 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     : updateWithStatus;
 
   const { error } = writeResult;
-  const rejectedJob = writeResult.data as { active?: boolean | null; status?: unknown } | null;
 
   if (error) {
     return NextResponse.json({ error: error.message || "Reject update failed." }, { status: 500 });
@@ -64,8 +63,8 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     ok: true,
     job: {
       id: jobId,
-      active: Boolean(rejectedJob?.active ?? false),
-      status: typeof rejectedJob?.status === "string" ? rejectedJob.status : null,
+      active: Boolean(writeResult.data?.active ?? false),
+      status: typeof writeResult.data?.status === "string" ? writeResult.data.status : null,
     },
   });
 }

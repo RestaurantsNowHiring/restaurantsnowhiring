@@ -2,9 +2,22 @@
 import "./globals.css";
 import Link from "next/link";
 import localFont from "next/font/local";
+import { Inter, Sora } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import TopBanner from "./components/TopBanner";
 import { getSiteUrl } from "../lib/seo";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-body",
+  display: "swap",
+});
+
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-heading",
+  display: "swap",
+});
 
 // Keep Coldsmith available (optional)
 const coldsmith = localFont({
@@ -70,7 +83,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={coldsmith.variable}
+      className={`${inter.variable} ${sora.variable} ${coldsmith.variable}`}
     >
       <body
         style={{

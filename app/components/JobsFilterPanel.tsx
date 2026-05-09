@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import React, { memo, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type Job = {
   id: string;
@@ -19,119 +19,6 @@ type Job = {
 
 type DatePostedOption = "" | "24h" | "3d" | "7d" | "14d" | "30d";
 type PayOption = "" | "listed";
-
-type OpenMenu = null | "role" | "type" | "pay" | "date";
-
-const inputStyle: React.CSSProperties = {
-  height: 46,
-  borderRadius: 18,
-  border: "1px solid rgba(0,0,0,.10)",
-  backgroundColor: "#fff",
-  color: "#111",
-  padding: "0 14px",
-  outline: "none",
-  fontWeight: 700,
-  fontFamily: "var(--font-body)",
-  boxShadow: "0 8px 18px rgba(0,0,0,.05)",
-  width: "100%",
-};
-
-const pillButtonStyle: React.CSSProperties = {
-  height: 40,
-  borderRadius: 999,
-  border: "1px solid rgba(0,0,0,.10)",
-  backgroundColor: "rgba(255,255,255,.75)",
-  padding: "0 14px",
-  display: "inline-flex",
-  alignItems: "center",
-  gap: 8,
-  cursor: "pointer",
-  fontFamily: "var(--font-body)",
-  fontWeight: 800,
-  color: "rgba(0,0,0,.75)",
-  whiteSpace: "nowrap",
-};
-
-const menuStyle: React.CSSProperties = {
-  position: "absolute",
-  top: 44,
-  left: 0,
-  minWidth: 240,
-  background: "#fff",
-  border: "1px solid rgba(0,0,0,.10)",
-  borderRadius: 18,
-  boxShadow: "0 18px 40px rgba(0,0,0,.12)",
-  padding: 8,
-  zIndex: 50,
-};
-
-const menuItemStyle: React.CSSProperties = {
-  width: "100%",
-  textAlign: "left",
-  padding: "10px 10px",
-  borderRadius: 18,
-  border: "none",
-  background: "transparent",
-  cursor: "pointer",
-  fontFamily: "var(--font-body)",
-  fontWeight: 700,
-  color: "rgba(0,0,0,.75)",
-};
-
-const chipStyle: React.CSSProperties = {
-  display: "inline-flex",
-  alignItems: "center",
-  height: 26,
-  padding: "0 10px",
-  borderRadius: 999,
-  border: "1px solid rgba(0,0,0,.10)",
-  backgroundColor: "rgba(255,255,255,0.70)",
-  color: "rgba(0,0,0,.72)",
-  fontSize: 12,
-  fontWeight: 800,
-  whiteSpace: "nowrap",
-};
-
-const PillMenu = memo(function PillMenu({
-  id,
-  label,
-  activeLabel,
-  children,
-  isActive,
-  openMenu,
-  setOpenMenu,
-}: {
-  id: "role" | "type" | "pay" | "date";
-  label: string;
-  activeLabel?: string;
-  children: React.ReactNode;
-  isActive?: boolean;
-  openMenu: OpenMenu;
-  setOpenMenu: React.Dispatch<React.SetStateAction<OpenMenu>>;
-}) {
-  return (
-    <div style={{ position: "relative" }}>
-      <button
-        className="rn-btn-pill"
-        type="button"
-        onClick={() => setOpenMenu((prev) => (prev === id ? null : id))}
-        aria-expanded={openMenu === id}
-        aria-controls={`${id}-filter-menu`}
-        style={{
-          ...pillButtonStyle,
-          backgroundColor: isActive ? "rgba(53,128,110,0.14)" : pillButtonStyle.backgroundColor,
-          border: isActive ? "1px solid rgba(53,128,110,0.35)" : pillButtonStyle.border,
-          color: isActive ? "#2d6e5f" : pillButtonStyle.color,
-        }}
-      >
-        <span>{activeLabel ?? label}</span>
-        <span style={{ fontSize: 12, opacity: 0.8 }}>▾</span>
-      </button>
-
-      {openMenu === id && <div id={`${id}-filter-menu`} style={menuStyle}>{children}</div>}
-    </div>
-  );
-});
 
 export default function JobsFilterPanel({
   jobs,
@@ -156,8 +43,13 @@ export default function JobsFilterPanel({
   const [datePosted, setDatePosted] = useState<DatePostedOption>("");
 
   // Menu open/close
-  const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
+  const [openMenu, setOpenMenu] = useState<null | "role" | "type" | "pay" | "date">(null);
   const menuWrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    // If locked roles change, reset role selection to "All shown roles"
+    setRoleCategory("");
+  }, [lockedRoleCategories.join("|")]);
 
   useEffect(() => {
     // Close menus when clicking outside
@@ -284,7 +176,113 @@ export default function JobsFilterPanel({
     setOpenMenu(null);
   };
 
+  // Shared styles
+  const inputStyle: React.CSSProperties = {
+    height: 46,
+    borderRadius: 18,
+    border: "1px solid rgba(0,0,0,.10)",
+    backgroundColor: "#fff",
+    color: "#111",
+    padding: "0 14px",
+    outline: "none",
+    fontWeight: 700,
+    fontFamily: "var(--font-body)",
+    boxShadow: "0 8px 18px rgba(0,0,0,.05)",
+    width: "100%",
+  };
 
+  const pillButtonStyle: React.CSSProperties = {
+    height: 40,
+    borderRadius: 999,
+    border: "1px solid rgba(0,0,0,.10)",
+    backgroundColor: "rgba(255,255,255,.75)",
+    padding: "0 14px",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 8,
+    cursor: "pointer",
+    fontFamily: "var(--font-body)",
+    fontWeight: 800,
+    color: "rgba(0,0,0,.75)",
+    whiteSpace: "nowrap",
+  };
+
+  const menuStyle: React.CSSProperties = {
+    position: "absolute",
+    top: 44,
+    left: 0,
+    minWidth: 240,
+    background: "#fff",
+    border: "1px solid rgba(0,0,0,.10)",
+    borderRadius: 18,
+    boxShadow: "0 18px 40px rgba(0,0,0,.12)",
+    padding: 8,
+    zIndex: 50,
+  };
+
+  const menuItemStyle: React.CSSProperties = {
+    width: "100%",
+    textAlign: "left",
+    padding: "10px 10px",
+    borderRadius: 18,
+    border: "none",
+    background: "transparent",
+    cursor: "pointer",
+    fontFamily: "var(--font-body)",
+    fontWeight: 700,
+    color: "rgba(0,0,0,.75)",
+  };
+
+  const chipStyle: React.CSSProperties = {
+    display: "inline-flex",
+    alignItems: "center",
+    height: 26,
+    padding: "0 10px",
+    borderRadius: 999,
+    border: "1px solid rgba(0,0,0,.10)",
+    backgroundColor: "rgba(255,255,255,0.70)",
+    color: "rgba(0,0,0,.72)",
+    fontSize: 12,
+    fontWeight: 800,
+    whiteSpace: "nowrap",
+  };
+
+  const PillMenu = ({
+    id,
+    label,
+    activeLabel,
+    children,
+    isActive,
+  }: {
+    id: "role" | "type" | "pay" | "date";
+    label: string;
+    activeLabel?: string;
+    children: React.ReactNode;
+    isActive?: boolean;
+  }) => {
+    return (
+      <div style={{ position: "relative" }}>
+        <button
+          className="rn-btn-pill"
+          type="button"
+          onClick={() => setOpenMenu((prev) => (prev === id ? null : id))}
+          aria-expanded={openMenu === id}
+          aria-controls={`${id}-filter-menu`}
+          style={{
+            ...pillButtonStyle,
+            backgroundColor: isActive ? "rgba(53,128,110,0.14)" : pillButtonStyle.backgroundColor,
+            border: isActive ? "1px solid rgba(53,128,110,0.35)" : pillButtonStyle.border,
+            color: isActive ? "#2d6e5f" : pillButtonStyle.color,
+          }}
+        >
+          <span>{activeLabel ?? label}</span>
+          <span style={{ fontSize: 12, opacity: 0.8 }}>▾</span>
+        </button>
+
+        {openMenu === id && <div id={`${id}-filter-menu`} style={menuStyle}>{children}</div>}
+      </div>
+    );
+  };
 
   return (
     <div
@@ -391,8 +389,6 @@ export default function JobsFilterPanel({
           label="Pay"
           activeLabel={payFilter === "listed" ? "Pay: listed" : undefined}
           isActive={payFilter === "listed"}
-          openMenu={openMenu}
-          setOpenMenu={setOpenMenu}
         >
           <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setPayFilter(""); setOpenMenu(null); }}>
             Any
@@ -410,8 +406,6 @@ export default function JobsFilterPanel({
           label="Job type"
           activeLabel={employmentType ? `Job type: ${employmentType}` : undefined}
           isActive={!!employmentType}
-          openMenu={openMenu}
-          setOpenMenu={setOpenMenu}
         >
           <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setEmploymentType(""); setOpenMenu(null); }}>
             Any
@@ -432,8 +426,6 @@ export default function JobsFilterPanel({
           label="Role category"
           activeLabel={roleCategory ? `Role: ${roleCategory}` : undefined}
           isActive={!!roleCategory}
-          openMenu={openMenu}
-          setOpenMenu={setOpenMenu}
         >
           <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setRoleCategory(""); setOpenMenu(null); }}>
             {lockedRoleCategories.length ? "All shown roles" : "Any"}
@@ -464,8 +456,6 @@ export default function JobsFilterPanel({
               : undefined
           }
           isActive={!!datePosted}
-          openMenu={openMenu}
-          setOpenMenu={setOpenMenu}
         >
           <button className="rn-btn-menu" style={menuItemStyle} onClick={() => { setDatePosted(""); setOpenMenu(null); }}>
             Any time

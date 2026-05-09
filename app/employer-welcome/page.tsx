@@ -2,7 +2,7 @@
 
 import type React from "react";
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import {
@@ -12,7 +12,7 @@ import {
   homeTheme,
 } from "../styles/homepageDesignSystem";
 
-function EmployerWelcomePageContent() {
+export default function EmployerWelcomePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const emailFromUrl = searchParams.get("email") ?? "";
@@ -250,13 +250,5 @@ function EmployerWelcomePageContent() {
         </section>
       </div>
     </main>
-  );
-}
-
-export default function EmployerWelcomePage() {
-  return (
-    <Suspense fallback={null}>
-      <EmployerWelcomePageContent />
-    </Suspense>
   );
 }
