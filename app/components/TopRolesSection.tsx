@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 
 type RoleCard = {
@@ -24,7 +25,7 @@ export default function TopRolesSection() {
   const roles: RoleCard[] = [
     {
       title: "Line / Prep Cooks",
-      imageSrc: "/roles/line-cooks.jpg",
+      imageSrc: "/roles/line-cooks.JPG",
       roleFilters: ["Line", "Prep"],
       objectPosition: "center 20%",
       imageScale: 1.03,
@@ -75,9 +76,12 @@ export default function TopRolesSection() {
             >
               {/* Image */}
               <div style={{ width: "100%", height: 170, overflow: "hidden" }}>
-                <img
+                <Image
                   src={r.imageSrc}
                   alt={r.title}
+                  width={360}
+                  height={170}
+                  sizes="(max-width: 640px) 100vw, (max-width: 980px) 50vw, 33vw"
                   style={{
                     width: "100%",
                     height: "100%",
