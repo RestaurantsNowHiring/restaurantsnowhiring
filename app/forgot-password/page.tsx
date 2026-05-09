@@ -147,7 +147,7 @@ function ForgotPasswordForm() {
 
 export default function ForgotPasswordPage() {
   return (
-    <Suspense>
+    <Suspense fallback={null}>
       <ForgotPasswordForm />
     </Suspense>
   );
