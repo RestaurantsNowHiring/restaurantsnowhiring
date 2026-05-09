@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "../../../lib/supabase";
@@ -6,6 +7,145 @@ import {
   isMissingViewsColumnError,
   isPubliclyVisibleJob,
 } from "../../../lib/jobStatus";
+import { absoluteUrl, noIndexRobots, truncateMetaDescription } from "../../../lib/seo";
+
+type JobRouteParams = { id?: string };
+
+const JOB_DETAIL_FIELDS =
+  "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
+
+async function fetchPublicJobForSeo(id?: string) {
+  if (!id) return null;
+
+  const result = await supabase.from("jobs").select(JOB_DETAIL_FIELDS).eq("id", id).limit(1);
+
+  if (isMissingStatusColumnError(result.error)) {
+    const fallbackResult = await supabase
+      .from("jobs")
+      .select(JOB_DETAIL_FIELDS.replace(",status", ""))
+      .eq("id", id)
+      .eq("active", true)
+      .limit(1);
+
+    if (fallbackResult.error) return null;
+    const fallbackJob = fallbackResult.data?.[0] as unknown as Job | undefined;
+    return fallbackJob && isPubliclyVisibleJob(fallbackJob.status, fallbackJob.active) ? fallbackJob : null;
+  }
+
+  if (result.error) return null;
+  const job = result.data?.[0] as Job | undefined;
+  return job && isPubliclyVisibleJob(job.status, job.active) ? job : null;
+}
+
+function formatEmploymentType(value: string | null | undefined) {
+  if (!value) return undefined;
+
+  const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
+  const allowed = new Set(["FULL_TIME", "PART_TIME", "CONTRACTOR", "TEMPORARY", "INTERN", "VOLUNTEER", "PER_DIEM", "OTHER"]);
+
+  if (allowed.has(normalized)) return normalized;
+  if (normalized.includes("FULL")) return "FULL_TIME";
+  if (normalized.includes("PART")) return "PART_TIME";
+  if (normalized.includes("TEMP")) return "TEMPORARY";
+  if (normalized.includes("CONTRACT")) return "CONTRACTOR";
+  return "OTHER";
+}
+
+function safeExternalUrl(value: string | null | undefined) {
+  if (!value?.trim()) return undefined;
+  const trimmed = value.trim();
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : `https://${trimmed}`;
+}
+
+function buildJobMetaDescription(job: Job) {
+  const location = job.city && job.state ? `${job.city}, ${job.state}` : "restaurant location";
+  const pay = job.pay_range ? ` Pay: ${job.pay_range}.` : "";
+  return truncateMetaDescription(
+    `${job.restaurant_name} is hiring a ${job.title} in ${location}.${pay} View details and apply on RestaurantsNowHiring.com.`
+  );
+}
+
+function buildJobPostingSchema(job: Job) {
+  const jobUrl = absoluteUrl(`/jobs/${job.id}`);
+  const locationName = job.city && job.state ? `${job.city}, ${job.state}` : undefined;
+  const orgUrl = safeExternalUrl(job.company_website);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "JobPosting",
+    title: job.title,
+    description: job.description || `${job.restaurant_name} is hiring for ${job.title}${locationName ? ` in ${locationName}` : ""}.`,
+    identifier: {
+      "@type": "PropertyValue",
+      name: "RestaurantsNowHiring.com",
+      value: job.id,
+    },
+    datePosted: job.created_at,
+    employmentType: formatEmploymentType(job.employment_type),
+    hiringOrganization: {
+      "@type": "Organization",
+      name: job.restaurant_name,
+      sameAs: orgUrl,
+    },
+    jobLocation: {
+      "@type": "Place",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: job.address || undefined,
+        addressLocality: job.city || undefined,
+        addressRegion: job.state || undefined,
+        addressCountry: "US",
+      },
+    },
+    url: jobUrl,
+    directApply: false,
+  };
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: JobRouteParams | Promise<JobRouteParams>;
+}): Promise<Metadata> {
+  const resolvedParams = await Promise.resolve(params);
+  const job = await fetchPublicJobForSeo(resolvedParams?.id);
+
+  if (!job) {
+    return {
+      title: "Job Not Found",
+      description: "This restaurant job may be inactive, removed, or unavailable.",
+      robots: noIndexRobots,
+      alternates: {
+        canonical: absoluteUrl(resolvedParams?.id ? `/jobs/${resolvedParams.id}` : "/jobs"),
+      },
+    };
+  }
+
+  const location = job.city && job.state ? `${job.city}, ${job.state}` : "Restaurant Job";
+  const title = `${job.title} at ${job.restaurant_name} - ${location}`;
+  const description = buildJobMetaDescription(job);
+  const url = absoluteUrl(`/jobs/${job.id}`);
+
+  return {
+    title,
+    description,
+    alternates: { canonical: url },
+    openGraph: {
+      title,
+      description,
+      url,
+      siteName: "Restaurants Now Hiring",
+      type: "article",
+      images: [{ url: absoluteUrl("/logo-star.png"), alt: "Restaurants Now Hiring" }],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+      images: [absoluteUrl("/logo-star.png")],
+    },
+  };
+}
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -86,7 +226,7 @@ export default async function JobDetailsPage({
         .limit(1);
 
       if (!result.error) {
-        data = result.data as Array<Record<string, unknown>>;
+        data = result.data as unknown as Array<Record<string, unknown>>;
         error = null;
         missingStatus = !variant.includesStatus;
         missingViews = !variant.includesViews;
@@ -232,6 +372,9 @@ export default async function JobDetailsPage({
     whiteSpace: "nowrap",
   };
 
+  const visibleJob = job as Job;
+  const jobPostingSchema = !notFound && job ? buildJobPostingSchema(visibleJob) : null;
+
   return (
     <main
       style={{
@@ -241,6 +384,12 @@ export default async function JobDetailsPage({
         paddingBottom: 70,
       }}
     >
+      {jobPostingSchema ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jobPostingSchema) }}
+        />
+      ) : null}
       <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
         {/* Header row */}
         <div
@@ -265,13 +414,13 @@ export default async function JobDetailsPage({
                 letterSpacing: -0.3,
               }}
             >
-              {notFound ? "Job Details" : job.title}
+              {notFound ? "Job Details" : visibleJob.title}
             </h1>
 
             <div style={{ marginTop: 10, color: INK, fontWeight: 800 }}>
               {notFound
                 ? "This job may be inactive, removed, or the link is incorrect."
-                : `${job.restaurant_name} — ${locationText}`}
+                : `${visibleJob.restaurant_name} — ${locationText}`}
             </div>
 
             {!notFound && (
@@ -345,14 +494,14 @@ export default async function JobDetailsPage({
                   padding: "10px 10px 16px",
                 }}
               >
-                {job.pay_range && <span style={badgeEmphasis}>{job.pay_range}</span>}
+                {visibleJob.pay_range && <span style={badgeEmphasis}>{visibleJob.pay_range}</span>}
 
-                {job.employment_type && (
-                  <span style={badgeBase}>{job.employment_type}</span>
+                {visibleJob.employment_type && (
+                  <span style={badgeBase}>{visibleJob.employment_type}</span>
                 )}
 
-                {job.role_category && (
-                  <span style={badgeBase}>{job.role_category}</span>
+                {visibleJob.role_category && (
+                  <span style={badgeBase}>{visibleJob.role_category}</span>
                 )}
 
                 {websiteDisplay && safeWebsiteHref && (
@@ -379,9 +528,9 @@ export default async function JobDetailsPage({
                   marginBottom: 14,
                 }}
               >
-                <InfoCard label="Company" value={job.restaurant_name} />
+                <InfoCard label="Company" value={visibleJob.restaurant_name} />
                 <InfoCard label="Location" value={locationText || "Not listed"} />
-                <InfoCard label="Address" value={job.address || "Not listed"} />
+                <InfoCard label="Address" value={visibleJob.address || "Not listed"} />
               </div>
 
               {/* Description */}
@@ -395,7 +544,7 @@ export default async function JobDetailsPage({
                     fontSize: 16,
                   }}
                 >
-                  {job.description || "No description provided."}
+                  {visibleJob.description || "No description provided."}
                 </div>
               </SectionCard>
 
@@ -410,7 +559,7 @@ export default async function JobDetailsPage({
                     fontSize: 16,
                   }}
                 >
-                  {job.how_to_apply || "Not listed yet."}
+                  {visibleJob.how_to_apply || "Not listed yet."}
                 </div>
               </SectionCard>
             </>
