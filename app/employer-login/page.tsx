@@ -434,9 +434,10 @@ export default function EmployerLoginPage() {
 
           {/* Right form panel */}
           <section style={card}>
-            <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+            <div aria-label="Employer access mode" style={{ display: "flex", gap: 10, marginBottom: 18 }}>
               <button
                 type="button"
+                aria-pressed={mode === "login"}
                 onClick={() => switchMode("login")}
                 style={{
                   ...toggleBase,
@@ -450,6 +451,7 @@ export default function EmployerLoginPage() {
 
               <button
                 type="button"
+                aria-pressed={mode === "signup"}
                 onClick={() => switchMode("signup")}
                 style={{
                   ...toggleBase,
@@ -466,8 +468,11 @@ export default function EmployerLoginPage() {
             {mode === "login" ? (
               <form onSubmit={handleLoginSubmit} style={{ display: "grid", gap: 16 }}>
                 <div>
-                  <label style={labelStyle}>Email</label>
+                  <label htmlFor="employer-login-email" style={labelStyle}>Email</label>
                   <input
+                    id="employer-login-email"
+                    aria-invalid={!!message && mode === "login"}
+                    aria-describedby={message && mode === "login" ? "employer-login-message" : undefined}
                     required
                     type="email"
                     value={email}
@@ -479,8 +484,11 @@ export default function EmployerLoginPage() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Password</label>
+                  <label htmlFor="employer-login-password" style={labelStyle}>Password</label>
                   <input
+                    id="employer-login-password"
+                    aria-invalid={!!message && mode === "login"}
+                    aria-describedby={message && mode === "login" ? "employer-login-message" : undefined}
                     required
                     type="password"
                     value={password}
@@ -520,7 +528,8 @@ export default function EmployerLoginPage() {
 
                 {message && (
                   <div
-                    role="status"
+                    id="employer-login-message"
+                    role="alert"
                     aria-live="polite"
                     style={{
                       marginTop: 2,
@@ -540,8 +549,11 @@ export default function EmployerLoginPage() {
                 {signupStep === 1 && (
                   <form onSubmit={handleSignupEmailContinue} style={{ display: "grid", gap: 16 }}>
                     <div>
-                      <label style={labelStyle}>Work Email</label>
+                      <label htmlFor="signup-work-email" style={labelStyle}>Work Email</label>
                       <input
+                        id="signup-work-email"
+                        aria-invalid={!!message && mode === "signup" && signupStep === 1}
+                        aria-describedby={message && mode === "signup" && signupStep === 1 ? "signup-step-1-message" : undefined}
                         required
                         type="email"
                         value={email}
@@ -564,7 +576,8 @@ export default function EmployerLoginPage() {
 
                     {message && (
                       <div
-                        role="status"
+                        id="signup-step-1-message"
+                        role="alert"
                         aria-live="polite"
                         style={{
                           marginTop: 2,
@@ -605,8 +618,11 @@ export default function EmployerLoginPage() {
                     style={{ display: "grid", gap: 16 }}
                   >
                     <div>
-                      <label style={labelStyle}>Create Password</label>
+                      <label htmlFor="signup-password" style={labelStyle}>Create Password</label>
                       <input
+                        id="signup-password"
+                        aria-describedby="signup-password-help"
+                        aria-invalid={!!message && mode === "signup" && signupStep === 2}
                         required
                         type="password"
                         value={password}
@@ -616,6 +632,7 @@ export default function EmployerLoginPage() {
                         autoComplete="new-password"
                       />
                       <div
+                        id="signup-password-help"
                         style={{
                           marginTop: 8,
                           fontFamily: "var(--font-body)",
@@ -649,7 +666,8 @@ export default function EmployerLoginPage() {
 
                     {message && (
                       <div
-                        role="status"
+                        id="signup-step-2-message"
+                        role="alert"
                         aria-live="polite"
                         style={{
                           marginTop: 2,
@@ -677,8 +695,11 @@ export default function EmployerLoginPage() {
                       className="rn-employer-auth-two-col"
                     >
                       <div>
-                        <label style={labelStyle}>First Name *</label>
+                        <label htmlFor="signup-first-name" style={labelStyle}>First Name *</label>
                         <input
+                          id="signup-first-name"
+                          aria-invalid={!!message && mode === "signup" && signupStep === 3 && !firstName.trim()}
+                          aria-describedby={message && mode === "signup" && signupStep === 3 ? "signup-step-3-message" : undefined}
                           required
                           value={firstName}
                           onChange={(e) => setFirstName(e.target.value)}
@@ -689,8 +710,11 @@ export default function EmployerLoginPage() {
                       </div>
 
                       <div>
-                        <label style={labelStyle}>Last Name *</label>
+                        <label htmlFor="signup-last-name" style={labelStyle}>Last Name *</label>
                         <input
+                          id="signup-last-name"
+                          aria-invalid={!!message && mode === "signup" && signupStep === 3 && !lastName.trim()}
+                          aria-describedby={message && mode === "signup" && signupStep === 3 ? "signup-step-3-message" : undefined}
                           required
                           value={lastName}
                           onChange={(e) => setLastName(e.target.value)}
@@ -702,8 +726,11 @@ export default function EmployerLoginPage() {
                     </div>
 
                     <div>
-                      <label style={labelStyle}>Company *</label>
+                      <label htmlFor="signup-company" style={labelStyle}>Company *</label>
                       <input
+                        id="signup-company"
+                        aria-invalid={!!message && mode === "signup" && signupStep === 3 && !companyName.trim()}
+                        aria-describedby={message && mode === "signup" && signupStep === 3 ? "signup-step-3-message" : undefined}
                         required
                         value={companyName}
                         onChange={(e) => setCompanyName(e.target.value)}
@@ -713,8 +740,11 @@ export default function EmployerLoginPage() {
                     </div>
 
                     <div>
-                      <label style={labelStyle}>Your Job Title *</label>
+                      <label htmlFor="signup-job-title" style={labelStyle}>Your Job Title *</label>
                       <input
+                        id="signup-job-title"
+                        aria-invalid={!!message && mode === "signup" && signupStep === 3 && !jobTitle.trim()}
+                        aria-describedby={message && mode === "signup" && signupStep === 3 ? "signup-step-3-message" : undefined}
                         required
                         value={jobTitle}
                         onChange={(e) => setJobTitle(e.target.value)}
@@ -724,8 +754,11 @@ export default function EmployerLoginPage() {
                     </div>
 
                     <div>
-                      <label style={labelStyle}># Jobs Open *</label>
+                      <label htmlFor="signup-jobs-open" style={labelStyle}># Jobs Open *</label>
                       <select
+                        id="signup-jobs-open"
+                        aria-invalid={!!message && mode === "signup" && signupStep === 3 && !jobsOpen}
+                        aria-describedby={message && mode === "signup" && signupStep === 3 ? "signup-step-3-message" : undefined}
                         required
                         value={jobsOpen}
                         onChange={(e) => setJobsOpen(e.target.value)}
@@ -741,8 +774,9 @@ export default function EmployerLoginPage() {
                     </div>
 
                     <div>
-                      <label style={labelStyle}>Work Email</label>
+                      <label htmlFor="signup-confirmed-email" style={labelStyle}>Work Email</label>
                       <input
+                        id="signup-confirmed-email"
                         value={email}
                         style={{ ...inputStyle, backgroundColor: "rgba(0,0,0,.04)" }}
                         disabled
@@ -805,7 +839,8 @@ export default function EmployerLoginPage() {
 
                     {message && (
                       <div
-                        role="status"
+                        id="signup-step-3-message"
+                        role="alert"
                         aria-live="polite"
                         style={{
                           marginTop: 2,

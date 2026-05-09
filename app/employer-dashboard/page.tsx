@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import {
@@ -178,6 +178,37 @@ export default function EmployerDashboardPage() {
   const [owner, setOwner] = useState<EmployerOwner | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const deleteDialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!deleteJob) return;
+    deleteDialogRef.current?.focus();
+  }, [deleteJob]);
+
+  function handleDeleteDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape" && !busyJobId) {
+      setDeleteJob(null);
+      return;
+    }
+
+    if (e.key !== "Tab") return;
+
+    const focusable = deleteDialogRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable?.length) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -932,14 +963,18 @@ export default function EmployerDashboardPage() {
         <div className="rn-delete-modal-backdrop" role="presentation">
           <div
             aria-labelledby="delete-job-title"
+            aria-describedby="delete-job-description"
             aria-modal="true"
             className="rn-delete-modal"
+            onKeyDown={handleDeleteDialogKeyDown}
+            ref={deleteDialogRef}
             role="dialog"
+            tabIndex={-1}
           >
             <p className="rn-delete-modal-eyebrow">Confirm delete</p>
             <h2 id="delete-job-title">Delete this job ad?</h2>
             <p className="rn-delete-modal-job">{deleteJob.title}</p>
-            <p>{DELETE_CONFIRMATION_MESSAGE}</p>
+            <p id="delete-job-description">{DELETE_CONFIRMATION_MESSAGE}</p>
             <div className="rn-delete-modal-actions">
               <button
                 type="button"

@@ -4,7 +4,6 @@ import Link from "next/link";
 import localFont from "next/font/local";
 import { Inter, Sora } from "next/font/google";
 import TopBanner from "./components/TopBanner";
-import EmployerConfirmGate from "./components/EmployerConfirmGate";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -25,6 +24,15 @@ const coldsmith = localFont({
   display: "swap",
 });
 
+export const metadata = {
+  title: {
+    default: "Restaurants Now Hiring | Restaurant Jobs Hiring Now",
+    template: "%s | Restaurants Now Hiring",
+  },
+  description:
+    "Browse restaurant jobs hiring now or post restaurant openings for review on RestaurantsNowHiring.com.",
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html
@@ -43,15 +51,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Skip link for accessibility */}
         <a
           href="#main-content"
-          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 bg-black text-white px-4 py-2 rounded"
+          className="sr-only sr-only-focusable bg-black text-white px-4 py-2 rounded"
         >
           Skip to main content
         </a>
 
-        <main id="main-content" style={{ padding: 0 }}>
-          {/* If you’re using this gate, wrap children with it */}
+        <div id="main-content" tabIndex={-1} style={{ padding: 0 }}>
           {children}
-        </main>
+        </div>
 
         <footer
           style={{

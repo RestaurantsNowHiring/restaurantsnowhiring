@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Mail,
   BriefcaseBusiness,
@@ -33,6 +33,37 @@ export default function ContactPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const successDialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showSuccessModal) return;
+    successDialogRef.current?.focus();
+  }, [showSuccessModal]);
+
+  function handleDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") {
+      setShowSuccessModal(false);
+      return;
+    }
+
+    if (e.key !== "Tab") return;
+
+    const focusable = successDialogRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable?.length) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -178,7 +209,7 @@ export default function ContactPage() {
           <div className="rn-contact-hero">
             <div>
               <div style={iconWrap(true)}>
-                <Mail size={22} color={GREEN} />
+                <Mail aria-hidden="true" size={22} color={GREEN} />
               </div>
 
               <h1
@@ -240,17 +271,17 @@ export default function ContactPage() {
               <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
                 {[
                   {
-                    icon: <BriefcaseBusiness size={18} color={GREEN} />,
+                    icon: <BriefcaseBusiness aria-hidden="true" size={18} color={GREEN} />,
                     title: "Employer help",
                     body: "Posting jobs, employer accounts, listing edits, or review questions.",
                   },
                   {
-                    icon: <CircleHelp size={18} color={GREEN} />,
+                    icon: <CircleHelp aria-hidden="true" size={18} color={GREEN} />,
                     title: "General questions",
                     body: "How the site works, feature requests, or anything confusing.",
                   },
                   {
-                    icon: <ShieldCheck size={18} color={GREEN} />,
+                    icon: <ShieldCheck aria-hidden="true" size={18} color={GREEN} />,
                     title: "Listing concerns",
                     body: "Report inaccurate information or something that needs review.",
                   },
@@ -306,9 +337,12 @@ export default function ContactPage() {
               <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
                 <div className="rn-contact-two-col">
                   <div>
-                    <label style={labelStyle}>Name *</label>
+                    <label htmlFor="contact-name" style={labelStyle}>Name *</label>
                     <input
+                      id="contact-name"
                       required
+                      aria-invalid={!!errorMessage && !name.trim()}
+                      aria-describedby={errorMessage ? "contact-form-error" : undefined}
                       style={inputStyle}
                       placeholder="Your name"
                       value={name}
@@ -317,9 +351,12 @@ export default function ContactPage() {
                   </div>
 
                   <div>
-                    <label style={labelStyle}>Email *</label>
+                    <label htmlFor="contact-email" style={labelStyle}>Email *</label>
                     <input
+                      id="contact-email"
                       required
+                      aria-invalid={!!errorMessage && !email.trim()}
+                      aria-describedby={errorMessage ? "contact-form-error" : undefined}
                       type="email"
                       style={inputStyle}
                       placeholder="you@example.com"
@@ -330,9 +367,12 @@ export default function ContactPage() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Subject *</label>
+                  <label htmlFor="contact-subject" style={labelStyle}>Subject *</label>
                   <input
+                    id="contact-subject"
                     required
+                    aria-invalid={!!errorMessage && !subject.trim()}
+                    aria-describedby={errorMessage ? "contact-form-error" : undefined}
                     style={inputStyle}
                     placeholder="Employer question, listing issue, feedback, etc."
                     value={subject}
@@ -341,9 +381,12 @@ export default function ContactPage() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Message *</label>
+                  <label htmlFor="contact-message" style={labelStyle}>Message *</label>
                   <textarea
+                    id="contact-message"
                     required
+                    aria-invalid={!!errorMessage && !message.trim()}
+                    aria-describedby={errorMessage ? "contact-form-error" : undefined}
                     style={textareaStyle}
                     placeholder="Tell us what you need help with."
                     value={message}
@@ -353,6 +396,8 @@ export default function ContactPage() {
 
                 {errorMessage && (
                   <div
+                    id="contact-form-error"
+                    role="alert"
                     style={{
                       color: ERROR,
                       fontSize: 14,
@@ -375,7 +420,7 @@ export default function ContactPage() {
                       opacity: isSubmitting ? 0.75 : 1,
                     }}
                   >
-                    <Send size={16} />
+                    <Send size={16} aria-hidden="true" />
                     {isSubmitting ? "Sending..." : "Submit"}
                   </button>
 
@@ -505,7 +550,7 @@ export default function ContactPage() {
             >
               <Link href="/jobs" style={primaryBtn} className="rn-btn-primary">
                 Browse Jobs
-                <ArrowRight size={16} />
+                <ArrowRight aria-hidden="true" size={16} />
               </Link>
               <Link href="/" style={secondaryBtn} className="rn-btn-secondary">
                 Home
@@ -530,6 +575,7 @@ export default function ContactPage() {
 
       {showSuccessModal && (
         <div
+          role="presentation"
           style={{
             position: "fixed",
             inset: 0,
@@ -542,6 +588,13 @@ export default function ContactPage() {
           }}
         >
           <div
+            ref={successDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="contact-success-title"
+            aria-describedby="contact-success-description"
+            tabIndex={-1}
+            onKeyDown={handleDialogKeyDown}
             style={{
               width: "100%",
               maxWidth: 500,
@@ -573,6 +626,7 @@ export default function ContactPage() {
             </div>
 
             <h2
+              id="contact-success-title"
               style={{
                 margin: 0,
                 fontSize: 30,
@@ -585,6 +639,7 @@ export default function ContactPage() {
             </h2>
 
             <p
+              id="contact-success-description"
               style={{
                 marginTop: 14,
                 marginBottom: 0,

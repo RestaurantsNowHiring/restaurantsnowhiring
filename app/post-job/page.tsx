@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import {
@@ -22,6 +22,7 @@ export default function PostJobPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const successDialogRef = useRef<HTMLDivElement>(null);
 
   // Step 1
   const [companyName, setCompanyName] = useState("");
@@ -125,6 +126,36 @@ export default function PostJobPage() {
     "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
     "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC",
   ];
+
+  useEffect(() => {
+    if (!showSuccessModal) return;
+    successDialogRef.current?.focus();
+  }, [showSuccessModal]);
+
+  function handleDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Escape") {
+      setShowSuccessModal(false);
+      return;
+    }
+
+    if (e.key !== "Tab") return;
+
+    const focusable = successDialogRef.current?.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+    );
+    if (!focusable?.length) return;
+
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
 
   useEffect(() => {
     let mounted = true;
@@ -672,8 +703,12 @@ export default function PostJobPage() {
           {step === 1 && (
             <div className="rn-two-col">
               <div>
-                <label style={labelStyle}>Your company’s name *</label>
+                <label htmlFor="company-name" style={labelStyle}>Your company’s name *</label>
                 <input
+                  id="company-name"
+                  required
+                  aria-invalid={!!message && step === 1 && !companyName.trim()}
+                  aria-describedby={message ? "post-job-form-error" : undefined}
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   style={inputStyle}
@@ -682,8 +717,12 @@ export default function PostJobPage() {
               </div>
 
               <div>
-                <label style={labelStyle}>Your company’s number of employees *</label>
+                <label htmlFor="employee-count" style={labelStyle}>Your company’s number of employees *</label>
                 <select
+                  id="employee-count"
+                  required
+                  aria-invalid={!!message && step === 1 && !employeeCount}
+                  aria-describedby={message ? "post-job-form-error" : undefined}
                   value={employeeCount}
                   onChange={(e) => setEmployeeCount(e.target.value)}
                   style={inputStyle}
@@ -698,8 +737,12 @@ export default function PostJobPage() {
               </div>
 
               <div>
-                <label style={labelStyle}>Your first and last name *</label>
+                <label htmlFor="contact-name" style={labelStyle}>Your first and last name *</label>
                 <input
+                  id="contact-name"
+                  required
+                  aria-invalid={!!message && step === 1 && !contactName.trim()}
+                  aria-describedby={message ? "post-job-form-error" : undefined}
                   value={contactName}
                   onChange={(e) => setContactName(e.target.value)}
                   style={inputStyle}
@@ -708,8 +751,12 @@ export default function PostJobPage() {
               </div>
 
               <div>
-                <label style={labelStyle}>Work Email *</label>
+                <label htmlFor="work-email" style={labelStyle}>Work Email *</label>
                 <input
+                  id="work-email"
+                  required
+                  aria-invalid={!!message && step === 1 && !workEmail.trim()}
+                  aria-describedby={message ? "post-job-form-error" : undefined}
                   type="email"
                   value={workEmail}
                   onChange={(e) => setWorkEmail(e.target.value)}
@@ -727,8 +774,12 @@ export default function PostJobPage() {
             <>
               <div className="rn-two-col">
                 <div>
-                  <label style={labelStyle}>Type of Restaurant *</label>
+                  <label htmlFor="restaurant-type" style={labelStyle}>Type of Restaurant *</label>
                   <select
+                    id="restaurant-type"
+                    required
+                    aria-invalid={!!message && step === 2 && !restaurantType}
+                    aria-describedby={message ? "post-job-form-error" : undefined}
                     value={restaurantType}
                     onChange={(e) => setRestaurantType(e.target.value)}
                     style={inputStyle}
@@ -743,8 +794,12 @@ export default function PostJobPage() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Job title *</label>
+                  <label htmlFor="job-title" style={labelStyle}>Job title *</label>
                   <input
+                    id="job-title"
+                    required
+                    aria-invalid={!!message && step === 2 && !jobTitle.trim()}
+                    aria-describedby={message ? "post-job-form-error" : undefined}
                     value={jobTitle}
                     onChange={(e) => setJobTitle(e.target.value)}
                     style={inputStyle}
@@ -753,9 +808,9 @@ export default function PostJobPage() {
                 </div>
               </div>
 
-              <div style={{ marginTop: 18 }}>
-                <label style={labelStyle}>Role Category *</label>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <fieldset style={{ marginTop: 18, border: 0, padding: 0 }}>
+                <legend style={labelStyle}>Role Category *</legend>
+                <div role="group" aria-describedby="role-category-help" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {ROLE_OPTIONS.map((role) => (
                     <button
                       key={role}
@@ -763,18 +818,23 @@ export default function PostJobPage() {
                       onClick={() => toggleValue(role, roleCategories, setRoleCategories)}
                       className="rn-btn-pill"
                       style={pillStyle(roleCategories.includes(role))}
+                      aria-pressed={roleCategories.includes(role)}
                     >
                       {role}
                     </button>
                   ))}
                 </div>
-                <div style={helperStyle}>Select one or more categories that fit this role.</div>
-              </div>
+                <div id="role-category-help" style={helperStyle}>Select one or more categories that fit this role.</div>
+              </fieldset>
 
               <div className="rn-two-col" style={{ marginTop: 18 }}>
                 <div>
-                  <label style={labelStyle}>City *</label>
+                  <label htmlFor="job-city" style={labelStyle}>City *</label>
                   <input
+                    id="job-city"
+                    required
+                    aria-invalid={!!message && step === 2 && !city.trim()}
+                    aria-describedby={message ? "post-job-form-error" : undefined}
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     style={inputStyle}
@@ -784,8 +844,12 @@ export default function PostJobPage() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>State *</label>
+                  <label htmlFor="job-state" style={labelStyle}>State *</label>
                   <select
+                    id="job-state"
+                    required
+                    aria-invalid={!!message && step === 2 && !stateVal.trim()}
+                    aria-describedby={message ? "post-job-form-error" : undefined}
                     value={stateVal}
                     onChange={(e) => setStateVal(e.target.value)}
                     style={inputStyle}
@@ -804,8 +868,8 @@ export default function PostJobPage() {
 
           {step === 3 && (
             <>
-              <div>
-                <label style={labelStyle}>What type of job is this? *</label>
+              <fieldset style={{ border: 0, padding: 0 }}>
+                <legend style={labelStyle}>What type of job is this? *</legend>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {EMPLOYMENT_OPTIONS.map((option) => (
                     <button
@@ -814,15 +878,16 @@ export default function PostJobPage() {
                       onClick={() => setEmploymentType(option)}
                       className="rn-btn-pill"
                       style={pillStyle(employmentType === option)}
+                      aria-pressed={employmentType === option}
                     >
                       {option}
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
 
-              <div style={{ marginTop: 16 }}>
-                <label style={labelStyle}>What is the schedule for this job?</label>
+              <fieldset style={{ marginTop: 16, border: 0, padding: 0 }}>
+                <legend style={labelStyle}>What is the schedule for this job?</legend>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {SCHEDULE_OPTIONS.map((option) => (
                     <button
@@ -831,15 +896,16 @@ export default function PostJobPage() {
                       onClick={() => toggleValue(option, scheduleTags, setScheduleTags)}
                       className="rn-btn-pill"
                       style={pillStyle(scheduleTags.includes(option))}
+                      aria-pressed={scheduleTags.includes(option)}
                     >
                       {option}
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
 
-              <div style={{ marginTop: 16 }}>
-                <label style={labelStyle}>Pay *</label>
+              <fieldset style={{ marginTop: 16, border: 0, padding: 0 }}>
+                <legend style={labelStyle}>Pay *</legend>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {[
                     { value: "range", label: "Range" },
@@ -853,18 +919,24 @@ export default function PostJobPage() {
                       onClick={() => setPayMode(item.value as PayMode)}
                       className="rn-btn-pill"
                       style={pillStyle(payMode === item.value)}
+                      aria-pressed={payMode === item.value}
                     >
                       {item.label}
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
 
               <div className="rn-two-col" style={{ marginTop: 16 }}>
                 {payMode === "range" ? (
                   <>
                     <div>
+                      <label className="sr-only" htmlFor="pay-minimum">Minimum pay</label>
                       <input
+                        id="pay-minimum"
+                        required
+                        aria-invalid={!!message && step === 3 && payMode === "range" && !payMin.trim()}
+                        aria-describedby={message ? "post-job-form-error" : undefined}
                         value={payMin}
                         onChange={(e) => setPayMin(e.target.value)}
                         style={inputStyle}
@@ -872,7 +944,12 @@ export default function PostJobPage() {
                       />
                     </div>
                     <div>
+                      <label className="sr-only" htmlFor="pay-maximum">Maximum pay</label>
                       <input
+                        id="pay-maximum"
+                        required
+                        aria-invalid={!!message && step === 3 && payMode === "range" && !payMax.trim()}
+                        aria-describedby={message ? "post-job-form-error" : undefined}
                         value={payMax}
                         onChange={(e) => setPayMax(e.target.value)}
                         style={inputStyle}
@@ -883,7 +960,12 @@ export default function PostJobPage() {
                 ) : (
                   <>
                     <div>
+                      <label className="sr-only" htmlFor="pay-rate">Pay amount</label>
                       <input
+                        id="pay-rate"
+                        required
+                        aria-invalid={!!message && step === 3 && !payRate.trim()}
+                        aria-describedby={message ? "post-job-form-error" : undefined}
                         value={payRate}
                         onChange={(e) => setPayRate(e.target.value)}
                         style={inputStyle}
@@ -901,8 +983,9 @@ export default function PostJobPage() {
 
               <div className="rn-two-col" style={{ marginTop: 16 }}>
                 <div>
-                  <label style={labelStyle}>Company website</label>
+                  <label htmlFor="company-website" style={labelStyle}>Company website</label>
                   <input
+                    id="company-website"
                     value={companyWebsite}
                     onChange={(e) => setCompanyWebsite(e.target.value)}
                     style={inputStyle}
@@ -911,8 +994,9 @@ export default function PostJobPage() {
                 </div>
 
                 <div>
-                  <label style={labelStyle}>Address</label>
+                  <label htmlFor="job-address" style={labelStyle}>Address</label>
                   <input
+                    id="job-address"
                     value={address}
                     onChange={(e) => setAddress(e.target.value)}
                     style={inputStyle}
@@ -922,8 +1006,12 @@ export default function PostJobPage() {
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <label style={labelStyle}>How to apply *</label>
+                <label htmlFor="how-to-apply" style={labelStyle}>How to apply *</label>
                 <input
+                  id="how-to-apply"
+                  required
+                  aria-invalid={!!message && step === 3 && !howToApply.trim()}
+                  aria-describedby={message ? "post-job-form-error" : undefined}
                   value={howToApply}
                   onChange={(e) => setHowToApply(e.target.value)}
                   style={inputStyle}
@@ -933,8 +1021,12 @@ export default function PostJobPage() {
               </div>
 
               <div style={{ marginTop: 16 }}>
-                <label style={labelStyle}>Job description *</label>
+                <label htmlFor="job-description" style={labelStyle}>Job description *</label>
                 <textarea
+                  id="job-description"
+                  required
+                  aria-invalid={!!message && step === 3 && !description.trim()}
+                  aria-describedby={message ? "post-job-form-error" : undefined}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   style={textareaStyle}
@@ -942,8 +1034,8 @@ export default function PostJobPage() {
                 />
               </div>
 
-              <div style={{ marginTop: 16 }}>
-                <label style={labelStyle}>Benefits</label>
+              <fieldset style={{ marginTop: 16, border: 0, padding: 0 }}>
+                <legend style={labelStyle}>Benefits</legend>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                   {BENEFIT_OPTIONS.map((option) => (
                     <button
@@ -952,12 +1044,13 @@ export default function PostJobPage() {
                       onClick={() => toggleValue(option, benefits, setBenefits)}
                       className="rn-btn-pill"
                       style={pillStyle(benefits.includes(option))}
+                      aria-pressed={benefits.includes(option)}
                     >
                       {option}
                     </button>
                   ))}
                 </div>
-              </div>
+              </fieldset>
             </>
           )}
 
@@ -1233,6 +1326,8 @@ export default function PostJobPage() {
 
               {message && (
                 <div
+                  id="post-job-form-error"
+                  role="alert"
                   style={{
                     marginTop: 10,
                     color: ERROR,
@@ -1273,6 +1368,7 @@ export default function PostJobPage() {
 
       {showSuccessModal && (
         <div
+          role="presentation"
           style={{
             position: "fixed",
             inset: 0,
@@ -1285,6 +1381,13 @@ export default function PostJobPage() {
           }}
         >
           <div
+            ref={successDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="post-job-success-title"
+            aria-describedby="post-job-success-description"
+            tabIndex={-1}
+            onKeyDown={handleDialogKeyDown}
             style={{
               width: "100%",
               maxWidth: 500,
@@ -1316,6 +1419,7 @@ export default function PostJobPage() {
             </div>
 
             <h2
+              id="post-job-success-title"
               style={{
                 margin: 0,
                 fontSize: 30,
@@ -1328,6 +1432,7 @@ export default function PostJobPage() {
             </h2>
 
             <p
+              id="post-job-success-description"
               style={{
                 marginTop: 14,
                 marginBottom: 0,

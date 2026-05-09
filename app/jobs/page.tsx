@@ -8,6 +8,11 @@ import {
   homeTheme,
 } from "../styles/homepageDesignSystem";
 
+export const metadata = {
+  title: "Browse Restaurant Jobs",
+  description: "Search restaurant jobs hiring now by role, location, and employment type on RestaurantsNowHiring.com.",
+};
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
