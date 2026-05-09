@@ -611,9 +611,10 @@ export default function AdminPageClient() {
         </section>
 
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <div aria-label="Admin sections" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
             <button
               type="button"
+              aria-pressed={tab === "jobs"}
               onClick={() => setTab("jobs")}
               style={tabBtn(tab === "jobs")}
             >
@@ -621,6 +622,7 @@ export default function AdminPageClient() {
             </button>
             <button
               type="button"
+              aria-pressed={tab === "contacts"}
               onClick={() => setTab("contacts")}
               style={tabBtn(tab === "contacts")}
             >
@@ -628,6 +630,7 @@ export default function AdminPageClient() {
             </button>
             <button
               type="button"
+              aria-pressed={tab === "admins"}
               onClick={() => setTab("admins")}
               style={tabBtn(tab === "admins")}
             >
@@ -737,6 +740,7 @@ export default function AdminPageClient() {
                   <button
                     key={filter.key}
                     type="button"
+                    aria-pressed={jobFilter === filter.key}
                     onClick={() => setJobFilter(filter.key as typeof jobFilter)}
                     style={tabBtn(jobFilter === filter.key)}
                   >
@@ -1048,7 +1052,9 @@ export default function AdminPageClient() {
                 value={newAdminEmail}
                 onChange={(event) => setNewAdminEmail(event.target.value)}
                 placeholder="new-admin@example.com"
+                id="new-admin-email"
                 aria-label="New admin email"
+                aria-describedby={adminUsersError ? "admin-users-error" : adminAddMessage ? "admin-add-message" : undefined}
                 style={{
                   flex: "1 1 280px",
                   border: `1px solid ${homeTheme.border}`,
@@ -1071,6 +1077,8 @@ export default function AdminPageClient() {
 
             {adminUsersError && (
               <div
+                id="admin-users-error"
+                role="alert"
                 style={{
                   marginBottom: 12,
                   padding: "10px 12px",
@@ -1087,6 +1095,9 @@ export default function AdminPageClient() {
 
             {adminAddMessage && (
               <div
+                id="admin-add-message"
+                role="status"
+                aria-live="polite"
                 style={{
                   marginBottom: 12,
                   padding: "10px 12px",

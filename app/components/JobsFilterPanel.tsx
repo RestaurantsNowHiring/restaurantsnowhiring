@@ -266,6 +266,8 @@ export default function JobsFilterPanel({
           className="rn-btn-pill"
           type="button"
           onClick={() => setOpenMenu((prev) => (prev === id ? null : id))}
+          aria-expanded={openMenu === id}
+          aria-controls={`${id}-filter-menu`}
           style={{
             ...pillButtonStyle,
             backgroundColor: isActive ? "rgba(53,128,110,0.14)" : pillButtonStyle.backgroundColor,
@@ -277,7 +279,7 @@ export default function JobsFilterPanel({
           <span style={{ fontSize: 12, opacity: 0.8 }}>▾</span>
         </button>
 
-        {openMenu === id && <div style={menuStyle}>{children}</div>}
+        {openMenu === id && <div id={`${id}-filter-menu`} style={menuStyle}>{children}</div>}
       </div>
     );
   };
