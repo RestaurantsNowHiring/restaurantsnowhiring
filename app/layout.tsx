@@ -6,6 +6,7 @@ import { Inter, Sora } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import TopBanner from "./components/TopBanner";
 import { getSiteUrl } from "../lib/seo";
+import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -139,6 +140,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
           © {new Date().getFullYear()} RestaurantsNowHiring.com
         </footer>
+        <Analytics/>
       </body>
     </html>
   );
