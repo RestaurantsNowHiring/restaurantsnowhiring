@@ -1,21 +1,47 @@
 -- Job ad expiration for Restaurants Now Hiring.
 --
 -- Expiration rule:
--- - Jobs pause after 30 days.
--- - Prefer approved_at when it is set.
--- - Fall back to created_at when approved_at is null.
+-- - Active approved jobs pause after 30 days.
+-- - Expiration is based on approved_at.
 -- - Do not delete jobs, charge employers, or renew listings.
 -- - Public visibility remains status = 'active' and active = true.
 --
+-- Reminder rule:
+-- - Send employer emails 5 days before expiration, 1 day before expiration,
+--   and immediately after auto-pause.
+-- - public.job_expiration_email_events prevents duplicate reminders.
+--
 -- Apply in the Supabase SQL Editor. Then either:
--- 1) call public.pause_expired_job_ads() from Supabase pg_cron, or
--- 2) call /api/cron/pause-expired-jobs from an external scheduler with CRON_SECRET.
+-- 1) call public.pause_expired_job_ads() from Supabase pg_cron and schedule
+--    /api/cron/pause-expired-jobs for reminder emails, or
+-- 2) call /api/cron/pause-expired-jobs from an external scheduler with CRON_SECRET
+--    to run reminders and the existing pause function together.
 
 alter table public.jobs
 add column if not exists approved_at timestamptz;
 
 create index if not exists jobs_expiration_lookup_idx
 on public.jobs (status, active, approved_at, created_at);
+
+create table if not exists public.job_expiration_email_events (
+  id uuid primary key default gen_random_uuid(),
+  job_id uuid not null references public.jobs(id) on delete cascade,
+  reminder_type text not null,
+  sent_at timestamptz not null default now(),
+  constraint job_expiration_email_events_type_check check (
+    reminder_type in ('five_day', 'one_day', 'auto_paused')
+  ),
+  constraint job_expiration_email_events_job_type_unique unique (job_id, reminder_type)
+);
+
+create index if not exists job_expiration_email_events_job_idx
+on public.job_expiration_email_events (job_id, reminder_type);
+
+alter table public.job_expiration_email_events enable row level security;
+
+revoke all on public.job_expiration_email_events from public;
+revoke all on public.job_expiration_email_events from anon;
+revoke all on public.job_expiration_email_events from authenticated;
 
 create or replace function public.pause_expired_job_ads()
 returns table (paused_count integer)
@@ -30,7 +56,8 @@ begin
     status = 'paused'
   where status = 'active'
     and active = true
-    and coalesce(approved_at, created_at) <= now() - interval '30 days';
+    and approved_at is not null
+    and approved_at <= now() - interval '30 days';
 
   get diagnostics paused_count = row_count;
   return next;
