@@ -140,7 +140,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
           © {new Date().getFullYear()} RestaurantsNowHiring.com
         </footer>
-        <Analytics/>
+        <Analytics />
       </body>
     </html>
   );
