@@ -2,16 +2,19 @@ import Link from "next/link";
 import { buildPageMetadata } from "../../lib/seo";
 import {
   BadgeDollarSign,
-  Check,
-  ShieldCheck,
-  Clock3,
-  RefreshCcw,
   BriefcaseBusiness,
+  Check,
+  Clock3,
+  HelpCircle,
+  PauseCircle,
+  SearchCheck,
+  ShieldCheck,
 } from "lucide-react";
 
 export const metadata = buildPageMetadata({
-  title: "Restaurant Job Posting Pricing",
-  description: "Review simple MVP pricing for posting restaurant jobs on RestaurantsNowHiring.com.",
+  title: "Simple Pricing for Restaurant Hiring",
+  description:
+    "Start with a 30-day free trial, pay $9 per active approved restaurant job ad every 30 days, and pause or cancel anytime.",
   path: "/pricing",
 });
 
@@ -47,7 +50,7 @@ export default function PricingPage() {
     boxShadow: "0 18px 40px rgba(0,0,0,.08)",
   };
 
-  const smallCard: React.CSSProperties = {
+  const whiteCard: React.CSSProperties = {
     backgroundColor: "#fff",
     border: `1px solid ${BORDER}`,
     borderRadius: 18,
@@ -60,8 +63,8 @@ export default function PricingPage() {
     alignItems: "center",
     justifyContent: "center",
     gap: 8,
-    minHeight: 48,
-    padding: "0 18px",
+    minHeight: 50,
+    padding: "0 20px",
     borderRadius: 16,
     textDecoration: "none",
     fontWeight: 900,
@@ -75,6 +78,7 @@ export default function PricingPage() {
     ...buttonBase,
     backgroundColor: GREEN,
     color: "#fff",
+    borderColor: "rgba(0,0,0,.08)",
   };
 
   const secondaryBtn: React.CSSProperties = {
@@ -107,16 +111,64 @@ export default function PricingPage() {
     fontFamily: "var(--font-body)",
   };
 
+  const includedItems = [
+    "30-day free trial",
+    "No charge today",
+    "$9 per active approved job ad every 30 days",
+    "Cancel anytime",
+    "Only active approved public ads are billed",
+    "Jobs auto-pause after 30 days",
+    "Pause/remove jobs anytime",
+    "Google Jobs optimized",
+    "Employer dashboard included",
+  ];
+
+  const faqItems = [
+    {
+      question: "What is billed after the free trial?",
+      answer:
+        "After the 30-day free trial, pricing is $9 per active approved public job ad every 30 days. Pending, paused, rejected, removed, or private ads are not billed.",
+    },
+    {
+      question: "Will I be charged today?",
+      answer:
+        "No. You can create an employer account and submit your first job during the trial without a charge today.",
+    },
+    {
+      question: "What happens after 30 days?",
+      answer:
+        "Approved job ads automatically pause after 30 days. You can manage, pause, remove, or reactivate listings from the employer dashboard.",
+    },
+    {
+      question: "Can I cancel anytime?",
+      answer:
+        "Yes. Pause or remove jobs anytime from your dashboard. Only active approved public ads count toward billing.",
+    },
+  ];
+
   return (
     <main style={pageWrap}>
       <div style={container}>
-        {/* HERO */}
         <section style={{ ...cardStyle, marginBottom: 18 }}>
           <div className="rn-pricing-hero">
             <div>
               <div style={iconWrap(true)}>
                 <BadgeDollarSign size={22} color={GREEN} />
               </div>
+
+              <p
+                style={{
+                  margin: "0 0 10px",
+                  color: MUTED,
+                  fontSize: 14,
+                  fontWeight: 900,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                RestaurantsNowHiring.com pricing
+              </p>
 
               <h1
                 style={{
@@ -128,12 +180,12 @@ export default function PricingPage() {
                   fontFamily: "var(--font-heading)",
                 }}
               >
-                Pricing
+                Simple Pricing for Restaurant Hiring
               </h1>
 
               <p
                 style={{
-                  marginTop: 14,
+                  marginTop: 16,
                   marginBottom: 0,
                   maxWidth: 720,
                   color: MUTED,
@@ -143,314 +195,186 @@ export default function PricingPage() {
                   fontWeight: 700,
                 }}
               >
-                Simple pricing for restaurant employers. Start with a free trial, then pay per job
-                post every 30 days while your post stays active.
+                Start with a 30-day free trial. There is no charge today, and only active approved
+                public job ads are billed after approval.
               </p>
 
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
-                <Link href="/post-job" style={primaryBtn} className="rn-btn-primary">
-                  Post a Job
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
+                <Link href="/employer-login?next=/post-job" style={primaryBtn} className="rn-btn-primary">
+                  Start Your Free Trial
                 </Link>
-                <Link href="/employer-login" style={secondaryBtn} className="rn-btn-secondary">
-                  Employer Login
-                </Link>
-                <Link href="/" style={secondaryBtn} className="rn-btn-secondary">
-                  Home
+                <Link href="/employer-dashboard" style={secondaryBtn} className="rn-btn-secondary">
+                  Manage Jobs
                 </Link>
               </div>
             </div>
 
-            <div style={smallCard}>
+            <aside style={whiteCard} aria-label="Pricing summary">
               <div
                 style={{
-                  fontSize: 14,
-                  fontWeight: 900,
-                  letterSpacing: 0.3,
-                  color: MUTED,
-                  textTransform: "uppercase",
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Quick summary
-              </div>
-
-              <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
-                {[
-                  {
-                    icon: <Clock3 size={18} color={GREEN} />,
-                    title: "30-day free trial",
-                    body: "New employers can start posting before paid billing begins.",
-                  },
-                  {
-                    icon: <BadgeDollarSign size={18} color={GREEN} />,
-                    title: "$9 per post",
-                    body: "Each active post renews every 30 days unless canceled.",
-                  },
-                  {
-                    icon: <RefreshCcw size={18} color={GREEN} />,
-                    title: "Auto-renews",
-                    body: "Posts stay active and billed every 30 days until you stop them.",
-                  },
-                ].map((item) => (
-                  <div
-                    key={item.title}
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "38px 1fr",
-                      gap: 12,
-                      alignItems: "start",
-                    }}
-                  >
-                    <div style={iconWrap(true)}>{item.icon}</div>
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 900,
-                          color: TEXT,
-                          fontFamily: "var(--font-body)",
-                          fontSize: 16,
-                        }}
-                      >
-                        {item.title}
-                      </div>
-                      <div
-                        style={{
-                          marginTop: 4,
-                          color: MUTED,
-                          lineHeight: 1.5,
-                          fontWeight: 700,
-                          fontFamily: "var(--font-body)",
-                          fontSize: 14,
-                        }}
-                      >
-                        {item.body}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* MAIN PLAN */}
-        <section style={{ ...cardStyle, marginBottom: 18 }}>
-          <SectionHeader title="Employer Plan" />
-
-          <div className="rn-pricing-main">
-            <div
-              style={{
-                ...smallCard,
-                border: "1px solid rgba(53,128,110,.20)",
-                boxShadow: "0 16px 30px rgba(0,0,0,.06)",
-              }}
-            >
-              <div style={iconWrap(true)}>
-                <BriefcaseBusiness size={20} color={GREEN} />
-              </div>
-
-              <div
-                style={{
-                  fontSize: 18,
-                  fontWeight: 900,
-                  color: TEXT,
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Restaurants Now Hiring Employer
-              </div>
-
-              <div
-                style={{
-                  marginTop: 14,
-                  display: "flex",
-                  alignItems: "baseline",
-                  gap: 8,
-                  flexWrap: "wrap",
-                }}
-              >
-                <div
-                  style={{
-                    fontSize: 52,
-                    lineHeight: 1,
-                    fontWeight: 700,
-                    color: GREEN,
-                    fontFamily: "var(--font-heading)",
-                  }}
-                >
-                  $9
-                </div>
-                <div
-                  style={{
-                    color: MUTED,
-                    fontWeight: 800,
-                    fontSize: 16,
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  per post / every 30 days
-                </div>
-              </div>
-
-              <div
-                style={{
-                  marginTop: 10,
                   display: "inline-flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  minHeight: 34,
-                  padding: "0 12px",
-                  borderRadius: 999,
-                  backgroundColor: "rgba(53,128,110,.10)",
-                  border: "1px solid rgba(53,128,110,.14)",
+                  gap: 8,
                   color: GREEN,
                   fontWeight: 900,
-                  fontSize: 13,
                   fontFamily: "var(--font-body)",
                 }}
               >
-                30-day free trial for new employers
+                <ShieldCheck size={18} /> 30-day free trial
               </div>
 
               <div
                 style={{
-                  marginTop: 18,
-                  display: "grid",
-                  gap: 12,
+                  marginTop: 16,
+                  color: TEXT,
+                  fontFamily: "var(--font-heading)",
+                  fontSize: 48,
+                  lineHeight: 1,
+                  fontWeight: 800,
                 }}
               >
-                {[
-                  "Post a restaurant job listing for public visibility after approval.",
-                  "Each job post stays active for 30 days at a time.",
-                  "After the free trial, each active post is billed at $9 every 30 days.",
-                  "Cancel a post before renewal to stop future charges.",
-                  "Best for restaurants that want a simple pay-per-post setup.",
-                ].map((item) => (
-                  <div key={item} style={checkRow}>
-                    <Check size={18} color={GREEN} style={{ marginTop: 2 }} />
-                    <div>{item}</div>
-                  </div>
-                ))}
-              </div>
-
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 22 }}>
-                <Link href="/post-job" style={primaryBtn} className="rn-btn-primary">
-                  Start Posting
-                </Link>
-                <Link href="/contact" style={secondaryBtn} className="rn-btn-secondary">
-                  Contact
-                </Link>
-              </div>
-            </div>
-
-            <div style={{ display: "grid", gap: 14 }}>
-              <div style={smallCard}>
-                <div style={iconWrap(true)}>
-                  <ShieldCheck size={20} color={GREEN} />
-                </div>
-                <div className="rn-pricing-card-title">What’s included</div>
-
-                <div
+                $9
+                <span
                   style={{
-                    display: "grid",
-                    gap: 12,
-                    marginTop: 12,
+                    color: MUTED,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 15,
+                    fontWeight: 800,
+                    marginLeft: 8,
                   }}
                 >
-                  {[
-                    "Employer account access",
-                    "Job submission for review",
-                    "Public job listing after approval",
-                    "Simple recurring billing per active post",
-                  ].map((item) => (
-                    <div key={item} style={checkRow}>
-                      <Check size={18} color={GREEN} style={{ marginTop: 2 }} />
-                      <div>{item}</div>
-                    </div>
-                  ))}
-                </div>
+                  / active approved ad / 30 days
+                </span>
               </div>
 
-              <div style={smallCard}>
-                <div style={iconWrap(true)}>
-                  <RefreshCcw size={20} color={GREEN} />
-                </div>
-                <div className="rn-pricing-card-title">How billing works</div>
-                <div className="rn-pricing-card-body" style={{ marginTop: 12 }}>
-                  You’ll agree to a 30-day free trial, then active posts auto-renew every 30 days
-                  at <strong style={{ color: TEXT }}>$9 per post</strong> unless canceled.
-                </div>
+              <div
+                style={{
+                  marginTop: 12,
+                  color: MUTED,
+                  fontSize: 15,
+                  lineHeight: 1.55,
+                  fontWeight: 700,
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                No charge today. Jobs auto-pause after 30 days so you stay in control of what is
+                public and billable.
               </div>
+            </aside>
+          </div>
+        </section>
+
+        <section className="rn-pricing-main" style={{ marginBottom: 18 }}>
+          <div style={cardStyle}>
+            <SectionHeader title="What You Get" />
+            <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+              {includedItems.map((item) => (
+                <div key={item} style={checkRow}>
+                  <Check size={18} color={GREEN} style={{ marginTop: 2 }} />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={cardStyle}>
+            <SectionHeader title="Built For Restaurant Hiring" />
+            <div className="rn-pricing-feature-grid" style={{ marginTop: 18 }}>
+              {[
+                {
+                  icon: <Clock3 size={20} color={GREEN} />,
+                  title: "Trial-first",
+                  body: "Create an employer account and submit jobs for review before paid billing starts.",
+                },
+                {
+                  icon: <PauseCircle size={20} color={GREEN} />,
+                  title: "Pause anytime",
+                  body: "Listings can be paused or removed from the dashboard when the role is filled.",
+                },
+                {
+                  icon: <SearchCheck size={20} color={GREEN} />,
+                  title: "Google Jobs optimized",
+                  body: "Public approved jobs include structured job data for search visibility.",
+                },
+                {
+                  icon: <BriefcaseBusiness size={20} color={GREEN} />,
+                  title: "Dashboard included",
+                  body: "Employers can review listing status, manage ads, and reactivate roles in one place.",
+                },
+              ].map((feature) => (
+                <div key={feature.title} style={whiteCard}>
+                  <div style={iconWrap(true)}>{feature.icon}</div>
+                  <h3
+                    style={{
+                      margin: 0,
+                      color: TEXT,
+                      fontSize: 18,
+                      fontFamily: "var(--font-heading)",
+                    }}
+                  >
+                    {feature.title}
+                  </h3>
+                  <p
+                    style={{
+                      margin: "8px 0 0",
+                      color: MUTED,
+                      fontSize: 14,
+                      lineHeight: 1.55,
+                      fontWeight: 700,
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    {feature.body}
+                  </p>
+                </div>
+              ))}
             </div>
           </div>
         </section>
 
-    
-
-        {/* FAQ */}
         <section style={{ ...cardStyle, marginBottom: 18 }}>
-          <SectionHeader title="Common Questions" />
-
-          <div style={{ display: "grid", gap: 14 }}>
-            {[
-              {
-                q: "Is pricing per employer or per job post?",
-                a: "Pricing is per active job post. Each post is billed separately at $9 every 30 days after the free trial period.",
-              },
-              {
-                q: "Do posts renew automatically?",
-                a: "Yes. Active posts auto-renew every 30 days unless canceled before the next billing cycle.",
-              },
-              {
-                q: "Can I stop billing on a post?",
-                a: "Yes. Cancel the post before renewal and future charges for that post stop.",
-              },
-              {
-                q: "Does every employer get a free trial?",
-                a: "The plan is designed around a one-month free trial for new employers before recurring post billing begins.",
-              },
-            ].map((item) => (
-              <div key={item.q} style={smallCard}>
-                <div
-                  style={{
-                    fontWeight: 900,
-                    fontSize: 17,
-                    color: TEXT,
-                    fontFamily: "var(--font-body)",
-                    marginBottom: 8,
-                  }}
-                >
-                  {item.q}
+          <SectionHeader title="FAQ" />
+          <div className="rn-pricing-faq-grid" style={{ marginTop: 18 }}>
+            {faqItems.map((item) => (
+              <article key={item.question} style={whiteCard}>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <HelpCircle size={20} color={GREEN} style={{ flex: "0 0 auto", marginTop: 2 }} />
+                  <div>
+                    <h3
+                      style={{
+                        margin: 0,
+                        color: TEXT,
+                        fontSize: 17,
+                        fontFamily: "var(--font-heading)",
+                      }}
+                    >
+                      {item.question}
+                    </h3>
+                    <p
+                      style={{
+                        margin: "8px 0 0",
+                        color: MUTED,
+                        fontSize: 14,
+                        lineHeight: 1.6,
+                        fontWeight: 700,
+                        fontFamily: "var(--font-body)",
+                      }}
+                    >
+                      {item.answer}
+                    </p>
+                  </div>
                 </div>
-                <div
-                  style={{
-                    color: MUTED,
-                    lineHeight: 1.6,
-                    fontWeight: 700,
-                    fontFamily: "var(--font-body)",
-                    fontSize: 15,
-                  }}
-                >
-                  {item.a}
-                </div>
-              </div>
+              </article>
             ))}
           </div>
         </section>
 
-        {/* CTA */}
         <section style={cardStyle}>
-          <SectionHeader title="Ready To Post?" />
-
-          <div
-            style={{
-              maxWidth: 760,
-              margin: "0 auto",
-              textAlign: "center",
-            }}
-          >
-            <div
+          <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
+            <SectionHeader title="Ready To Hire Restaurant Staff?" />
+            <p
               style={{
+                margin: "12px auto 0",
                 color: TEXT,
                 fontSize: 18,
                 lineHeight: 1.65,
@@ -458,45 +382,22 @@ export default function PricingPage() {
                 fontFamily: "var(--font-body)",
               }}
             >
-              Start your employer setup, submit a job, and take advantage of the free trial before
-              paid post renewals begin.
-            </div>
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                gap: 10,
-                flexWrap: "wrap",
-                marginTop: 20,
-              }}
-            >
-              <Link href="/post-job" style={primaryBtn} className="rn-btn-primary">
-                Post a Job
+              Start your 30-day free trial, submit a job for approval, and manage every listing from
+              your employer dashboard.
+            </p>
+            <div style={{ display: "flex", justifyContent: "center", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+              <Link href="/employer-login?next=/post-job" style={primaryBtn} className="rn-btn-primary">
+                Post Your First Job Free
               </Link>
               <Link href="/contact" style={secondaryBtn} className="rn-btn-secondary">
-                Contact
+                Questions? Contact Us
               </Link>
             </div>
           </div>
         </section>
-
-        <footer
-          style={{
-            marginTop: 18,
-            textAlign: "center",
-            color: MUTED,
-            fontSize: 13,
-            fontWeight: 800,
-            fontFamily: "var(--font-body)",
-          }}
-        >
-          Restaurants Now Hiring
-        </footer>
       </div>
 
       <style
-        // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{
           __html: `
             .rn-pricing-hero {
@@ -508,36 +409,29 @@ export default function PricingPage() {
 
             .rn-pricing-main {
               display: grid;
-              grid-template-columns: 1.05fr .95fr;
+              grid-template-columns: .9fr 1.1fr;
               gap: 18px;
             }
 
-            .rn-pricing-three-col {
+            .rn-pricing-feature-grid,
+            .rn-pricing-faq-grid {
               display: grid;
-              grid-template-columns: repeat(3, minmax(0, 1fr));
+              grid-template-columns: repeat(2, minmax(0, 1fr));
               gap: 14px;
             }
 
-            .rn-pricing-card-title {
-              font-weight: 900;
-              font-size: 18px;
-              color: ${TEXT};
-              font-family: var(--font-body);
-            }
-
-            .rn-pricing-card-body {
-              color: ${MUTED};
-              line-height: 1.6;
-              font-weight: 700;
-              font-family: var(--font-body);
-              font-size: 15px;
-            }
-
-            @media (max-width: 980px) {
+            @media (max-width: 900px) {
               .rn-pricing-hero,
               .rn-pricing-main,
-              .rn-pricing-three-col {
+              .rn-pricing-feature-grid,
+              .rn-pricing-faq-grid {
                 grid-template-columns: 1fr !important;
+              }
+            }
+
+            @media (max-width: 640px) {
+              .rn-pricing-hero h1 {
+                font-size: 42px !important;
               }
             }
           `,
@@ -549,28 +443,16 @@ export default function PricingPage() {
 
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div
+    <h2
       style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 16,
-        marginBottom: 18,
+        margin: 0,
+        color: "#35806e",
+        fontSize: 28,
+        lineHeight: 1.15,
+        fontFamily: "var(--font-heading)",
       }}
     >
-      <div style={{ height: 1, width: 170, background: "rgba(0,0,0,.18)" }} />
-      <div
-        style={{
-          fontSize: 30,
-          fontWeight: 700,
-          color: "rgba(0,0,0,.88)",
-          fontFamily: "var(--font-heading)",
-          textAlign: "center",
-        }}
-      >
-        {title}
-      </div>
-      <div style={{ height: 1, width: 170, background: "rgba(0,0,0,.18)" }} />
-    </div>
+      {title}
+    </h2>
   );
 }

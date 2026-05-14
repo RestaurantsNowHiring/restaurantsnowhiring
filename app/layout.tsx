@@ -130,6 +130,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <Link href="/privacy" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
               Privacy
             </Link>
+            <Link href="/pricing" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
+              Pricing
+            </Link>
             <Link href="/admin/login" style={{ color: "rgba(255,255,255,.85)", textDecoration: "underline" }}>
               Admin
             </Link>

@@ -77,6 +77,7 @@ export default function TopBanner() {
             </>
           )}
 
+          <NavLink href="/pricing">PRICING</NavLink>
           <NavLink href="/about">ABOUT</NavLink>
           <NavLink href="/contact">CONTACT</NavLink>
         </div>
