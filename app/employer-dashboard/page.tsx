@@ -304,6 +304,7 @@ export default function EmployerDashboardPage() {
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [candidates, setCandidates] = useState<CandidateSubmission[]>([]);
   const [candidateFilter, setCandidateFilter] = useState<CandidateFilter>("all");
+  const [areCandidatesExpanded, setAreCandidatesExpanded] = useState(false);
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidateBusyId, setCandidateBusyId] = useState<string | null>(null);
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
@@ -467,6 +468,7 @@ export default function EmployerDashboardPage() {
         if (mounted) {
           setJobs([]);
           setCandidates([]);
+          setAreCandidatesExpanded(false);
           setOwner(null);
           setAuthStatus("allowed");
           setActionError("Your employer session is missing account ownership details. Please sign out and sign back in.");
@@ -514,6 +516,7 @@ export default function EmployerDashboardPage() {
         if (mounted) {
           setJobs([]);
           setCandidates(nextCandidates);
+          setAreCandidatesExpanded(nextCandidates.some((candidate) => candidate.status === "new"));
           setOwner(currentOwner);
           setBillingSummary(nextBillingSummary);
           setAuthStatus("allowed");
@@ -552,6 +555,7 @@ export default function EmployerDashboardPage() {
       if (mounted) {
         setJobs(hydratedJobs);
         setCandidates(nextCandidates);
+        setAreCandidatesExpanded(nextCandidates.some((candidate) => candidate.status === "new"));
         setOwner(currentOwner);
         setBillingSummary(nextBillingSummary);
         setEmployerAccess(access);
@@ -1251,19 +1255,23 @@ export default function EmployerDashboardPage() {
         )}
 
         <section id="interested-candidates" style={{ ...homeCardStyle, marginBottom: 16 }}>
-          <div className="rn-dashboard-header-row">
+          <div className="rn-dashboard-header-row rn-candidate-section-header">
             <div>
-              <h2
-                style={{
-                  margin: 0,
-                  color: homeTheme.text,
-                  fontSize: 26,
-                  fontFamily: "var(--font-heading)",
-                  lineHeight: 1.2,
-                }}
-              >
-                Interested Candidates
-              </h2>
+              <div className="rn-candidate-title-row">
+                <h2
+                  style={{
+                    margin: 0,
+                    color: homeTheme.text,
+                    fontSize: 26,
+                    fontFamily: "var(--font-heading)",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  Interested Candidates
+                </h2>
+                <span className="rn-candidate-count-pill">{candidates.length} total</span>
+                <span className="rn-candidate-count-pill rn-candidate-count-pill-new">{candidateStatusCounts.new} new</span>
+              </div>
               <p
                 style={{
                   marginTop: 6,
@@ -1276,6 +1284,18 @@ export default function EmployerDashboardPage() {
                 Candidate submissions from your public job ad pages, newest first.
               </p>
             </div>
+            <button
+              type="button"
+              className="rn-candidate-toggle"
+              onClick={() => setAreCandidatesExpanded((isExpanded) => !isExpanded)}
+              aria-controls="interested-candidates-content"
+              aria-expanded={areCandidatesExpanded}
+            >
+              <span>{areCandidatesExpanded ? "Collapse" : "Expand"}</span>
+              <span className="rn-candidate-toggle-icon" aria-hidden="true">
+                {areCandidatesExpanded ? "−" : "+"}
+              </span>
+            </button>
           </div>
 
           {candidatesError ? (
@@ -1296,6 +1316,12 @@ export default function EmployerDashboardPage() {
             </div>
           ) : null}
 
+          {!areCandidatesExpanded ? (
+            <p className="rn-candidate-collapsed-summary">
+              {candidates.length} total candidates • {candidateStatusCounts.new} new
+            </p>
+          ) : (
+            <div id="interested-candidates-content">
           {candidates.length > 0 ? (
             <div className="rn-candidate-filters" aria-label="Filter interested candidates by status">
               {CANDIDATE_FILTER_OPTIONS.map((filter) => {
@@ -1386,6 +1412,8 @@ export default function EmployerDashboardPage() {
                   {candidate.message ? <p className="rn-candidate-message">{candidate.message}</p> : null}
                 </article>
               ))}
+            </div>
+          )}
             </div>
           )}
         </section>
@@ -1874,6 +1902,92 @@ export default function EmployerDashboardPage() {
           transform: none;
         }
 
+        .rn-candidate-section-header {
+          align-items: flex-start;
+          gap: 16px;
+          margin-bottom: 16px;
+        }
+
+        .rn-candidate-title-row {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+        }
+
+        .rn-candidate-count-pill {
+          align-items: center;
+          background: rgba(31, 79, 68, 0.08);
+          border: 1px solid rgba(31, 79, 68, 0.16);
+          border-radius: 999px;
+          color: ${homeTheme.green};
+          display: inline-flex;
+          font-family: var(--font-body);
+          font-size: 13px;
+          font-weight: 900;
+          line-height: 1;
+          padding: 7px 10px;
+        }
+
+        .rn-candidate-count-pill-new {
+          background: rgba(53, 128, 110, 0.12);
+          border-color: rgba(53, 128, 110, 0.24);
+          color: #1d5b4d;
+        }
+
+        .rn-candidate-toggle {
+          align-items: center;
+          background: rgba(255, 250, 242, 0.92);
+          border: 1px solid ${homeTheme.border};
+          border-radius: 999px;
+          color: ${homeTheme.text};
+          cursor: pointer;
+          display: inline-flex;
+          flex: 0 0 auto;
+          font-family: var(--font-body);
+          font-size: 14px;
+          font-weight: 900;
+          gap: 10px;
+          justify-content: center;
+          padding: 10px 12px 10px 16px;
+          transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+        }
+
+        .rn-candidate-toggle:hover {
+          border-color: rgba(31, 79, 68, 0.28);
+          box-shadow: 0 8px 18px rgba(31, 79, 68, 0.12);
+          transform: translateY(-1px);
+        }
+
+        .rn-candidate-toggle:focus-visible {
+          outline: 3px solid rgba(31, 79, 68, 0.18);
+          outline-offset: 2px;
+        }
+
+        .rn-candidate-toggle-icon {
+          align-items: center;
+          background: ${homeTheme.green};
+          border-radius: 999px;
+          color: #fffaf2;
+          display: inline-flex;
+          font-size: 17px;
+          height: 24px;
+          justify-content: center;
+          line-height: 1;
+          width: 24px;
+        }
+
+        .rn-candidate-collapsed-summary {
+          background: rgba(255, 250, 242, 0.76);
+          border: 1px solid ${homeTheme.border};
+          border-radius: 14px;
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-weight: 900;
+          margin: 0;
+          padding: 14px 16px;
+        }
+
         .rn-candidate-empty {
           border: 1px dashed ${homeTheme.border};
           border-radius: 14px;
@@ -2141,6 +2255,10 @@ export default function EmployerDashboardPage() {
           .rn-dashboard-header-row > *,
           .rn-dashboard-hero-row > * {
             min-width: 0;
+          }
+
+          .rn-candidate-toggle {
+            width: 100%;
           }
 
           .rn-dashboard-actions {
