@@ -186,6 +186,15 @@ export default function CandidateSubmissionForm({ jobId }: CandidateSubmissionFo
             grid-template-columns: 1fr !important;
           }
         }
+        @media (max-width: 480px) {
+          section {
+            padding: 14px !important;
+          }
+          button[type="submit"] {
+            justify-self: stretch !important;
+            width: 100%;
+          }
+        }
       `}</style>
     </section>
   );

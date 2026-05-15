@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/static-components */
 "use client";
 
 import Link from "next/link";
@@ -251,6 +252,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
 
       {/* Search row */}
       <div
+        className="rn-jobs-search-row"
         style={{
           display: "grid",
           gridTemplateColumns: "1.6fr 1fr auto",
@@ -296,7 +298,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
       </div>
 
       {/* Pills row (Position + Date posted) */}
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
+      <div className="rn-jobs-pills-row" style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 14 }}>
         <PillMenu
           id="position"
           label="Position"
@@ -402,6 +404,7 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
             return (
               <div
                 key={job.id}
+                className="rn-job-list-row"
                 style={{
                   display: "grid",
                   gridTemplateColumns: "1fr auto",
@@ -484,8 +487,26 @@ export default function LatestJobsPanel({ jobs }: { jobs: Job[] }) {
       {/* Responsive: stack search row */}
       <style jsx>{`
         @media (max-width: 860px) {
-          div[style*="grid-template-columns: 1.6fr 1fr auto"] {
+          .rn-jobs-search-row {
             grid-template-columns: 1fr !important;
+          }
+        }
+        @media (max-width: 640px) {
+          .rn-job-list-row {
+            grid-template-columns: 1fr !important;
+            align-items: stretch !important;
+          }
+          .rn-job-list-row .rn-btn-view {
+            width: 100%;
+          }
+          .rn-jobs-pills-row > div,
+          .rn-jobs-pills-row button {
+            width: 100%;
+          }
+          .rn-jobs-pills-row [id$="-filter-menu"] {
+            left: 0 !important;
+            min-width: 0 !important;
+            width: min(100%, calc(100vw - 56px));
           }
         }
       `}</style>

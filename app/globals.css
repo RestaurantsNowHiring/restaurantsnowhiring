@@ -572,7 +572,7 @@ html, body {
   }
 
   .top-banner__mobile-spacer--menu-open {
-    height: 91px;
+    height: 410px;
   }
 }
 
@@ -604,5 +604,122 @@ html, body {
   .top-banner__brand {
     font-size: 19px;
     letter-spacing: 0.55px;
+  }
+}
+
+
+/* ===== Mobile optimization QA hardening ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+:where(p, h1, h2, h3, h4, h5, h6, a, span, div, li, td, th) {
+  overflow-wrap: anywhere;
+}
+
+:where(input, select, textarea, button) {
+  font: inherit;
+  max-width: 100%;
+}
+
+:where(a, button, input, select, textarea, [role="button"]) {
+  touch-action: manipulation;
+}
+
+:where(a, button, input, select, textarea) {
+  min-height: 44px;
+}
+
+:where(textarea) {
+  min-width: 0;
+}
+
+@media (max-width: 767px) {
+  body {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  main {
+    padding-top: 24px !important;
+  }
+
+  main :where(h1) {
+    font-size: clamp(36px, 10vw, 44px) !important;
+    line-height: 1.05 !important;
+  }
+
+  main :where(h2) {
+    font-size: clamp(26px, 7.5vw, 32px) !important;
+    line-height: 1.12 !important;
+  }
+
+  main :where(section, article, form) {
+    min-width: 0;
+  }
+
+  .site-button,
+  .hero-button,
+  .rn-btn-primary,
+  .rn-btn-secondary,
+  .rn-btn-subtle,
+  .rn-btn-pill,
+  .rn-btn-menu,
+  .rn-btn-view {
+    min-height: 44px !important;
+    white-space: normal !important;
+    text-align: center;
+  }
+
+  .rn-btn-primary,
+  .rn-btn-secondary,
+  .rn-btn-subtle,
+  .rn-btn-view {
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 430px) {
+  main {
+    padding-bottom: 44px !important;
+  }
+
+  main > div {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  main :where(p) {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 390px) {
+  main :where(h1) {
+    font-size: clamp(33px, 9.5vw, 40px) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .rn-section-header-row {
+    gap: 10px !important;
+  }
+
+  .rn-section-header-row > div:first-child,
+  .rn-section-header-row > div:last-child,
+  .rn-section-heading-row > div:first-child,
+  .rn-section-heading-row > div:last-child {
+    flex: 1 1 30px;
+    width: auto !important;
   }
 }

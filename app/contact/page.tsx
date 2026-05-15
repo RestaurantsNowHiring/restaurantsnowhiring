@@ -756,6 +756,7 @@ function SectionHeader({
 
   return (
     <div
+      className="rn-section-header-row"
       style={{
         display: "flex",
         alignItems: "center",
