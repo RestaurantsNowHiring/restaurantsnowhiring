@@ -3,6 +3,7 @@ import Link from "next/link";
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "../../../lib/supabase";
 import {
+  isMissingApprovedAtColumnError,
   isMissingStatusColumnError,
   isMissingViewsColumnError,
   isPubliclyVisibleJob,
@@ -12,17 +13,17 @@ import { absoluteUrl, noIndexRobots, truncateMetaDescription } from "../../../li
 type JobRouteParams = { id?: string };
 
 const JOB_DETAIL_FIELDS =
-  "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
+  "id,title,restaurant_name,city,state,description,created_at,approved_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
 
 async function fetchPublicJobForSeo(id?: string) {
   if (!id) return null;
 
   const result = await supabase.from("jobs").select(JOB_DETAIL_FIELDS).eq("id", id).limit(1);
 
-  if (isMissingStatusColumnError(result.error)) {
+  if (isMissingStatusColumnError(result.error) || isMissingApprovedAtColumnError(result.error)) {
     const fallbackResult = await supabase
       .from("jobs")
-      .select(JOB_DETAIL_FIELDS.replace(",status", ""))
+      .select(JOB_DETAIL_FIELDS.replace(",status", "").replace(",approved_at", ""))
       .eq("id", id)
       .eq("active", true)
       .limit(1);
@@ -49,6 +50,14 @@ function formatEmploymentType(value: string | null | undefined) {
   if (normalized.includes("TEMP")) return "TEMPORARY";
   if (normalized.includes("CONTRACT")) return "CONTRACTOR";
   return "OTHER";
+}
+
+function addDaysIso(value: string | null | undefined, days: number) {
+  const baseDate = value ? new Date(value) : null;
+  if (!baseDate || Number.isNaN(baseDate.getTime())) return undefined;
+
+  baseDate.setUTCDate(baseDate.getUTCDate() + days);
+  return baseDate.toISOString();
 }
 
 function safeExternalUrl(value: string | null | undefined) {
@@ -93,6 +102,7 @@ function buildJobPostingSchema(job: Job) {
       value: job.id,
     },
     datePosted: job.created_at,
+    validThrough: addDaysIso(job.approved_at ?? job.created_at, 30),
     employmentType: formatEmploymentType(job.employment_type),
     industry: "Restaurants",
     occupationalCategory: job.role_category || undefined,
@@ -113,7 +123,7 @@ function buildJobPostingSchema(job: Job) {
       }),
     },
     url: jobUrl,
-    directApply: false,
+    directApply: true,
   };
 }
 
@@ -173,6 +183,7 @@ type Job = {
   state: string;
   description: string | null;
   created_at: string;
+  approved_at?: string | null;
   active: boolean;
   status?: string | null;
   pay_range: string | null;
@@ -200,32 +211,69 @@ export default async function JobDetailsPage({
         })
       : null;
 
-  const queryVariants = [
+  const queryVariants: Array<{
+    fields: string;
+    includesStatus: boolean;
+    includesViews: boolean;
+    includesApprovedAt: boolean;
+  }> = [
+    {
+      fields:
+        "id,title,restaurant_name,city,state,description,created_at,approved_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+      includesStatus: true,
+      includesViews: true,
+      includesApprovedAt: true,
+    },
+    {
+      fields:
+        "id,title,restaurant_name,city,state,description,created_at,approved_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+      includesStatus: true,
+      includesViews: false,
+      includesApprovedAt: true,
+    },
     {
       fields:
         "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
       includesStatus: true,
       includesViews: true,
+      includesApprovedAt: false,
     },
     {
       fields:
         "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
       includesStatus: true,
       includesViews: false,
+      includesApprovedAt: false,
+    },
+    {
+      fields:
+        "id,title,restaurant_name,city,state,description,created_at,approved_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+      includesStatus: false,
+      includesViews: true,
+      includesApprovedAt: true,
+    },
+    {
+      fields:
+        "id,title,restaurant_name,city,state,description,created_at,approved_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+      includesStatus: false,
+      includesViews: false,
+      includesApprovedAt: true,
     },
     {
       fields:
         "id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
       includesStatus: false,
       includesViews: true,
+      includesApprovedAt: false,
     },
     {
       fields:
         "id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
       includesStatus: false,
       includesViews: false,
+      includesApprovedAt: false,
     },
-  ] as const;
+  ];
 
   let data: Array<Record<string, unknown>> | null = null;
   let error: { code?: string; message?: string } | null = null;
@@ -250,7 +298,8 @@ export default async function JobDetailsPage({
 
       const statusMissing = isMissingStatusColumnError(result.error);
       const viewsMissing = isMissingViewsColumnError(result.error);
-      if (statusMissing || viewsMissing) {
+      const approvedAtMissing = isMissingApprovedAtColumnError(result.error);
+      if (statusMissing || viewsMissing || approvedAtMissing) {
         missingStatus = missingStatus || statusMissing;
         missingViews = missingViews || viewsMissing;
         error = result.error;
