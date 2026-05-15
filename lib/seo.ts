@@ -1,21 +1,10 @@
 import type { Metadata } from "next";
 
-const DEFAULT_SITE_URL = "https://restaurantsnowhiring.com";
+const CANONICAL_SITE_URL = "https://www.restaurantsnowhiring.com";
 const SITE_NAME = "Restaurants Now Hiring";
 
 export function getSiteUrl() {
-  const rawUrl =
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
-    process.env.VERCEL_PROJECT_PRODUCTION_URL ||
-    process.env.VERCEL_URL ||
-    DEFAULT_SITE_URL;
-
-  const withProtocol = rawUrl.startsWith("http://") || rawUrl.startsWith("https://")
-    ? rawUrl
-    : `https://${rawUrl}`;
-
-  return withProtocol.replace(/\/$/, "");
+  return CANONICAL_SITE_URL;
 }
 
 export function absoluteUrl(path = "/") {
