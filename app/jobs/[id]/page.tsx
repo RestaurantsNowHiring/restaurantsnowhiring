@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import CandidateSubmissionForm from "../../components/CandidateSubmissionForm";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "../../../lib/supabase";
@@ -696,6 +697,8 @@ export default async function JobDetailsPage({
                   {visibleJob.description || "No description provided."}
                 </div>
               </SectionCard>
+
+              <CandidateSubmissionForm jobId={visibleJob.id} />
 
               {/* How to Apply */}
               <SectionCard title="How to Apply">
