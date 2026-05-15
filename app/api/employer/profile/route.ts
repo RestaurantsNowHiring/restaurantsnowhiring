@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
+import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
 
 type EmployerProfileRow = {
   user_id: string;
@@ -145,10 +146,14 @@ export async function GET(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
-    const { data: authUserData, error: authUserError } = await supabaseAdmin.auth.admin.getUserById(user.id);
+    const context = await getEmployerAccountContext(user);
+    const profileUserId = context.ownerUserId;
+    const profileEmail = context.ownerEmail;
+
+    const { data: authUserData, error: authUserError } = await supabaseAdmin.auth.admin.getUserById(profileUserId);
     if (authUserError) throw new Error(authUserError.message || "Could not load auth user metadata.");
 
-    const profile = await getEmployerProfile(user.id, user.email, authUserData.user?.user_metadata ?? {});
+    const profile = await getEmployerProfile(profileUserId, profileEmail, authUserData.user?.user_metadata ?? {});
     return NextResponse.json({ profile });
   } catch (error) {
     console.error("Employer profile load failed", { error });
@@ -163,6 +168,11 @@ export async function PUT(request: Request) {
   try {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+    const context = await getEmployerAccountContext(user);
+    if (!context.canManageProfile) {
+      return NextResponse.json({ error: "Only Account Owners can edit the company profile. Contact your account admin to make changes." }, { status: 403 });
+    }
 
     const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!payload) return NextResponse.json({ error: "Invalid profile payload." }, { status: 400 });
@@ -184,8 +194,8 @@ export async function PUT(request: Request) {
       .from("employer_profiles")
       .upsert(
         {
-          user_id: user.id,
-          login_email: user.email,
+          user_id: context.ownerUserId,
+          login_email: context.ownerEmail,
           ...safeUpdate,
           updated_at: new Date().toISOString(),
         },
@@ -198,7 +208,7 @@ export async function PUT(request: Request) {
 
     if (error) throw new Error(error.message || "Could not save employer profile.");
 
-    return NextResponse.json({ profile: { ...data, login_email: user.email } });
+    return NextResponse.json({ profile: { ...data, login_email: context.ownerEmail } });
   } catch (error) {
     console.error("Employer profile save failed", { error });
     return NextResponse.json(

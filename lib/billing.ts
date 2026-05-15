@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { getSupabaseAdminClient } from "./supabaseAdmin";
+import { getEmployerAccountContext } from "./employerAccounts";
 
 export type BillingRecord = {
   user_id: string;
@@ -141,12 +142,41 @@ export async function getBillingRecord(userId: string) {
   return (data ?? null) as BillingRecord | null;
 }
 
-export async function countActiveBillableJobs(userId: string, email?: string | null) {
+export async function getBillingRecordForEmployerUser(user: { id: string; email: string }) {
+  const context = await getEmployerAccountContext(user);
+  return getBillingRecord(context.ownerUserId);
+}
+
+export async function countActiveBillableJobsForEmployerUser(user: { id: string; email: string }) {
+  const context = await getEmployerAccountContext(user);
+  return countActiveBillableJobs(context.ownerUserId, context.ownerEmail, context.accountId);
+}
+
+export async function countActiveBillableJobs(userId: string, email?: string | null, accountId?: string | null) {
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
   let userIdCount = 0;
   let emailCount = 0;
+  let accountCount = 0;
+
+  if (accountId) {
+    const accountResult = await supabaseAdmin
+      .from("jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("employer_account_id", accountId)
+      .eq("status", BILLABLE_JOB_FILTER.status)
+      .eq("active", BILLABLE_JOB_FILTER.active);
+
+    if (!accountResult.error) {
+      accountCount = accountResult.count ?? 0;
+      return accountCount;
+    }
+
+    if (accountResult.error.code !== "42703") {
+      throw new Error(accountResult.error.message || "Could not count billable jobs.");
+    }
+  }
 
   const userIdResult = await supabaseAdmin
     .from("jobs")

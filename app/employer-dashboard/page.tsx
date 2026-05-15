@@ -17,7 +17,9 @@ import {
   isMissingViewsColumnError,
 } from "../../lib/jobStatus";
 
-type EmployerOwner = { userId: string; email: string };
+type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string };
+type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
+type EmployerAccess = { role: EmployerRole; accountId: string | null; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
 type OwnershipMatch = "employer_user_id" | "employer_email";
 
 type DashboardJob = {
@@ -30,6 +32,7 @@ type DashboardJob = {
   employer_user_id: string | null;
   employer_email: string | null;
   ownership_match: OwnershipMatch | null;
+  employer_account_id?: string | null;
   created_at: string;
   views: number;
   dashboard_status: "Active" | "Pending" | "Draft" | "Paused" | "Rejected";
@@ -89,9 +92,9 @@ type SupabaseActionError = {
 
 const isDevelopment = process.env.NODE_ENV !== "production";
 
-const PAUSE_RESUME_RETURN_FIELDS = "id,active,status,employer_user_id,employer_email";
+const PAUSE_RESUME_RETURN_FIELDS = "id,active,status,employer_user_id,employer_email,employer_account_id";
 const DELETE_EMAIL_RETURN_FIELDS = "id,employer_email";
-const DELETE_USER_ID_RETURN_FIELDS = "id,employer_user_id,employer_email";
+const DELETE_USER_ID_RETURN_FIELDS = "id,employer_user_id,employer_email,employer_account_id";
 const DELETE_CONFIRMATION_MESSAGE =
   "This will permanently delete your job ad. If you want to repost this position later, you will need to complete the Post a Job form again.";
 const CANDIDATE_STATUS_OPTIONS = ["new", "reviewed", "contacted", "archived"] as const;
@@ -182,12 +185,12 @@ function isMissingEmployerUserIdColumnError(error: SupabaseActionError | null | 
 
 const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   {
-    fields: "id,title,city,state,active,status,created_at,views,employer_user_id,employer_email",
+    fields: "id,title,city,state,active,status,created_at,views,employer_user_id,employer_email,employer_account_id",
     includesStatus: true,
     includesViews: true,
   },
   {
-    fields: "id,title,city,state,active,status,created_at,employer_user_id,employer_email",
+    fields: "id,title,city,state,active,status,created_at,employer_user_id,employer_email,employer_account_id",
     includesStatus: true,
     includesViews: false,
   },
@@ -253,8 +256,8 @@ function getJobOwnershipMatch(job: Record<string, unknown>, owner: EmployerOwner
   const employerUserId = typeof job.employer_user_id === "string" ? job.employer_user_id.trim() : "";
   const employerEmail = typeof job.employer_email === "string" ? job.employer_email.trim() : "";
 
-  if (employerUserId && employerUserId === owner.userId) return "employer_user_id";
-  if (employerEmail && employerEmail === owner.email) return "employer_email";
+  if (employerUserId && (employerUserId === owner.userId || employerUserId === owner.ownerUserId)) return "employer_user_id";
+  if (employerEmail && (employerEmail === owner.email || employerEmail === owner.ownerEmail)) return "employer_email";
 
   return null;
 }
@@ -299,6 +302,7 @@ export default function EmployerDashboardPage() {
   const [deleteJob, setDeleteJob] = useState<DashboardJob | null>(null);
   const [owner, setOwner] = useState<EmployerOwner | null>(null);
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
+  const [employerAccess, setEmployerAccess] = useState<EmployerAccess | null>(null);
   const [billingBusyAction, setBillingBusyAction] = useState<"checkout" | "portal" | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -344,25 +348,36 @@ export default function EmployerDashboardPage() {
       let selectedVariant: JobsQueryVariant | null = null;
 
       for (const variant of JOB_QUERY_VARIANTS) {
-        const [userIdResult, emailResult] = await Promise.all([
+        const queries = [
           supabase
             .from("jobs")
             .select(variant.fields)
-            .eq("employer_user_id", currentOwner.userId)
+            .eq("employer_user_id", currentOwner.ownerUserId ?? currentOwner.userId)
             .order("created_at", { ascending: false }),
           supabase
             .from("jobs")
             .select(variant.fields)
-            .eq("employer_email", currentOwner.email)
+            .eq("employer_email", currentOwner.ownerEmail ?? currentOwner.email)
             .order("created_at", { ascending: false }),
-        ]);
+        ];
 
-        const variantError = userIdResult.error ?? emailResult.error;
+        if (currentOwner.accountId) {
+          queries.unshift(
+            supabase
+              .from("jobs")
+              .select(variant.fields)
+              .eq("employer_account_id", currentOwner.accountId)
+              .order("created_at", { ascending: false }),
+          );
+        }
+
+        const results = await Promise.all(queries);
+        const variantError = results.find((result) => result.error)?.error ?? null;
 
         if (!variantError) {
           const jobsById = new Map<string, Record<string, unknown>>();
 
-          [...(emailResult.data ?? []), ...(userIdResult.data ?? [])].forEach((job) => {
+          results.flatMap((result) => result.data ?? []).forEach((job) => {
             const jobRecord = job as unknown as Record<string, unknown>;
             const id = String(jobRecord.id ?? "");
             if (id) {
@@ -451,7 +466,22 @@ export default function EmployerDashboardPage() {
         return;
       }
 
-      const currentOwner = { userId, email };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      let access: EmployerAccess | null = null;
+      if (accessToken) {
+        const accessResponse = await fetch("/api/employer/me", { headers: { Authorization: `Bearer ${accessToken}` } });
+        const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
+        access = accessPayload?.employer ?? null;
+      }
+
+      const currentOwner = {
+        userId,
+        email,
+        accountId: access?.accountId ?? null,
+        ownerUserId: access?.ownerUserId ?? userId,
+        ownerEmail: access?.ownerEmail ?? email,
+      };
       setActionError(null);
       setActionSuccess(null);
 
@@ -489,6 +519,7 @@ export default function EmployerDashboardPage() {
         const active = Boolean(job.active);
         const employerUserId = typeof job.employer_user_id === "string" && job.employer_user_id.trim() ? job.employer_user_id.trim() : null;
         const employerEmail = typeof job.employer_email === "string" && job.employer_email.trim() ? job.employer_email.trim() : null;
+        const employerAccountId = typeof job.employer_account_id === "string" && job.employer_account_id.trim() ? job.employer_account_id.trim() : null;
 
         return {
           id: String(job.id ?? ""),
@@ -499,6 +530,7 @@ export default function EmployerDashboardPage() {
           status,
           employer_user_id: employerUserId,
           employer_email: employerEmail,
+          employer_account_id: employerAccountId,
           ownership_match: getJobOwnershipMatch(job, currentOwner),
           created_at: String(job.created_at ?? ""),
           views:
@@ -514,6 +546,7 @@ export default function EmployerDashboardPage() {
         setCandidates(nextCandidates);
         setOwner(currentOwner);
         setBillingSummary(nextBillingSummary);
+        setEmployerAccess(access);
         setAuthStatus("allowed");
       }
     }
@@ -943,6 +976,11 @@ export default function EmployerDashboardPage() {
     ];
   }, [jobs, candidates]);
 
+  const canManageJobs = employerAccess?.canManageJobs ?? true;
+  const canManageBilling = employerAccess?.canManageBilling ?? true;
+  const canManageProfile = employerAccess?.canManageProfile ?? true;
+  const canManageTeam = employerAccess?.canManageTeam ?? true;
+
   if (authStatus === "loading") {
     return (
       <main
@@ -1009,9 +1047,20 @@ export default function EmployerDashboardPage() {
             >
               Manage your job listings, monitor status, and keep your restaurant hiring pipeline moving.
             </p>
-            <Link href="/employer-dashboard/profile" style={homeSecondaryButton} className="rn-btn-secondary">
-              My Profile
-            </Link>
+            <div className="rn-dashboard-actions">
+              {canManageTeam ? (
+                <Link href="/employer-dashboard/team" style={homeSecondaryButton} className="rn-btn-secondary">
+                  Team Access
+                </Link>
+              ) : null}
+              {canManageProfile ? (
+                <Link href="/employer-dashboard/profile" style={homeSecondaryButton} className="rn-btn-secondary">
+                  My Profile
+                </Link>
+              ) : (
+                <span style={{ color: homeTheme.muted, fontWeight: 800 }}>Contact your account admin to make profile changes.</span>
+              )}
+            </div>
           </div>
         </section>
 
@@ -1053,6 +1102,7 @@ export default function EmployerDashboardPage() {
           ))}
         </section>
 
+        {canManageBilling ? (
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
           <div className="rn-dashboard-header-row">
             <div>
@@ -1140,6 +1190,12 @@ export default function EmployerDashboardPage() {
             ))}
           </div>
         </section>
+        ) : (
+          <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+            <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Billing</h2>
+            <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Contact your account admin to manage billing.</p>
+          </section>
+        )}
 
         <section id="interested-candidates" style={{ ...homeCardStyle, marginBottom: 16 }}>
           <div className="rn-dashboard-header-row">
@@ -1415,33 +1471,37 @@ export default function EmployerDashboardPage() {
                             >
                               View
                             </Link>
-                            <Link
-                              href={`/employer-dashboard/jobs/${job.id}/edit`}
-                              style={homeSecondaryButton}
-                              className="rn-btn-secondary"
-                            >
-                              Edit
-                            </Link>
-                            {canEmployerPauseResume(job.status) ? (
+                            {canManageJobs ? (
+                              <Link
+                                href={`/employer-dashboard/jobs/${job.id}/edit`}
+                                style={homeSecondaryButton}
+                                className="rn-btn-secondary"
+                              >
+                                Edit
+                              </Link>
+                            ) : null}
+                            {canManageJobs && canEmployerPauseResume(job.status) ? (
                               <button
                                 type="button"
                                 style={homeSecondaryButton}
                                 className="rn-btn-secondary"
-                                onClick={() => handlePauseToggle(job)}
+                                onClick={() => (canManageJobs ? handlePauseToggle(job) : setActionError("Contact your account admin to make changes."))}
                                 disabled={busyJobId === job.id}
                               >
                                 {busyJobId === job.id ? "Saving..." : job.dashboard_status === "Paused" ? "Resume" : "Pause"}
                               </button>
                             ) : null}
-                            <button
-                              type="button"
-                              style={homeSecondaryButton}
-                              className="rn-btn-secondary rn-btn-delete"
-                              onClick={() => handleDeleteClick(job)}
-                              disabled={busyJobId === job.id}
-                            >
-                              Delete
-                            </button>
+                            {canManageJobs ? (
+                              <button
+                                type="button"
+                                style={homeSecondaryButton}
+                                className="rn-btn-secondary rn-btn-delete"
+                                onClick={() => handleDeleteClick(job)}
+                                disabled={busyJobId === job.id}
+                              >
+                                Delete
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -1474,33 +1534,37 @@ export default function EmployerDashboardPage() {
                       >
                         View
                       </Link>
-                      <Link
-                        href={`/employer-dashboard/jobs/${job.id}/edit`}
-                        style={homeSecondaryButton}
-                        className="rn-btn-secondary"
-                      >
-                        Edit
-                      </Link>
-                      {canEmployerPauseResume(job.status) ? (
+                      {canManageJobs ? (
+                        <Link
+                          href={`/employer-dashboard/jobs/${job.id}/edit`}
+                          style={homeSecondaryButton}
+                          className="rn-btn-secondary"
+                        >
+                          Edit
+                        </Link>
+                      ) : null}
+                      {canManageJobs && canEmployerPauseResume(job.status) ? (
                         <button
                           type="button"
                           style={homeSecondaryButton}
                           className="rn-btn-secondary"
-                          onClick={() => handlePauseToggle(job)}
+                          onClick={() => (canManageJobs ? handlePauseToggle(job) : setActionError("Contact your account admin to make changes."))}
                           disabled={busyJobId === job.id}
                         >
                           {busyJobId === job.id ? "Saving..." : job.dashboard_status === "Paused" ? "Resume" : "Pause"}
                         </button>
                       ) : null}
-                      <button
-                        type="button"
-                        style={homeSecondaryButton}
-                        className="rn-btn-secondary rn-btn-delete"
-                        onClick={() => handleDeleteClick(job)}
-                        disabled={busyJobId === job.id}
-                      >
-                        Delete
-                      </button>
+                      {canManageJobs ? (
+                        <button
+                          type="button"
+                          style={homeSecondaryButton}
+                          className="rn-btn-secondary rn-btn-delete"
+                          onClick={() => handleDeleteClick(job)}
+                          disabled={busyJobId === job.id}
+                        >
+                          Delete
+                        </button>
+                      ) : null}
                     </div>
                   </article>
                 ))}

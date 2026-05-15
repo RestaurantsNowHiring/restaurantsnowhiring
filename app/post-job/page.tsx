@@ -12,6 +12,8 @@ import {
 
 type Step = 1 | 2 | 3 | 4;
 type PayMode = "range" | "minimum" | "maximum" | "rate";
+type EmployerAccess = { accountId: string | null; canManageJobs: boolean; canManageNotificationRouting: boolean; defaultCandidateNotificationRouting: string; supportEmail: string | null; };
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function PostJobPage() {
   const router = useRouter();
@@ -19,6 +21,7 @@ export default function PostJobPage() {
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed" | "unconfirmed">("loading");
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
   const [canPostJobs, setCanPostJobs] = useState(false);
+  const [employerAccess, setEmployerAccess] = useState<EmployerAccess | null>(null);
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -48,6 +51,7 @@ export default function PostJobPage() {
   const [companyWebsite, setCompanyWebsite] = useState("");
   const [address, setAddress] = useState("");
   const [howToApply, setHowToApply] = useState("");
+  const [candidateNotificationEmail, setCandidateNotificationEmail] = useState("");
   const [description, setDescription] = useState("");
   const [benefits, setBenefits] = useState<string[]>([]);
 
@@ -175,6 +179,7 @@ export default function PostJobPage() {
         if (data.session?.user.email) {
           const sessionEmail = data.session.user.email.trim();
           setWorkEmail((currentEmail) => currentEmail.trim() || sessionEmail);
+          setCandidateNotificationEmail((currentEmail) => currentEmail.trim() || sessionEmail);
         }
 
         if (!data.session?.user.email_confirmed_at) {
@@ -185,6 +190,19 @@ export default function PostJobPage() {
 
         const accessToken = data.session?.access_token;
         if (accessToken) {
+          const accessResponse = await fetch("/api/employer/me", {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess; error?: string } | null;
+          const nextAccess = accessPayload?.employer ?? null;
+          setEmployerAccess(nextAccess);
+          if (nextAccess && !nextAccess.canManageJobs) {
+            setCanPostJobs(false);
+            setMessage("Your Viewer role can view jobs and candidates, but cannot post job ads. Contact your account admin to make changes.");
+            setAuthStatus("allowed");
+            return;
+          }
+
           const billingResponse = await fetch("/api/billing/status", {
             headers: { Authorization: `Bearer ${accessToken}` },
           });
@@ -269,6 +287,11 @@ export default function PostJobPage() {
         return false;
       }
 
+      if (candidateNotificationEmail.trim() && !EMAIL_PATTERN.test(candidateNotificationEmail.trim())) {
+        setMessage("Please enter a valid candidate notification email address.");
+        return false;
+      }
+
       return true;
     }
 
@@ -317,6 +340,7 @@ export default function PostJobPage() {
     setCompanyWebsite("");
     setAddress("");
     setHowToApply("");
+    setCandidateNotificationEmail(authUserEmail ?? "");
     setDescription("");
     setBenefits([]);
   }
@@ -329,8 +353,15 @@ export default function PostJobPage() {
       return;
     }
 
-    if (!canPostJobs) {
-      setMessage("Start or reactivate billing from your employer dashboard before posting a job.");
+    if (!canPostJobs || employerAccess?.canManageJobs === false) {
+      setMessage(employerAccess?.canManageJobs === false ? "Contact your account admin to make changes." : "Start or reactivate billing from your employer dashboard before posting a job.");
+      return;
+    }
+
+    const notificationEmail = candidateNotificationEmail.trim().toLowerCase();
+    if (notificationEmail && !EMAIL_PATTERN.test(notificationEmail)) {
+      setMessage("Please enter a valid candidate notification email address.");
+      setStep(3);
       return;
     }
 
@@ -383,6 +414,11 @@ export default function PostJobPage() {
       active: false,
       employer_email: employerEmail,
       employer_user_id: employerUserId,
+      employer_account_id: employerAccess?.accountId ?? null,
+      posted_by_user_id: employerUserId,
+      posted_by_email: employerEmail,
+      candidate_notification_email: notificationEmail || null,
+      candidate_notification_routing: notificationEmail ? "custom_job_email" : employerAccess?.defaultCandidateNotificationRouting ?? "job_poster",
     };
 
     const insertResult = await supabase.from("jobs").insert([jobPayload]);
@@ -1054,6 +1090,21 @@ export default function PostJobPage() {
               </div>
 
               <div style={{ marginTop: 16 }}>
+                <label htmlFor="candidate-notification-email" style={labelStyle}>Where should candidate interest emails be sent?</label>
+                <input
+                  id="candidate-notification-email"
+                  type="email"
+                  aria-invalid={!!message && !!candidateNotificationEmail.trim() && !EMAIL_PATTERN.test(candidateNotificationEmail.trim())}
+                  aria-describedby={message ? "post-job-form-error" : undefined}
+                  value={candidateNotificationEmail}
+                  onChange={(e) => setCandidateNotificationEmail(e.target.value)}
+                  style={inputStyle}
+                  placeholder="location-manager@restaurant.com"
+                />
+                <div style={helperStyle}>This can be the restaurant/location email, hiring manager, or another contact who should receive candidate submissions.</div>
+              </div>
+
+              <div style={{ marginTop: 16 }}>
                 <label htmlFor="job-description" style={labelStyle}>Job description *</label>
                 <textarea
                   id="job-description"
@@ -1141,6 +1192,7 @@ export default function PostJobPage() {
                   <div><strong>Website:</strong> {companyWebsite || "—"}</div>
                   <div><strong>Address:</strong> {address || "—"}</div>
                   <div><strong>How to apply:</strong> {howToApply || "—"}</div>
+                  <div><strong>Candidate notification email:</strong> {candidateNotificationEmail || "Account default"}</div>
                   <div><strong>Benefits:</strong> {benefits.join(", ") || "—"}</div>
 
                   <div style={{ height: 6 }} />

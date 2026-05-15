@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../../../lib/supabaseAdmin";
+import { getEmployerAccountContext } from "../../../../../../lib/employerAccounts";
 
 const RESUME_BUCKET = "candidate-resumes";
 
@@ -11,6 +12,9 @@ export async function GET(request: Request, context: RouteContext) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
+    const accountContext = await getEmployerAccountContext(user);
+    if (!accountContext.canViewCandidates) return NextResponse.json({ error: "Not authorized to view candidates." }, { status: 403 });
+
     const params = await Promise.resolve(context.params);
     const id = params.id?.trim();
     if (!id) return NextResponse.json({ error: "Not found." }, { status: 404 });
@@ -20,7 +24,7 @@ export async function GET(request: Request, context: RouteContext) {
 
     const { data, error } = await supabaseAdmin
       .from("candidate_submissions")
-      .select("id,resume_path,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email)")
+      .select("id,resume_path,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email,employer_account_id)")
       .eq("id", id)
       .maybeSingle();
 
@@ -30,9 +34,14 @@ export async function GET(request: Request, context: RouteContext) {
     const resumePath = typeof row?.resume_path === "string" ? row.resume_path : "";
     const ownsSubmission =
       row?.employer_user_id === user.id ||
+      row?.employer_user_id === accountContext.ownerUserId ||
       String(row?.employer_email ?? "").toLowerCase() === user.email.toLowerCase() ||
+      String(row?.employer_email ?? "").toLowerCase() === accountContext.ownerEmail.toLowerCase() ||
       job?.employer_user_id === user.id ||
-      String(job?.employer_email ?? "").toLowerCase() === user.email.toLowerCase();
+      job?.employer_user_id === accountContext.ownerUserId ||
+      String(job?.employer_email ?? "").toLowerCase() === user.email.toLowerCase() ||
+      String(job?.employer_email ?? "").toLowerCase() === accountContext.ownerEmail.toLowerCase() ||
+      (accountContext.accountId && job?.employer_account_id === accountContext.accountId);
 
     if (!row || !ownsSubmission || !resumePath) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
