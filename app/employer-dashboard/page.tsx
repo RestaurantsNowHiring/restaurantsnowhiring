@@ -35,6 +35,23 @@ type DashboardJob = {
   dashboard_status: "Active" | "Pending" | "Draft" | "Paused" | "Rejected";
 };
 
+
+type CandidateSubmission = {
+  id: string;
+  job_id: string;
+  candidate_name: string;
+  candidate_email: string;
+  candidate_phone: string;
+  message: string | null;
+  resume_filename: string | null;
+  status: "new" | "reviewed" | "contacted" | "archived" | string;
+  created_at: string;
+  job_title: string;
+  restaurant_name: string | null;
+  city: string | null;
+  state: string | null;
+};
+
 type BillingInfo = {
   billing_status: string | null;
   trial_started_at: string | null;
@@ -77,6 +94,7 @@ const DELETE_EMAIL_RETURN_FIELDS = "id,employer_email";
 const DELETE_USER_ID_RETURN_FIELDS = "id,employer_user_id,employer_email";
 const DELETE_CONFIRMATION_MESSAGE =
   "This will permanently delete your job ad. If you want to repost this position later, you will need to complete the Post a Job form again.";
+const CANDIDATE_STATUS_OPTIONS = ["new", "reviewed", "contacted", "archived"] as const;
 
 function formatBillingDate(isoDate?: string | null) {
   if (!isoDate) return "—";
@@ -175,6 +193,10 @@ function formatDate(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
+function formatCandidateStatus(status: string) {
+  return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 function getJobOwnershipMatch(job: Record<string, unknown>, owner: EmployerOwner): OwnershipMatch | null {
   const employerUserId = typeof job.employer_user_id === "string" ? job.employer_user_id.trim() : "";
   const employerEmail = typeof job.employer_email === "string" ? job.employer_email.trim() : "";
@@ -217,6 +239,9 @@ export default function EmployerDashboardPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
+  const [candidates, setCandidates] = useState<CandidateSubmission[]>([]);
+  const [candidatesError, setCandidatesError] = useState<string | null>(null);
+  const [candidateBusyId, setCandidateBusyId] = useState<string | null>(null);
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
   const [deleteJob, setDeleteJob] = useState<DashboardJob | null>(null);
   const [owner, setOwner] = useState<EmployerOwner | null>(null);
@@ -332,6 +357,24 @@ export default function EmployerDashboardPage() {
       return (await response.json()) as BillingSummary;
     }
 
+    async function loadCandidateSubmissions() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) return [] as CandidateSubmission[];
+
+      const response = await fetch("/api/employer/candidate-submissions", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Could not load interested candidates.");
+      }
+
+      const payload = (await response.json()) as { candidates?: CandidateSubmission[] };
+      return payload.candidates ?? [];
+    }
+
     async function loadDashboard() {
       const { data, error: authError } = await supabase.auth.getUser();
       const authUser = data?.user;
@@ -347,6 +390,7 @@ export default function EmployerDashboardPage() {
       if (!email || !userId) {
         if (mounted) {
           setJobs([]);
+          setCandidates([]);
           setOwner(null);
           setAuthStatus("allowed");
           setActionError("Your employer session is missing account ownership details. Please sign out and sign back in.");
@@ -365,11 +409,20 @@ export default function EmployerDashboardPage() {
         if (mounted) setBillingError(error instanceof Error ? error.message : "Could not load billing details.");
       }
 
+      let nextCandidates: CandidateSubmission[] = [];
+      setCandidatesError(null);
+      try {
+        nextCandidates = await loadCandidateSubmissions();
+      } catch (error) {
+        if (mounted) setCandidatesError(error instanceof Error ? error.message : "Could not load interested candidates.");
+      }
+
       const jobsResult = await loadEmployerJobs(currentOwner);
 
       if (jobsResult.error || !jobsResult.liveJobs || !jobsResult.selectedVariant) {
         if (mounted) {
           setJobs([]);
+          setCandidates(nextCandidates);
           setOwner(currentOwner);
           setBillingSummary(nextBillingSummary);
           setAuthStatus("allowed");
@@ -405,6 +458,7 @@ export default function EmployerDashboardPage() {
 
       if (mounted) {
         setJobs(hydratedJobs);
+        setCandidates(nextCandidates);
         setOwner(currentOwner);
         setBillingSummary(nextBillingSummary);
         setAuthStatus("allowed");
@@ -748,19 +802,78 @@ export default function EmployerDashboardPage() {
     void syncBillingQuantity().then(refreshBillingSummary);
   }
 
+  async function handleCandidateStatusChange(candidateId: string, nextStatus: string) {
+    if (candidateBusyId) return;
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      setCandidatesError("Please sign in again before updating a candidate.");
+      return;
+    }
+
+    setCandidateBusyId(candidateId);
+    setCandidatesError(null);
+
+    const response = await fetch("/api/employer/candidate-submissions", {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ id: candidateId, status: nextStatus }),
+    });
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+
+    if (!response.ok) {
+      setCandidatesError(payload?.error || "Could not update candidate status.");
+      setCandidateBusyId(null);
+      return;
+    }
+
+    setCandidates((prev) => prev.map((candidate) => (candidate.id === candidateId ? { ...candidate, status: nextStatus } : candidate)));
+    setCandidateBusyId(null);
+  }
+
+  async function handleResumeOpen(candidateId: string) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
+      setCandidatesError("Please sign in again before opening a resume.");
+      return;
+    }
+
+    setCandidateBusyId(candidateId);
+    setCandidatesError(null);
+
+    const response = await fetch(`/api/employer/candidate-submissions/${encodeURIComponent(candidateId)}/resume`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
+
+    if (!response.ok || !payload?.url) {
+      setCandidatesError(payload?.error || "Could not create a secure resume link.");
+      setCandidateBusyId(null);
+      return;
+    }
+
+    window.open(payload.url, "_blank", "noopener,noreferrer");
+    setCandidateBusyId(null);
+  }
+
   const metrics = useMemo(() => {
     const active = jobs.filter((job) => job.dashboard_status === "Active").length;
     const pending = jobs.filter((job) => job.dashboard_status === "Pending").length;
-    const drafts = jobs.filter((job) => job.dashboard_status === "Draft").length;
+    const newCandidates = candidates.filter((candidate) => candidate.status === "new").length;
     const totalViews = jobs.reduce((sum, job) => sum + job.views, 0);
 
     return [
       { label: "Active Jobs", value: active },
       { label: "Pending Review", value: pending },
-      { label: "Drafts", value: drafts },
+      { label: "New Candidates", value: newCandidates },
       { label: "Total Views", value: totalViews },
     ];
-  }, [jobs]);
+  }, [jobs, candidates]);
 
   if (authStatus === "loading") {
     return (
@@ -958,6 +1071,117 @@ export default function EmployerDashboardPage() {
               </article>
             ))}
           </div>
+        </section>
+
+        <section id="interested-candidates" style={{ ...homeCardStyle, marginBottom: 16 }}>
+          <div className="rn-dashboard-header-row">
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  color: homeTheme.text,
+                  fontSize: 26,
+                  fontFamily: "var(--font-heading)",
+                  lineHeight: 1.2,
+                }}
+              >
+                Interested Candidates
+              </h2>
+              <p
+                style={{
+                  marginTop: 6,
+                  marginBottom: 0,
+                  color: homeTheme.muted,
+                  fontWeight: 600,
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                Candidate submissions from your public job ad pages, newest first.
+              </p>
+            </div>
+          </div>
+
+          {candidatesError ? (
+            <div
+              role="alert"
+              style={{
+                marginBottom: 16,
+                borderRadius: 14,
+                border: "1px solid rgba(173,67,67,0.28)",
+                backgroundColor: "rgba(173,67,67,0.08)",
+                color: "#8a2f2f",
+                fontFamily: "var(--font-body)",
+                fontWeight: 800,
+                padding: "12px 14px",
+              }}
+            >
+              {candidatesError}
+            </div>
+          ) : null}
+
+          {candidates.length === 0 ? (
+            <div className="rn-candidate-empty">
+              No interested candidates yet. When job seekers send their information, they will appear here.
+            </div>
+          ) : (
+            <div className="rn-candidate-list">
+              {candidates.map((candidate) => (
+                <article className="rn-candidate-card" key={candidate.id}>
+                  <div className="rn-candidate-card-header">
+                    <div>
+                      <h3>{candidate.candidate_name}</h3>
+                      <p>
+                        {candidate.job_title} • {[candidate.restaurant_name, [candidate.city, candidate.state].filter(Boolean).join(", ")]
+                          .filter(Boolean)
+                          .join(" — ") || "Restaurant job"}
+                      </p>
+                      <p>Submitted {formatDate(candidate.created_at)}</p>
+                    </div>
+                    <label className="rn-candidate-status-label">
+                      Status
+                      <select
+                        value={candidate.status}
+                        onChange={(event) => handleCandidateStatusChange(candidate.id, event.target.value)}
+                        disabled={candidateBusyId === candidate.id}
+                      >
+                        {CANDIDATE_STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {formatCandidateStatus(status)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <div className="rn-candidate-contact-grid">
+                    <div>
+                      <span>Email</span>
+                      <a href={`mailto:${candidate.candidate_email}`}>{candidate.candidate_email}</a>
+                    </div>
+                    <div>
+                      <span>Phone</span>
+                      <a href={`tel:${candidate.candidate_phone}`}>{candidate.candidate_phone}</a>
+                    </div>
+                    <div>
+                      <span>Resume</span>
+                      {candidate.resume_filename ? (
+                        <button
+                          type="button"
+                          className="rn-resume-link"
+                          onClick={() => handleResumeOpen(candidate.id)}
+                          disabled={candidateBusyId === candidate.id}
+                        >
+                          {candidateBusyId === candidate.id ? "Opening..." : candidate.resume_filename}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </div>
+                  </div>
+                  {candidate.message ? <p className="rn-candidate-message">{candidate.message}</p> : null}
+                </article>
+              ))}
+            </div>
+          )}
         </section>
 
         <section style={homeCardStyle}>
@@ -1436,6 +1660,129 @@ export default function EmployerDashboardPage() {
           transform: none;
         }
 
+        .rn-candidate-empty {
+          border: 1px dashed ${homeTheme.border};
+          border-radius: 14px;
+          background: rgba(255, 255, 255, 0.65);
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-weight: 700;
+          padding: 18px;
+        }
+
+        .rn-candidate-list {
+          display: grid;
+          gap: 12px;
+        }
+
+        .rn-candidate-card {
+          border: 1px solid ${homeTheme.border};
+          border-radius: 16px;
+          background: rgba(255, 255, 255, 0.9);
+          padding: 16px;
+        }
+
+        .rn-candidate-card-header {
+          align-items: flex-start;
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .rn-candidate-card h3 {
+          margin: 0 0 5px 0;
+          color: ${homeTheme.green};
+          font-family: var(--font-heading);
+          font-size: 24px;
+          line-height: 1.1;
+        }
+
+        .rn-candidate-card p {
+          margin: 4px 0 0 0;
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-weight: 700;
+        }
+
+        .rn-candidate-status-label {
+          display: grid;
+          gap: 6px;
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-size: 12px;
+          font-weight: 900;
+          text-transform: uppercase;
+        }
+
+        .rn-candidate-status-label select {
+          border: 1px solid ${homeTheme.border};
+          border-radius: 999px;
+          background: #fff;
+          color: ${homeTheme.text};
+          font-family: var(--font-body);
+          font-weight: 800;
+          padding: 8px 12px;
+          text-transform: none;
+        }
+
+        .rn-candidate-contact-grid {
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 10px;
+          margin-top: 14px;
+        }
+
+        .rn-candidate-contact-grid > div {
+          border: 1px solid rgba(0, 0, 0, 0.08);
+          border-radius: 12px;
+          background: rgba(255, 250, 242, 0.72);
+          color: ${homeTheme.text};
+          font-family: var(--font-body);
+          font-weight: 800;
+          overflow-wrap: anywhere;
+          padding: 12px;
+        }
+
+        .rn-candidate-contact-grid span {
+          display: block;
+          margin-bottom: 5px;
+          color: ${homeTheme.muted};
+          font-size: 11px;
+          font-weight: 900;
+          letter-spacing: 0.35px;
+          text-transform: uppercase;
+        }
+
+        .rn-candidate-contact-grid a,
+        .rn-resume-link {
+          color: ${homeTheme.green};
+          font-weight: 900;
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        .rn-resume-link {
+          border: 0;
+          background: transparent;
+          cursor: pointer;
+          font-family: var(--font-body);
+          padding: 0;
+          text-align: left;
+        }
+
+        .rn-resume-link:disabled {
+          cursor: not-allowed;
+          opacity: 0.68;
+        }
+
+        .rn-candidate-message {
+          border-left: 4px solid ${homeTheme.green};
+          margin-top: 14px !important;
+          padding-left: 12px;
+          white-space: pre-wrap;
+        }
+
         .rn-dashboard-mobile-list {
           display: none;
           margin-top: 14px;
@@ -1465,7 +1812,8 @@ export default function EmployerDashboardPage() {
           }
 
           .rn-dashboard-metrics,
-          .rn-billing-grid {
+          .rn-billing-grid,
+          .rn-candidate-contact-grid {
             grid-template-columns: 1fr;
           }
         }
