@@ -63,7 +63,7 @@ export default function TopBanner() {
           top: 0,
           left: 0,
           width: "100%",
-          height: 50,
+          height: 58,
           zIndex: 1000,
           backgroundColor: "#35806e",
           borderTop: "1px solid #eae7e2",
@@ -76,7 +76,7 @@ export default function TopBanner() {
             maxWidth: 1200,
             margin: "0 auto",
             height: "100%",
-            padding: "0 18px",
+            padding: "7px 22px",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
@@ -100,7 +100,7 @@ export default function TopBanner() {
 
           <div id="top-banner-menu" className="top-banner__menu">
             {/* LEFT SIDE */}
-            <div className="top-banner__nav" style={{ display: "flex", gap: 30 }}>
+            <div className="top-banner__nav" style={{ display: "flex", gap: 34 }}>
               {navLinks.map((link) => (
                 <NavLink
                   key={`${link.href}-${link.label}`}
@@ -115,7 +115,7 @@ export default function TopBanner() {
             {/* RIGHT SIDE */}
             <div
               className="top-banner__auth"
-              style={{ display: "flex", alignItems: "center", gap: 18 }}
+              style={{ display: "flex", alignItems: "center", gap: 20 }}
             >
               {/* Prevent flicker before auth check completes */}
               {!isReady ? null : !isLoggedIn ? (
@@ -149,6 +149,7 @@ export default function TopBanner() {
                     background: "transparent",
                     border: "none",
                     padding: 0,
+                    lineHeight: 1,
                     color: "#fff",
                     cursor: "pointer",
                   }}
@@ -189,6 +190,7 @@ function NavLink({
         textDecoration: "none",
         fontSize: 20,
         fontWeight: 400,
+        lineHeight: 1,
       }}
     >
       {children}
