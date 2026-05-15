@@ -159,6 +159,7 @@ export default async function HomePage() {
               />
 
               <div
+                className="rn-home-brand-lockup"
                 style={{
                   fontWeight: 900,
                   color: TEXT,
@@ -226,6 +227,7 @@ export default async function HomePage() {
 
             {/* Quick value props */}
             <div
+              className="rn-home-feature-grid"
               style={{
                 display: "grid",
                 gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
@@ -352,6 +354,7 @@ export default async function HomePage() {
         {/* TOP ROLES */}
         <section style={{ ...cardStyle, marginBottom: 18 }}>
           <div
+            className="rn-section-heading-row"
             style={{
               display: "flex",
               alignItems: "center",
@@ -497,6 +500,35 @@ export default async function HomePage() {
               .rn-home-hero {
                 grid-template-columns: 1fr !important;
               }
+              .rn-home-feature-grid {
+                grid-template-columns: 1fr !important;
+              }
+            }
+            @media (max-width: 640px) {
+              .rn-home-brand-lockup {
+                align-items: flex-start !important;
+                flex-wrap: wrap;
+                font-size: 16px !important;
+                line-height: 1.15 !important;
+                white-space: normal !important;
+              }
+              .rn-section-heading-row > div:first-child,
+              .rn-section-heading-row > div:last-child {
+                flex: 1 1 36px;
+                width: auto !important;
+              }
+              .rn-career-ladder {
+                padding: 12px !important;
+              }
+              .rn-career-ladder-grid {
+                grid-template-columns: 0.85fr 26px 1.15fr !important;
+                gap: 8px !important;
+              }
+            }
+            @media (max-width: 390px) {
+              .rn-career-ladder-grid {
+                grid-template-columns: 1fr !important;
+              }
             }
           `,
         }}
@@ -528,6 +560,7 @@ function CareerLadder({
 
   return (
     <div
+      className="rn-career-ladder"
       style={{
         backgroundColor: "rgba(255,255,255,.70)",
         border: `1px solid ${border}`,
@@ -536,6 +569,7 @@ function CareerLadder({
       }}
     >
       <div
+        className="rn-career-ladder-grid"
         style={{
           display: "grid",
           gridTemplateColumns: `1fr ${spineW}px 1.35fr`,

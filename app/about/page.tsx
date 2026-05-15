@@ -423,6 +423,7 @@ export default function AboutPage() {
 function SectionHeader({ title }: { title: string }) {
   return (
     <div
+      className="rn-section-header-row"
       style={{
         display: "flex",
         alignItems: "center",

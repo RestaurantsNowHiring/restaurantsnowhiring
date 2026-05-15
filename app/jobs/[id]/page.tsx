@@ -540,9 +540,10 @@ export default async function JobDetailsPage({
           dangerouslySetInnerHTML={{ __html: serializeJsonLd(jobPostingSchema) }}
         />
       ) : null}
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
+      <div className="rn-job-detail-container" style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
         {/* Header row */}
         <div
+          className="rn-job-detail-header"
           style={{
             display: "flex",
             justifyContent: "space-between",
@@ -580,7 +581,7 @@ export default async function JobDetailsPage({
             )}
           </div>
 
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div className="rn-job-detail-actions" style={{ display: "flex", gap: 12, alignItems: "center" }}>
             <Link href="/jobs" style={buttonPrimary}>
               Back to Jobs
             </Link>
@@ -592,6 +593,7 @@ export default async function JobDetailsPage({
 
         {/* Body card */}
         <div
+          className="rn-job-detail-card"
           style={{
             marginTop: 22,
             backgroundColor: "rgba(0,0,0,0.02)",
@@ -636,6 +638,7 @@ export default async function JobDetailsPage({
             <>
               {/* Badges row */}
               <div
+                className="rn-job-detail-badges"
                 style={{
                   display: "flex",
                   gap: 10,
@@ -718,6 +721,43 @@ export default async function JobDetailsPage({
           )}
         </div>
       </div>
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+            @media (max-width: 640px) {
+              .rn-job-detail-header {
+                display: grid !important;
+                gap: 14px !important;
+              }
+              .rn-job-detail-header > div:first-child {
+                min-width: 0 !important;
+              }
+              .rn-job-detail-actions {
+                align-items: stretch !important;
+                display: grid !important;
+                grid-template-columns: 1fr 1fr;
+                width: 100%;
+              }
+              .rn-job-detail-actions a {
+                justify-content: center;
+                text-align: center;
+              }
+              .rn-job-detail-card {
+                padding: 14px !important;
+              }
+              .rn-job-detail-badges {
+                padding-left: 0 !important;
+                padding-right: 0 !important;
+              }
+              .rn-job-detail-badges > * {
+                max-width: 100%;
+                min-height: 40px;
+                white-space: normal !important;
+              }
+            }
+          `,
+        }}
+      />
     </main>
   );
 }

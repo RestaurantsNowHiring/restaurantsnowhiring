@@ -2016,6 +2016,32 @@ export default function EmployerDashboardPage() {
             display: grid;
           }
 
+          .rn-dashboard-header-row,
+          .rn-dashboard-hero-row {
+            display: grid;
+          }
+
+          .rn-dashboard-header-row > *,
+          .rn-dashboard-hero-row > * {
+            min-width: 0;
+          }
+
+          .rn-dashboard-actions {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            width: 100%;
+          }
+
+          .rn-dashboard-actions > * {
+            justify-content: center !important;
+            min-width: 0;
+            text-align: center;
+          }
+
+          .rn-dashboard-mobile-card > div:first-child {
+            display: grid !important;
+          }
+
           .rn-candidate-filters {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2026,6 +2052,7 @@ export default function EmployerDashboardPage() {
           }
 
           .rn-candidate-status-label {
+            min-width: 0;
             width: 100%;
           }
 
@@ -2037,7 +2064,22 @@ export default function EmployerDashboardPage() {
         }
 
         @media (max-width: 460px) {
-          .rn-candidate-filters {
+          .rn-candidate-filters,
+          .rn-dashboard-actions {
+            grid-template-columns: 1fr;
+          }
+
+          .rn-candidate-card,
+          .rn-dashboard-mobile-card {
+            padding: 14px;
+          }
+
+          .rn-delete-modal {
+            padding: 18px;
+          }
+
+          .rn-delete-modal-actions {
+            display: grid;
             grid-template-columns: 1fr;
           }
         }
