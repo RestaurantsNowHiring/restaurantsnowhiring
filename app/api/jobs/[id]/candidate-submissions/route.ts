@@ -73,32 +73,43 @@ async function sendEmployerNotification(input: { to: string; submission: Candida
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) return { ok: false as const, reason: "missing_resend_api_key" };
 
-  const fromEmail = process.env.CANDIDATE_NOTIFICATION_FROM ?? process.env.CONTACT_NOTIFICATION_FROM ?? "Restaurants Now Hiring <notifications@restaurantsnowhiring.com>";
-  const dashboardUrl = `${getSiteUrl()}/employer-dashboard#interested-candidates`;
-  const resumeUrl = `${getSiteUrl()}/employer-dashboard#candidate-${encodeURIComponent(input.submission.id)}`;
-  const response = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: fromEmail,
+  try {
+    const fromEmail = process.env.CANDIDATE_NOTIFICATION_FROM ?? process.env.CONTACT_NOTIFICATION_FROM ?? "Restaurants Now Hiring <notifications@restaurantsnowhiring.com>";
+    const dashboardUrl = `${getSiteUrl()}/employer-dashboard#interested-candidates`;
+    const resumeUrl = `${getSiteUrl()}/employer-dashboard#candidate-${encodeURIComponent(input.submission.id)}`;
+    const emailContent = { ...input, dashboardUrl, resumeUrl };
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: fromEmail,
+        to: input.to,
+        subject: "New candidate interested in your job ad",
+        reply_to: input.submission.candidate_email,
+        text: buildCandidateSubmissionEmailText(emailContent),
+        html: buildCandidateSubmissionEmailHtml(emailContent),
+      }),
+    });
+
+    if (!response.ok) {
+      const details = await response.text().catch(() => "");
+      console.error("Candidate employer notification failed", { status: response.status, details, submissionId: input.submission.id });
+      return { ok: false as const, reason: "email_provider_error" };
+    }
+
+    return { ok: true as const };
+  } catch (error) {
+    console.error("Candidate employer notification rendering or sending failed", {
+      error,
+      submissionId: input.submission.id,
+      jobId: input.job.id,
       to: input.to,
-      subject: "New candidate interested in your job ad",
-      reply_to: input.submission.candidate_email,
-      text: buildCandidateSubmissionEmailText({ ...input, dashboardUrl, resumeUrl }),
-      html: buildCandidateSubmissionEmailHtml({ ...input, dashboardUrl, resumeUrl }),
-    }),
-  });
-
-  if (!response.ok) {
-    const details = await response.text().catch(() => "");
-    console.error("Candidate employer notification failed", { status: response.status, details, submissionId: input.submission.id });
-    return { ok: false as const, reason: "email_provider_error" };
+    });
+    return { ok: false as const, reason: "email_render_or_send_error" };
   }
-
-  return { ok: true as const };
 }
 
 export async function POST(request: Request, context: RouteContext) {
