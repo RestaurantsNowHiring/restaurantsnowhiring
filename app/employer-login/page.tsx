@@ -551,42 +551,44 @@ function EmployerLoginForm() {
               <>
                 {/* STEP 1 */}
                 {signupStep === 1 && (
-                  <form onSubmit={handleSignupEmailContinue} style={{ display: "grid", gap: 16 }}>
+                  <form onSubmit={handleSignupEmailContinue} style={{ display: "grid", gap: 14 }}>
                     <div
+                      className="rn-employer-signup-options"
                       style={{
                         display: "grid",
-                        gap: 12,
+                        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                        gap: 10,
                       }}
                     >
                       <div
                         style={{
-                          border: "1px solid rgba(53,128,110,0.24)",
-                          backgroundColor: "rgba(53,128,110,0.08)",
-                          borderRadius: 16,
-                          padding: 16,
+                          border: "1px solid rgba(53,128,110,0.20)",
+                          backgroundColor: "rgba(53,128,110,0.07)",
+                          borderRadius: 14,
+                          padding: "13px 14px",
                         }}
                       >
-                        <h2 style={{ margin: 0, color: GREEN, fontFamily: "var(--font-body)", fontSize: 18 }}>
-                          Creating a new employer account?
+                        <h2 style={{ margin: 0, color: GREEN, fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 850 }}>
+                          New employer account
                         </h2>
-                        <p style={{ margin: "8px 0 0 0", color: TEXT, fontFamily: "var(--font-body)", fontWeight: 750, lineHeight: 1.5 }}>
-                          Continue here only if you are starting a new company, franchise, or operator account. You will become the Account Owner and get a separate workspace for billing, jobs, candidates, and team access.
+                        <p style={{ margin: "6px 0 0 0", color: TEXT, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 650, lineHeight: 1.45 }}>
+                          Create a workspace for a company, franchise group, or restaurant operator. You’ll become the Account Owner.
                         </p>
                       </div>
 
                       <div
                         style={{
                           border: `1px solid ${BORDER}`,
-                          backgroundColor: "#fff",
-                          borderRadius: 16,
-                          padding: 16,
+                          backgroundColor: "rgba(255,255,255,0.78)",
+                          borderRadius: 14,
+                          padding: "13px 14px",
                         }}
                       >
-                        <h2 style={{ margin: 0, color: TEXT, fontFamily: "var(--font-body)", fontSize: 18 }}>
-                          Joining an existing employer account?
+                        <h2 style={{ margin: 0, color: TEXT, fontFamily: "var(--font-body)", fontSize: 15, fontWeight: 850 }}>
+                          Joining an existing account?
                         </h2>
-                        <p style={{ margin: "8px 0 0 0", color: MUTED, fontFamily: "var(--font-body)", fontWeight: 750, lineHeight: 1.5 }}>
-                          If your company already invited you, please use the invitation link from your email so you are added to the correct employer account.
+                        <p style={{ margin: "6px 0 0 0", color: MUTED, fontFamily: "var(--font-body)", fontSize: 13, fontWeight: 650, lineHeight: 1.45 }}>
+                          Use the invitation link from your company so you’re added to the correct workspace.
                         </p>
                       </div>
                     </div>
@@ -594,17 +596,18 @@ function EmployerLoginForm() {
                     <div
                       role="note"
                       style={{
-                        border: "1px solid rgba(176,0,32,0.18)",
-                        backgroundColor: "rgba(176,0,32,0.06)",
-                        borderRadius: 14,
-                        padding: 14,
-                        color: TEXT,
+                        border: "1px solid rgba(53,128,110,0.16)",
+                        backgroundColor: "rgba(255,255,255,0.72)",
+                        borderRadius: 12,
+                        padding: "11px 13px",
+                        color: MUTED,
                         fontFamily: "var(--font-body)",
-                        fontWeight: 850,
-                        lineHeight: 1.5,
+                        fontSize: 13,
+                        fontWeight: 650,
+                        lineHeight: 1.45,
                       }}
                     >
-                      Already invited by your company? Do not create a new employer account. Use your invitation link or contact your account owner.
+                      <strong style={{ color: TEXT, fontWeight: 850 }}>Already invited?</strong> Do not create a new employer account. Use your invitation email or contact your Account Owner.
                     </div>
 
                     <div>
@@ -980,7 +983,8 @@ function EmployerLoginForm() {
                 grid-template-columns: 1fr !important;
               }
 
-              .rn-employer-auth-two-col {
+              .rn-employer-auth-two-col,
+              .rn-employer-signup-options {
                 grid-template-columns: 1fr !important;
               }
             }
