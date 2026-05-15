@@ -95,6 +95,16 @@ const DELETE_USER_ID_RETURN_FIELDS = "id,employer_user_id,employer_email";
 const DELETE_CONFIRMATION_MESSAGE =
   "This will permanently delete your job ad. If you want to repost this position later, you will need to complete the Post a Job form again.";
 const CANDIDATE_STATUS_OPTIONS = ["new", "reviewed", "contacted", "archived"] as const;
+type CandidateStatusOption = (typeof CANDIDATE_STATUS_OPTIONS)[number];
+type CandidateFilter = "all" | CandidateStatusOption;
+
+const CANDIDATE_FILTER_OPTIONS: Array<{ value: CandidateFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "new", label: "New" },
+  { value: "reviewed", label: "Reviewed" },
+  { value: "contacted", label: "Contacted" },
+  { value: "archived", label: "Archived" },
+];
 
 function formatBillingDate(isoDate?: string | null) {
   if (!isoDate) return "—";
@@ -197,6 +207,48 @@ function formatCandidateStatus(status: string) {
   return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
+function getCandidateStatusTheme(status: string) {
+  const themes: Record<CandidateStatusOption, { bg: string; text: string; border: string; shadow: string }> = {
+    new: {
+      bg: "rgba(53,128,110,0.12)",
+      text: "#1d5b4d",
+      border: "rgba(53,128,110,0.28)",
+      shadow: "rgba(53,128,110,0.12)",
+    },
+    reviewed: {
+      bg: "rgba(30,137,153,0.12)",
+      text: "#11606d",
+      border: "rgba(30,137,153,0.28)",
+      shadow: "rgba(30,137,153,0.12)",
+    },
+    contacted: {
+      bg: "rgba(227,160,8,0.15)",
+      text: "#7a5600",
+      border: "rgba(227,160,8,0.32)",
+      shadow: "rgba(227,160,8,0.14)",
+    },
+    archived: {
+      bg: "rgba(101,115,126,0.13)",
+      text: "#46525c",
+      border: "rgba(101,115,126,0.26)",
+      shadow: "rgba(101,115,126,0.12)",
+    },
+  };
+
+  return themes[status as CandidateStatusOption] ?? themes.archived;
+}
+
+function candidateStatusControlStyle(status: string): React.CSSProperties {
+  const theme = getCandidateStatusTheme(status);
+
+  return {
+    backgroundColor: theme.bg,
+    borderColor: theme.border,
+    boxShadow: `0 8px 18px ${theme.shadow}`,
+    color: theme.text,
+  };
+}
+
 function getJobOwnershipMatch(job: Record<string, unknown>, owner: EmployerOwner): OwnershipMatch | null {
   const employerUserId = typeof job.employer_user_id === "string" ? job.employer_user_id.trim() : "";
   const employerEmail = typeof job.employer_email === "string" ? job.employer_email.trim() : "";
@@ -240,6 +292,7 @@ export default function EmployerDashboardPage() {
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [candidates, setCandidates] = useState<CandidateSubmission[]>([]);
+  const [candidateFilter, setCandidateFilter] = useState<CandidateFilter>("all");
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidateBusyId, setCandidateBusyId] = useState<string | null>(null);
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
@@ -861,6 +914,21 @@ export default function EmployerDashboardPage() {
     setCandidateBusyId(null);
   }
 
+  const candidateStatusCounts = useMemo(() => {
+    return CANDIDATE_STATUS_OPTIONS.reduce(
+      (counts, status) => ({
+        ...counts,
+        [status]: candidates.filter((candidate) => candidate.status === status).length,
+      }),
+      { all: candidates.length } as Record<CandidateFilter, number>
+    );
+  }, [candidates]);
+
+  const filteredCandidates = useMemo(() => {
+    if (candidateFilter === "all") return candidates;
+    return candidates.filter((candidate) => candidate.status === candidateFilter);
+  }, [candidateFilter, candidates]);
+
   const metrics = useMemo(() => {
     const active = jobs.filter((job) => job.dashboard_status === "Active").length;
     const pending = jobs.filter((job) => job.dashboard_status === "Pending").length;
@@ -1119,13 +1187,38 @@ export default function EmployerDashboardPage() {
             </div>
           ) : null}
 
+          {candidates.length > 0 ? (
+            <div className="rn-candidate-filters" aria-label="Filter interested candidates by status">
+              {CANDIDATE_FILTER_OPTIONS.map((filter) => {
+                const isActive = candidateFilter === filter.value;
+
+                return (
+                  <button
+                    type="button"
+                    className={`rn-candidate-filter${isActive ? " rn-candidate-filter-active" : ""}`}
+                    key={filter.value}
+                    onClick={() => setCandidateFilter(filter.value)}
+                    aria-pressed={isActive}
+                  >
+                    <span>{filter.label}</span>
+                    <strong>{candidateStatusCounts[filter.value]}</strong>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
+
           {candidates.length === 0 ? (
             <div className="rn-candidate-empty">
               No interested candidates yet. When job seekers send their information, they will appear here.
             </div>
+          ) : filteredCandidates.length === 0 ? (
+            <div className="rn-candidate-empty">
+              No {formatCandidateStatus(candidateFilter)} candidates right now. Try another status filter.
+            </div>
           ) : (
             <div className="rn-candidate-list">
-              {candidates.map((candidate) => (
+              {filteredCandidates.map((candidate) => (
                 <article className="rn-candidate-card" key={candidate.id}>
                   <div className="rn-candidate-card-header">
                     <div>
@@ -1138,18 +1231,22 @@ export default function EmployerDashboardPage() {
                       <p>Submitted {formatDate(candidate.created_at)}</p>
                     </div>
                     <label className="rn-candidate-status-label">
-                      Status
-                      <select
-                        value={candidate.status}
-                        onChange={(event) => handleCandidateStatusChange(candidate.id, event.target.value)}
-                        disabled={candidateBusyId === candidate.id}
-                      >
+                      <span>Status</span>
+                      <span className="rn-candidate-status-control" style={candidateStatusControlStyle(candidate.status)}>
+                        <span className="rn-candidate-status-dot" aria-hidden="true" />
+                        <select
+                          value={candidate.status}
+                          onChange={(event) => handleCandidateStatusChange(candidate.id, event.target.value)}
+                          disabled={candidateBusyId === candidate.id}
+                          aria-label={`Update ${candidate.candidate_name}'s status`}
+                        >
                         {CANDIDATE_STATUS_OPTIONS.map((status) => (
                           <option key={status} value={status}>
                             {formatCandidateStatus(status)}
                           </option>
                         ))}
-                      </select>
+                        </select>
+                      </span>
                     </label>
                   </div>
                   <div className="rn-candidate-contact-grid">
@@ -1670,6 +1767,62 @@ export default function EmployerDashboardPage() {
           padding: 18px;
         }
 
+        .rn-candidate-filters {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+          margin: 18px 0 16px;
+        }
+
+        .rn-candidate-filter {
+          align-items: center;
+          background: rgba(255, 250, 242, 0.82);
+          border: 1px solid ${homeTheme.border};
+          border-radius: 999px;
+          color: ${homeTheme.text};
+          cursor: pointer;
+          display: inline-flex;
+          font-family: var(--font-body);
+          font-size: 14px;
+          font-weight: 900;
+          gap: 8px;
+          justify-content: center;
+          min-height: 42px;
+          padding: 9px 13px;
+          transition: background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, color 160ms ease, transform 160ms ease;
+        }
+
+        .rn-candidate-filter:hover {
+          border-color: rgba(53, 128, 110, 0.24);
+          box-shadow: 0 10px 22px rgba(31, 79, 68, 0.1);
+          transform: translateY(-1px);
+        }
+
+        .rn-candidate-filter strong {
+          align-items: center;
+          background: #ffffff;
+          border: 1px solid rgba(0, 0, 0, 0.06);
+          border-radius: 999px;
+          display: inline-flex;
+          font-size: 12px;
+          justify-content: center;
+          min-width: 28px;
+          padding: 3px 8px;
+        }
+
+        .rn-candidate-filter-active {
+          background: ${homeTheme.green};
+          border-color: ${homeTheme.green};
+          box-shadow: 0 12px 26px rgba(31, 79, 68, 0.18);
+          color: #fffaf2;
+        }
+
+        .rn-candidate-filter-active strong {
+          background: rgba(255, 255, 255, 0.18);
+          border-color: rgba(255, 255, 255, 0.26);
+          color: #fffaf2;
+        }
+
         .rn-candidate-list {
           display: grid;
           gap: 12px;
@@ -1706,24 +1859,72 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-candidate-status-label {
-          display: grid;
-          gap: 6px;
           color: ${homeTheme.muted};
+          display: grid;
           font-family: var(--font-body);
           font-size: 12px;
           font-weight: 900;
+          gap: 7px;
+          min-width: 176px;
           text-transform: uppercase;
         }
 
-        .rn-candidate-status-label select {
-          border: 1px solid ${homeTheme.border};
+        .rn-candidate-status-control {
+          align-items: center;
+          border: 1px solid;
           border-radius: 999px;
-          background: #fff;
-          color: ${homeTheme.text};
+          display: grid;
+          grid-template-columns: auto minmax(0, 1fr);
+          overflow: hidden;
+          padding-left: 12px;
+          position: relative;
+        }
+
+        .rn-candidate-status-control::after {
+          border-bottom: 2px solid currentColor;
+          border-right: 2px solid currentColor;
+          content: "";
+          height: 7px;
+          pointer-events: none;
+          position: absolute;
+          right: 13px;
+          top: 50%;
+          transform: translateY(-62%) rotate(45deg);
+          width: 7px;
+        }
+
+        .rn-candidate-status-dot {
+          background: currentColor;
+          border-radius: 999px;
+          box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.55);
+          height: 8px;
+          width: 8px;
+        }
+
+        .rn-candidate-status-label select {
+          appearance: none;
+          background: transparent;
+          border: 0;
+          color: currentColor;
+          cursor: pointer;
           font-family: var(--font-body);
-          font-weight: 800;
-          padding: 8px 12px;
+          font-size: 14px;
+          font-weight: 900;
+          min-height: 40px;
+          outline: 0;
+          padding: 8px 34px 8px 9px;
           text-transform: none;
+          width: 100%;
+        }
+
+        .rn-candidate-status-label select:disabled {
+          cursor: not-allowed;
+          opacity: 0.68;
+        }
+
+        .rn-candidate-status-control:focus-within {
+          outline: 3px solid rgba(31, 79, 68, 0.18);
+          outline-offset: 2px;
         }
 
         .rn-candidate-contact-grid {
@@ -1811,9 +2012,32 @@ export default function EmployerDashboardPage() {
             display: grid;
           }
 
+          .rn-candidate-card-header {
+            display: grid;
+          }
+
+          .rn-candidate-filters {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .rn-candidate-filter {
+            width: 100%;
+          }
+
+          .rn-candidate-status-label {
+            width: 100%;
+          }
+
           .rn-dashboard-metrics,
           .rn-billing-grid,
           .rn-candidate-contact-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+
+        @media (max-width: 460px) {
+          .rn-candidate-filters {
             grid-template-columns: 1fr;
           }
         }
