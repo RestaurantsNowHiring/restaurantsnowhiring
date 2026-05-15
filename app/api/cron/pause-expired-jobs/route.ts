@@ -11,6 +11,13 @@ type PauseExpiredJobsRpcResult = {
   paused_count?: number;
 };
 
+type ReminderCounts = {
+  attempted: number;
+  sent: number;
+  skipped: number;
+  failed: number;
+};
+
 const JOB_EMAIL_FIELDS = "id,title,restaurant_name,city,state,employer_email,employer_user_id,approved_at,created_at";
 
 function isAuthorized(request: Request) {
@@ -21,8 +28,21 @@ function isAuthorized(request: Request) {
   const authHeader = request.headers.get("authorization") ?? "";
   const bearerToken = authHeader.startsWith("Bearer ") ? authHeader.slice("Bearer ".length).trim() : "";
   const headerToken = request.headers.get("x-cron-secret")?.trim() ?? "";
+  const queryToken = new URL(request.url).searchParams.get("secret")?.trim() ?? "";
 
-  return bearerToken === cronSecret || headerToken === cronSecret;
+  return bearerToken === cronSecret || headerToken === cronSecret || queryToken === cronSecret;
+}
+
+function sumReminderCounts(...counts: ReminderCounts[]): ReminderCounts {
+  return counts.reduce(
+    (totals, count) => ({
+      attempted: totals.attempted + count.attempted,
+      sent: totals.sent + count.sent,
+      skipped: totals.skipped + count.skipped,
+      failed: totals.failed + count.failed,
+    }),
+    { attempted: 0, sent: 0, skipped: 0, failed: 0 },
+  );
 }
 
 function daysAgo(days: number) {
@@ -124,8 +144,15 @@ async function pauseExpiredJobs(request: Request) {
     const rpcResult = Array.isArray(data) ? (data[0] as PauseExpiredJobsRpcResult | undefined) : null;
     const pausedCount = typeof rpcResult?.paused_count === "number" ? rpcResult.paused_count : 0;
 
+    const reminderTotals = sumReminderCounts(fiveDayEmails, oneDayEmails, autoPausedEmails);
+
     return NextResponse.json({
       ok: true,
+      reminders_attempted: reminderTotals.attempted,
+      reminders_sent: reminderTotals.sent,
+      reminders_skipped: reminderTotals.skipped,
+      reminders_failed: reminderTotals.failed,
+      jobs_auto_paused: pausedCount,
       paused_count: pausedCount,
       reminders: {
         five_day: fiveDayEmails,
