@@ -817,16 +817,21 @@ export default function EmployerDashboardPage() {
           >
             Employer Dashboard
           </h1>
-          <p
-            style={{
-              marginBottom: 0,
-              color: homeTheme.muted,
-              fontWeight: 600,
-              fontFamily: "var(--font-body)",
-            }}
-          >
-            Manage your job listings, monitor status, and keep your restaurant hiring pipeline moving.
-          </p>
+          <div className="rn-dashboard-hero-row">
+            <p
+              style={{
+                marginBottom: 0,
+                color: homeTheme.muted,
+                fontWeight: 600,
+                fontFamily: "var(--font-body)",
+              }}
+            >
+              Manage your job listings, monitor status, and keep your restaurant hiring pipeline moving.
+            </p>
+            <Link href="/employer-dashboard/profile" style={homeSecondaryButton} className="rn-btn-secondary">
+              My Profile
+            </Link>
+          </div>
         </section>
 
         <section className="rn-dashboard-metrics" style={{ marginBottom: 16 }}>
@@ -1224,6 +1229,14 @@ export default function EmployerDashboardPage() {
       ) : null}
 
       <style jsx>{`
+        .rn-dashboard-hero-row {
+          align-items: flex-start;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 14px;
+          justify-content: space-between;
+        }
+
         .rn-dashboard-metrics {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
