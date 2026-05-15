@@ -4,7 +4,7 @@ import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
-import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../../styles/homepageDesignSystem";
+import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../../styles/homepageDesignSystem";
 
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
 
@@ -154,15 +154,15 @@ export default function TeamAccessPage() {
   }
 
   if (authStatus === "loading") {
-    return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading team access…</main>;
+    return <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading team access…</main>;
   }
 
   const canManage = Boolean(access?.canManageTeam);
 
   return (
-    <main style={{ minHeight: "100vh", paddingTop: 82, paddingBottom: 64, backgroundColor: homeTheme.bg }}>
-      <div style={{ maxWidth: 1080, margin: "0 auto", padding: "0 18px" }}>
-        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+    <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, paddingBottom: 72, backgroundColor: homeTheme.bg }}>
+      <div className="rn-team-container" style={{ maxWidth: 1080, margin: "0 auto", padding: "0 18px" }}>
+        <section className="rn-team-hero" style={{ ...homeCardStyle, marginBottom: 16 }}>
           <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>
             Users & Permissions
           </p>
@@ -189,7 +189,7 @@ export default function TeamAccessPage() {
           </section>
         ) : (
           <>
-            <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+            <section className="rn-team-panel" style={{ ...homeCardStyle, marginBottom: 16 }}>
               <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Invite or add a user</h2>
               <form onSubmit={saveMember} style={{ display: "grid", gap: 12 }}>
                 <label style={{ fontWeight: 900, color: homeTheme.text }}>
@@ -200,7 +200,8 @@ export default function TeamAccessPage() {
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
                     placeholder="manager@mission-bbq.com"
-                    style={{ width: "100%", marginTop: 6, minHeight: 50, borderRadius: 12, border: `1px solid ${homeTheme.border}`, padding: "0 14px", fontWeight: 800 }}
+                    className="rn-team-input"
+                    style={{ ...homeInputStyle, marginTop: 6, minHeight: 50 }}
                   />
                 </label>
                 <label style={{ fontWeight: 900, color: homeTheme.text }}>
@@ -208,7 +209,8 @@ export default function TeamAccessPage() {
                   <select
                     value={role}
                     onChange={(event) => setRole(event.target.value as EmployerRole)}
-                    style={{ width: "100%", marginTop: 6, minHeight: 50, borderRadius: 12, border: `1px solid ${homeTheme.border}`, padding: "0 14px", fontWeight: 800 }}
+                    className="rn-team-select"
+                    style={{ ...homeInputStyle, marginTop: 6, minHeight: 50, appearance: "none" }}
                   >
                     {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => (
                       <option key={option} value={option}>{ROLE_LABELS[option]}</option>
@@ -216,9 +218,14 @@ export default function TeamAccessPage() {
                   </select>
                   <span style={{ display: "block", marginTop: 6, color: homeTheme.muted, fontSize: 13 }}>{ROLE_HELP[role]}</span>
                 </label>
-                <label style={{ display: "flex", alignItems: "center", gap: 10, fontWeight: 800, color: homeTheme.text }}>
-                  <input type="checkbox" checked={canRouteNotifications} onChange={(event) => setCanRouteNotifications(event.target.checked)} />
-                  Allow this user to change candidate notification routing
+                <label className="rn-team-checkbox-row" style={{ fontWeight: 800, color: homeTheme.text }}>
+                  <input
+                    className="rn-team-checkbox"
+                    type="checkbox"
+                    checked={canRouteNotifications}
+                    onChange={(event) => setCanRouteNotifications(event.target.checked)}
+                  />
+                  <span>Allow this user to change candidate notification routing</span>
                 </label>
                 <button type="submit" className="rn-btn-primary" style={homePrimaryButton} disabled={busy}>
                   {busy ? "Saving..." : "Save Team Access"}
@@ -226,33 +233,40 @@ export default function TeamAccessPage() {
               </form>
             </section>
 
-            <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+            <section className="rn-team-panel" style={{ ...homeCardStyle, marginBottom: 16 }}>
               <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Current team users</h2>
-              <div style={{ display: "grid", gap: 12 }}>
+              <div className="rn-team-users-list" style={{ display: "grid", gap: 12 }}>
                 {members.map((member) => (
-                  <article key={member.id} style={{ border: `1px solid ${homeTheme.border}`, borderRadius: 14, padding: 14, backgroundColor: "#fff" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                      <div>
+                  <article key={member.id} className="rn-team-user-card" style={{ border: `1px solid ${homeTheme.border}`, borderRadius: 16, padding: 18, backgroundColor: "#fff" }}>
+                    <div className="rn-team-user-card__top" style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+                      <div className="rn-team-user-card__identity">
                         <strong style={{ color: homeTheme.text }}>{member.email}</strong>
-                        <p style={{ margin: "4px 0 0", color: homeTheme.muted, fontWeight: 700 }}>{member.user_id ? "Matched login user" : "Invited by email; access applies after signup with this email"}</p>
+                        <span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span>
+                        <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 700 }}>{member.user_id ? "Matched login user" : "Invited by email; access applies after signup with this email"}</p>
                       </div>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <select value={member.role} onChange={(event) => updateMember(member, event.target.value as EmployerRole)} disabled={busy}>
+                      <div className="rn-team-user-card__actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        <select
+                          className="rn-team-member-select"
+                          value={member.role}
+                          onChange={(event) => updateMember(member, event.target.value as EmployerRole)}
+                          disabled={busy}
+                        >
                           {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}
                         </select>
-                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => removeMember(member)} disabled={busy || member.role === "account_owner"}>
+                        <button type="button" className="rn-btn-secondary rn-team-remove-button" style={homeSecondaryButton} onClick={() => removeMember(member)} disabled={busy || member.role === "account_owner"}>
                           Remove
                         </button>
                       </div>
                     </div>
-                    <label style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 10, fontWeight: 800, color: homeTheme.text }}>
+                    <label className="rn-team-checkbox-row rn-team-card-checkbox" style={{ fontWeight: 800, color: homeTheme.text }}>
                       <input
+                        className="rn-team-checkbox"
                         type="checkbox"
                         checked={member.can_manage_notification_routing}
                         onChange={(event) => updateMember(member, member.role, event.target.checked)}
                         disabled={busy || member.role === "account_owner"}
                       />
-                      Can change candidate notification routing
+                      <span>Can change candidate notification routing</span>
                     </label>
                   </article>
                 ))}

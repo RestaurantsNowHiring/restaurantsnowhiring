@@ -723,3 +723,229 @@ iframe {
     width: auto !important;
   }
 }
+
+/* ===== Team Access polish ===== */
+@media (min-width: 768px) {
+  body:has(.rn-team-page) .top-banner__nav {
+    align-items: center;
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+    gap: 16px 24px !important;
+    min-width: 0;
+  }
+
+  body:has(.rn-team-page) .top-banner__auth {
+    flex: 0 0 auto;
+  }
+
+  body:has(.rn-team-page) .top-banner__nav .banner-link,
+  body:has(.rn-team-page) .top-banner__auth .banner-link--login,
+  body:has(.rn-team-page) .top-banner__sign-out {
+    line-height: 1;
+    padding-block: 4px !important;
+    white-space: nowrap;
+  }
+}
+
+.rn-team-page {
+  color: rgba(0, 0, 0, 0.85);
+  font-family: var(--font-body);
+}
+
+.rn-team-hero,
+.rn-team-panel,
+.rn-team-user-card {
+  position: relative;
+  overflow: hidden;
+}
+
+.rn-team-panel {
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.1) !important;
+}
+
+.rn-team-input,
+.rn-team-select,
+.rn-team-member-select {
+  background-color: #ffffff !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  border-radius: 12px !important;
+  color: rgba(0, 0, 0, 0.85) !important;
+  color-scheme: light;
+  min-width: 0;
+}
+
+.rn-team-input::placeholder {
+  color: rgba(0, 0, 0, 0.42);
+}
+
+.rn-team-select,
+.rn-team-member-select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #35806e 50%),
+    linear-gradient(135deg, #35806e 50%, transparent 50%);
+  background-position:
+    calc(100% - 18px) 52%,
+    calc(100% - 12px) 52%;
+  background-repeat: no-repeat;
+  background-size: 6px 6px, 6px 6px;
+  padding-right: 38px !important;
+}
+
+.rn-team-member-select {
+  appearance: none;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.05);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 800;
+  min-height: 46px;
+  padding: 0 38px 0 14px;
+}
+
+.rn-team-checkbox-row {
+  align-items: flex-start;
+  background: rgba(53, 128, 110, 0.06);
+  border: 1px solid rgba(53, 128, 110, 0.14);
+  border-radius: 14px;
+  display: flex;
+  gap: 10px;
+  line-height: 1.35;
+  padding: 12px 14px;
+}
+
+.rn-team-checkbox {
+  appearance: none;
+  background: #ffffff !important;
+  border: 2px solid rgba(53, 128, 110, 0.42) !important;
+  border-radius: 6px !important;
+  color-scheme: light;
+  cursor: pointer;
+  flex: 0 0 auto;
+  height: 22px;
+  margin: 0;
+  min-height: 22px !important;
+  position: relative;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+  width: 22px;
+}
+
+.rn-team-checkbox:hover:not(:disabled) {
+  border-color: #35806e !important;
+  box-shadow: 0 0 0 4px rgba(53, 128, 110, 0.1);
+}
+
+.rn-team-checkbox:checked {
+  background: #35806e !important;
+  border-color: #35806e !important;
+}
+
+.rn-team-checkbox:checked::after {
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  content: "";
+  height: 10px;
+  left: 7px;
+  position: absolute;
+  top: 3px;
+  transform: rotate(45deg);
+  width: 5px;
+}
+
+.rn-team-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.rn-team-user-card {
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.07);
+  transition:
+    border-color 180ms ease,
+    box-shadow 180ms ease,
+    transform 180ms ease;
+}
+
+.rn-team-user-card:hover {
+  border-color: rgba(53, 128, 110, 0.24) !important;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+
+.rn-team-user-card__identity {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.rn-team-user-card__identity strong {
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.rn-team-role-pill {
+  align-items: center;
+  background: rgba(53, 128, 110, 0.1);
+  border: 1px solid rgba(53, 128, 110, 0.22);
+  border-radius: 999px;
+  color: #1d5b4d;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  justify-self: start;
+  letter-spacing: 0.2px;
+  padding: 5px 10px;
+  text-transform: uppercase;
+}
+
+.rn-team-user-card__actions {
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.rn-team-remove-button {
+  min-height: 46px !important;
+  padding: 10px 16px !important;
+}
+
+.rn-team-card-checkbox {
+  margin-top: 14px;
+}
+
+@media (max-width: 767px) {
+  .rn-team-container {
+    padding-left: 14px !important;
+    padding-right: 14px !important;
+  }
+
+  .rn-team-hero,
+  .rn-team-panel {
+    padding: 18px !important;
+  }
+
+  .rn-team-user-card {
+    padding: 16px !important;
+  }
+
+  .rn-team-user-card__top,
+  .rn-team-user-card__actions {
+    align-items: stretch !important;
+    flex-direction: column;
+  }
+
+  .rn-team-user-card__identity {
+    min-width: 0;
+  }
+
+  .rn-team-member-select,
+  .rn-team-remove-button,
+  .rn-team-page .rn-btn-primary,
+  .rn-team-page .rn-btn-secondary {
+    width: 100%;
+  }
+
+  .rn-team-checkbox-row {
+    padding: 11px 12px;
+  }
+}
