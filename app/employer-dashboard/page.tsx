@@ -19,7 +19,8 @@ import {
 
 type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string };
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
-type EmployerAccess = { role: EmployerRole; accountId: string | null; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
+type EmployerAccountMembership = { accountId: string; accountName: string; role: EmployerRole };
+type EmployerAccess = { role: EmployerRole; accountId: string | null; accountName: string | null; restaurantBrandName: string | null; memberships: EmployerAccountMembership[]; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
 type OwnershipMatch = "employer_user_id" | "employer_email";
 
 type DashboardJob = {
@@ -197,6 +198,13 @@ const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
 ];
 
 
+
+function formatEmployerRole(role?: EmployerRole | null) {
+  if (role === "account_owner") return "Account Owner";
+  if (role === "hiring_manager") return "Hiring Manager";
+  if (role === "viewer") return "Viewer";
+  return "Account Owner";
+}
 
 function formatDate(isoDate: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -1037,16 +1045,61 @@ export default function EmployerDashboardPage() {
             Employer Dashboard
           </h1>
           <div className="rn-dashboard-hero-row">
-            <p
-              style={{
-                marginBottom: 0,
-                color: homeTheme.muted,
-                fontWeight: 600,
-                fontFamily: "var(--font-body)",
-              }}
-            >
-              Manage your job listings, monitor status, and keep your restaurant hiring pipeline moving.
-            </p>
+            <div>
+              <p
+                style={{
+                  marginBottom: 0,
+                  color: homeTheme.muted,
+                  fontWeight: 600,
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                Manage your job listings, monitor status, and keep your restaurant hiring pipeline moving.
+              </p>
+              <div
+                style={{
+                  marginTop: 14,
+                  display: "grid",
+                  gap: 8,
+                  color: homeTheme.text,
+                  fontFamily: "var(--font-body)",
+                  fontWeight: 850,
+                }}
+              >
+                <div>
+                  Current Employer Account: {employerAccess?.accountName ?? "Employer Account"}
+                </div>
+                <div>
+                  Role: {formatEmployerRole(employerAccess?.role)}
+                </div>
+                {(employerAccess?.memberships?.length ?? 0) > 1 ? (
+                  <label style={{ display: "grid", gap: 6, maxWidth: 360, color: homeTheme.muted, fontSize: 13 }}>
+                    Account selector
+                    <select
+                      value={employerAccess?.accountId ?? ""}
+                      disabled
+                      style={{
+                        height: 42,
+                        borderRadius: 12,
+                        border: `1px solid ${homeTheme.border}`,
+                        padding: "0 12px",
+                        fontFamily: "var(--font-body)",
+                        fontWeight: 800,
+                        color: homeTheme.text,
+                        backgroundColor: "rgba(255,255,255,0.76)",
+                      }}
+                    >
+                      {employerAccess?.memberships.map((membership) => (
+                        <option key={membership.accountId} value={membership.accountId}>
+                          {membership.accountName} — {formatEmployerRole(membership.role)}
+                        </option>
+                      ))}
+                    </select>
+                    Switching is coming next; access is already modeled per employer account.
+                  </label>
+                ) : null}
+              </div>
+            </div>
             <div className="rn-dashboard-actions">
               {canManageTeam ? (
                 <Link href="/employer-dashboard/team" style={homeSecondaryButton} className="rn-btn-secondary">
