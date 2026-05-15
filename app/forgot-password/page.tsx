@@ -12,6 +12,17 @@ function getAccountType(value: string | null): AccountType {
   return value === "admin" ? "admin" : "employer";
 }
 
+function getPasswordResetRedirectTo(accountType: AccountType) {
+  const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
+  const browserOrigin = typeof window === "undefined" ? "" : window.location.origin;
+  const productionSiteUrl = "https://www.restaurantsnowhiring.com";
+  const baseUrl =
+    configuredSiteUrl ||
+    (browserOrigin.includes("localhost") || browserOrigin.includes("127.0.0.1") ? browserOrigin : productionSiteUrl);
+
+  return `${baseUrl}/reset-password?type=${accountType}`;
+}
+
 function ForgotPasswordForm() {
   const searchParams = useSearchParams();
   const accountType = getAccountType(searchParams.get("type"));
@@ -41,8 +52,9 @@ function ForgotPasswordForm() {
     setIsSubmitting(true);
 
     try {
-      const redirectTo = `${window.location.origin}/reset-password?type=${accountType}`;
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo });
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: getPasswordResetRedirectTo(accountType),
+      });
 
       if (error) {
         setMessageType("error");
