@@ -18,6 +18,7 @@ export default function PostJobPage() {
 
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed" | "unconfirmed">("loading");
   const [authUserEmail, setAuthUserEmail] = useState<string | null>(null);
+  const [canPostJobs, setCanPostJobs] = useState(false);
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -182,6 +183,28 @@ export default function PostJobPage() {
           return;
         }
 
+        const accessToken = data.session?.access_token;
+        if (accessToken) {
+          const billingResponse = await fetch("/api/billing/status", {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          const billingPayload = (await billingResponse.json().catch(() => null)) as
+            | { canPostOrActivateJobs?: boolean; billingGateReason?: string; error?: string }
+            | null;
+
+          if (!billingResponse.ok || !billingPayload?.canPostOrActivateJobs) {
+            setCanPostJobs(false);
+            setMessage(
+              billingPayload?.billingGateReason === "subscription_inactive"
+                ? "Your free trial has ended and your subscription is not active. Please manage billing from your employer dashboard before posting another job."
+                : "Start your 30-day free trial from your employer dashboard before posting a job. You will not be charged today."
+            );
+            setAuthStatus("allowed");
+            return;
+          }
+        }
+
+        setCanPostJobs(true);
         setAuthStatus("allowed");
       }
     }
@@ -303,6 +326,11 @@ export default function PostJobPage() {
 
     if (!validateStep(3)) {
       setStep(3);
+      return;
+    }
+
+    if (!canPostJobs) {
+      setMessage("Start or reactivate billing from your employer dashboard before posting a job.");
       return;
     }
 
@@ -632,9 +660,14 @@ export default function PostJobPage() {
               </div>
             </div>
 
-            <Link href="/jobs" style={topActionLink} className="rn-btn-secondary">
-              View jobs
-            </Link>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Link href="/employer-dashboard" style={topActionLink} className="rn-btn-secondary">
+                Billing
+              </Link>
+              <Link href="/jobs" style={topActionLink} className="rn-btn-secondary">
+                View jobs
+              </Link>
+            </div>
           </div>
 
           <div

@@ -5,12 +5,13 @@ import {
   SupabaseAdminLike,
   sendExpirationReminderBatch,
 } from "../../../../lib/jobExpirationEmails";
+import { syncSubscriptionQuantityForEmployer } from "../../../../lib/billing";
 
 type PauseExpiredJobsRpcResult = {
   paused_count?: number;
 };
 
-const JOB_EMAIL_FIELDS = "id,title,restaurant_name,city,state,employer_email,approved_at,created_at";
+const JOB_EMAIL_FIELDS = "id,title,restaurant_name,city,state,employer_email,employer_user_id,approved_at,created_at";
 
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
@@ -103,6 +104,23 @@ async function pauseExpiredJobs(request: Request) {
     }
 
     const autoPausedEmails = await sendExpirationReminderBatch(expirationEmailClient, jobsDueToPause, "auto_paused");
+    const employerUserIds = Array.from(
+      new Set(
+        jobsDueToPause.flatMap((job) => {
+          const employerUserId = (job as unknown as { employer_user_id?: unknown }).employer_user_id;
+          return typeof employerUserId === "string" && employerUserId ? [employerUserId] : [];
+        }),
+      ),
+    );
+
+    await Promise.all(
+      employerUserIds.map((employerUserId) =>
+        syncSubscriptionQuantityForEmployer(employerUserId).catch((syncError) => {
+          console.error("Failed to sync Stripe quantity after auto-pause", { syncError, employerUserId });
+        }),
+      ),
+    );
+
     const rpcResult = Array.isArray(data) ? (data[0] as PauseExpiredJobsRpcResult | undefined) : null;
     const pausedCount = typeof rpcResult?.paused_count === "number" ? rpcResult.paused_count : 0;
 

@@ -35,6 +35,22 @@ type DashboardJob = {
   dashboard_status: "Active" | "Pending" | "Draft" | "Paused" | "Rejected";
 };
 
+type BillingInfo = {
+  billing_status: string | null;
+  trial_started_at: string | null;
+  trial_ends_at: string | null;
+  subscription_current_period_end: string | null;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+};
+
+type BillingSummary = {
+  billing: BillingInfo | null;
+  activeBillableJobCount: number;
+  canPostOrActivateJobs: boolean;
+  billingGateReason: string;
+};
+
 type JobsQueryVariant = {
   fields: string;
   includesStatus: boolean;
@@ -61,6 +77,34 @@ const DELETE_EMAIL_RETURN_FIELDS = "id,employer_email";
 const DELETE_USER_ID_RETURN_FIELDS = "id,employer_user_id,employer_email";
 const DELETE_CONFIRMATION_MESSAGE =
   "This will permanently delete your job ad. If you want to repost this position later, you will need to complete the Post a Job form again.";
+
+function formatBillingDate(isoDate?: string | null) {
+  if (!isoDate) return "—";
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(isoDate));
+}
+
+function getTrialStatus(billing: BillingInfo | null) {
+  if (!billing?.trial_ends_at) return "Not started";
+  const trialEndsAt = new Date(billing.trial_ends_at).getTime();
+  if (Number.isFinite(trialEndsAt) && trialEndsAt > Date.now()) {
+    return `Trial active until ${formatBillingDate(billing.trial_ends_at)}`;
+  }
+  return `Trial ended ${formatBillingDate(billing.trial_ends_at)}`;
+}
+
+function getSubscriptionStatusLabel(status?: string | null) {
+  if (!status) return "Not started";
+  return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function isBillingActive(status?: string | null) {
+  return status === "active" || status === "trialing";
+}
 
 function formatSupabaseActionError(error: SupabaseActionError) {
   const parts = [
@@ -176,6 +220,9 @@ export default function EmployerDashboardPage() {
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
   const [deleteJob, setDeleteJob] = useState<DashboardJob | null>(null);
   const [owner, setOwner] = useState<EmployerOwner | null>(null);
+  const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
+  const [billingBusyAction, setBillingBusyAction] = useState<"checkout" | "portal" | null>(null);
+  const [billingError, setBillingError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
@@ -268,6 +315,23 @@ export default function EmployerDashboardPage() {
       return { liveJobs, selectedVariant, error };
     }
 
+    async function loadBillingSummary() {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) return null;
+
+      const response = await fetch("/api/billing/status", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(payload?.error || "Could not load billing details.");
+      }
+
+      return (await response.json()) as BillingSummary;
+    }
+
     async function loadDashboard() {
       const { data, error: authError } = await supabase.auth.getUser();
       const authUser = data?.user;
@@ -294,12 +358,20 @@ export default function EmployerDashboardPage() {
       setActionError(null);
       setActionSuccess(null);
 
+      let nextBillingSummary: BillingSummary | null = null;
+      try {
+        nextBillingSummary = await loadBillingSummary();
+      } catch (error) {
+        if (mounted) setBillingError(error instanceof Error ? error.message : "Could not load billing details.");
+      }
+
       const jobsResult = await loadEmployerJobs(currentOwner);
 
       if (jobsResult.error || !jobsResult.liveJobs || !jobsResult.selectedVariant) {
         if (mounted) {
           setJobs([]);
           setOwner(currentOwner);
+          setBillingSummary(nextBillingSummary);
           setAuthStatus("allowed");
           setActionError(jobsResult.error?.message || "Could not load your employer listings from Supabase.");
         }
@@ -334,6 +406,7 @@ export default function EmployerDashboardPage() {
       if (mounted) {
         setJobs(hydratedJobs);
         setOwner(currentOwner);
+        setBillingSummary(nextBillingSummary);
         setAuthStatus("allowed");
       }
     }
@@ -350,11 +423,73 @@ export default function EmployerDashboardPage() {
     };
   }, [router]);
 
+  async function refreshBillingSummary() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) return;
+
+    const response = await fetch("/api/billing/status", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+
+    if (response.ok) {
+      setBillingSummary((await response.json()) as BillingSummary);
+    }
+  }
+
+  async function syncBillingQuantity() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) return;
+
+    await fetch("/api/billing/sync", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }).catch(() => null);
+  }
+
+  async function handleBillingAction(action: "checkout" | "portal") {
+    if (billingBusyAction) return;
+
+    setBillingBusyAction(action);
+    setBillingError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setBillingError("Please sign in again before managing billing.");
+      setBillingBusyAction(null);
+      return;
+    }
+
+    const endpoint = action === "checkout" ? "/api/stripe/checkout" : "/api/stripe/portal";
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
+
+    if (!response.ok || !payload?.url) {
+      setBillingError(payload?.error || "Could not open Stripe billing. Please try again.");
+      setBillingBusyAction(null);
+      return;
+    }
+
+    window.location.href = payload.url;
+  }
+
   async function handlePauseToggle(job: DashboardJob) {
     if (busyJobId) return;
     if (!canEmployerPauseResume(job.status)) return;
 
     const { nextActive, nextStatus } = getEmployerPauseResumeUpdate(job.status, job.active);
+
+    if (nextActive && !billingSummary?.canPostOrActivateJobs) {
+      setActionError("Start or reactivate billing before resuming this job ad.");
+      return;
+    }
+
     setBusyJobId(job.id);
     setActionError(null);
     setActionSuccess(null);
@@ -469,6 +604,7 @@ export default function EmployerDashboardPage() {
       )
     );
     setBusyJobId(null);
+    void syncBillingQuantity().then(refreshBillingSummary);
   }
 
   function handleDeleteClick(job: DashboardJob) {
@@ -609,6 +745,7 @@ export default function EmployerDashboardPage() {
     setDeleteJob(null);
     setActionSuccess("Job ad deleted successfully.");
     setBusyJobId(null);
+    void syncBillingQuantity().then(refreshBillingSummary);
   }
 
   const metrics = useMemo(() => {
@@ -728,6 +865,94 @@ export default function EmployerDashboardPage() {
               </p>
             </article>
           ))}
+        </section>
+
+        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+          <div className="rn-dashboard-header-row">
+            <div>
+              <h2
+                style={{
+                  margin: 0,
+                  color: homeTheme.text,
+                  fontSize: 26,
+                  fontFamily: "var(--font-heading)",
+                  lineHeight: 1.2,
+                }}
+              >
+                Billing
+              </h2>
+              <p
+                style={{
+                  marginTop: 6,
+                  marginBottom: 0,
+                  color: homeTheme.muted,
+                  fontWeight: 600,
+                  fontFamily: "var(--font-body)",
+                }}
+              >
+                30-day free trial, then $9 per active approved public job ad every 30 days.
+              </p>
+            </div>
+            <div className="rn-dashboard-actions">
+              <button
+                type="button"
+                style={homePrimaryButton}
+                className="rn-btn-primary"
+                onClick={() => handleBillingAction("checkout")}
+                disabled={billingBusyAction !== null || isBillingActive(billingSummary?.billing?.billing_status)}
+              >
+                {billingBusyAction === "checkout"
+                  ? "Opening..."
+                  : isBillingActive(billingSummary?.billing?.billing_status)
+                    ? "Trial Started"
+                    : "Start Free Trial"}
+              </button>
+              <button
+                type="button"
+                style={homeSecondaryButton}
+                className="rn-btn-secondary"
+                onClick={() => handleBillingAction("portal")}
+                disabled={billingBusyAction !== null || !billingSummary?.billing?.stripe_customer_id}
+              >
+                {billingBusyAction === "portal" ? "Opening..." : "Manage Billing"}
+              </button>
+            </div>
+          </div>
+
+          {billingError ? (
+            <div
+              role="alert"
+              style={{
+                marginBottom: 16,
+                borderRadius: 14,
+                border: "1px solid rgba(173,67,67,0.28)",
+                backgroundColor: "rgba(173,67,67,0.08)",
+                color: "#8a2f2f",
+                fontFamily: "var(--font-body)",
+                fontWeight: 800,
+                padding: "12px 14px",
+              }}
+            >
+              {billingError}
+            </div>
+          ) : null}
+
+          <div className="rn-billing-grid">
+            {[
+              { label: "Trial Status", value: getTrialStatus(billingSummary?.billing ?? null) },
+              { label: "Subscription", value: getSubscriptionStatusLabel(billingSummary?.billing?.billing_status) },
+              { label: "Active Billable Jobs", value: billingSummary?.activeBillableJobCount ?? "—" },
+              {
+                label: "Next Billing Date",
+                value: formatBillingDate(billingSummary?.billing?.subscription_current_period_end),
+              },
+            ].map((item) => (
+              <article key={item.label} className="rn-billing-stat">
+                <p>{item.label}</p>
+                <strong>{item.value}</strong>
+              </article>
+            ))}
+          </div>
         </section>
 
         <section style={homeCardStyle}>
@@ -1030,6 +1255,36 @@ export default function EmployerDashboardPage() {
           text-underline-offset: 3px;
         }
 
+        .rn-billing-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 12px;
+        }
+
+        .rn-billing-stat {
+          border: 1px solid ${homeTheme.border};
+          border-radius: 14px;
+          padding: 14px;
+          background: rgba(255,255,255,.72);
+        }
+
+        .rn-billing-stat p {
+          margin: 0 0 8px 0;
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-size: 12px;
+          font-weight: 900;
+          letter-spacing: .35px;
+          text-transform: uppercase;
+        }
+
+        .rn-billing-stat strong {
+          color: ${homeTheme.text};
+          font-family: var(--font-body);
+          font-size: 16px;
+          font-weight: 900;
+        }
+
         .rn-dashboard-table-wrap {
           border: 1px solid ${homeTheme.border};
           border-radius: 14px;
@@ -1196,7 +1451,8 @@ export default function EmployerDashboardPage() {
             display: grid;
           }
 
-          .rn-dashboard-metrics {
+          .rn-dashboard-metrics,
+          .rn-billing-grid {
             grid-template-columns: 1fr;
           }
         }

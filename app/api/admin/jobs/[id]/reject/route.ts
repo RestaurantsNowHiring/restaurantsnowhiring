@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { ADMIN_SESSION_COOKIE, getAdminUserFromAccessToken } from "../../../../../../lib/adminAuth";
 import { isMissingStatusColumnError, normalizePersistedStatus } from "../../../../../../lib/jobStatus";
 import { getSupabaseAdminClient } from "../../../../../../lib/supabaseAdmin";
+import { syncSubscriptionQuantityForEmployer } from "../../../../../../lib/billing";
 
 export async function POST(_: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -36,11 +37,11 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     .from("jobs")
     .update({ active: false, status: "rejected" })
     .eq("id", jobId)
-    .select("id,active,status")
+    .select("id,active,status,employer_user_id")
     .single();
 
   const writeResult = isMissingStatusColumnError(updateWithStatus.error)
-    ? await supabaseAdmin.from("jobs").update({ active: false }).eq("id", jobId).select("id,active").single()
+    ? await supabaseAdmin.from("jobs").update({ active: false }).eq("id", jobId).select("id,active,employer_user_id").single()
     : updateWithStatus;
 
   const { error } = writeResult;
@@ -57,6 +58,13 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
         { status: 409 }
       );
     }
+  }
+
+  const employerUserId = typeof writeResult.data?.employer_user_id === "string" ? writeResult.data.employer_user_id : null;
+  if (employerUserId) {
+    await syncSubscriptionQuantityForEmployer(employerUserId).catch((syncError) => {
+      console.error("Failed to sync Stripe quantity after rejection", { syncError, jobId, employerUserId });
+    });
   }
 
   return NextResponse.json({
