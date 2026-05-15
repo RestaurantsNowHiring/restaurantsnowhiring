@@ -38,8 +38,11 @@ function formatSubmittedAt(value: string) {
   if (Number.isNaN(date.getTime())) return "Just submitted";
 
   return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
     timeZoneName: "short",
   }).format(date);
 }
