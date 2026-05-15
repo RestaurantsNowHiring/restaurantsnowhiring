@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  countActiveBillableJobs,
+  countActiveBillableJobsForEmployerUser,
   evaluateBillingAccess,
   getAuthUserFromRequest,
-  getBillingRecord,
+  getBillingRecordForEmployerUser,
 } from "../../../../lib/billing";
 
 export async function GET(request: Request) {
@@ -11,8 +11,8 @@ export async function GET(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const billing = await getBillingRecord(user.id);
-    const activeBillableJobCount = await countActiveBillableJobs(user.id, user.email);
+    const billing = await getBillingRecordForEmployerUser(user);
+    const activeBillableJobCount = await countActiveBillableJobsForEmployerUser(user);
     const access = evaluateBillingAccess(billing);
 
     return NextResponse.json({

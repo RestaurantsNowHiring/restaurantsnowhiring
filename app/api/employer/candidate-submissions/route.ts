@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
+import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
 
 const ALLOWED_STATUSES = new Set(["new", "reviewed", "contacted", "archived"]);
 
@@ -28,12 +29,15 @@ export async function GET(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
+    const context = await getEmployerAccountContext(user);
+    if (!context.canViewCandidates) return NextResponse.json({ error: "Not authorized to view candidates." }, { status: 403 });
+
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
     const { data, error } = await supabaseAdmin
       .from("candidate_submissions")
-      .select("id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email)")
+      .select("id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email,employer_account_id)")
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -45,9 +49,14 @@ export async function GET(request: Request) {
       const job = row.jobs && typeof row.jobs === "object" ? (row.jobs as Record<string, unknown>) : null;
       return (
         row.employer_user_id === user.id ||
+        row.employer_user_id === context.ownerUserId ||
         String(row.employer_email ?? "").toLowerCase() === userEmail ||
+        String(row.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
         job?.employer_user_id === user.id ||
-        String(job?.employer_email ?? "").toLowerCase() === userEmail
+        job?.employer_user_id === context.ownerUserId ||
+        String(job?.employer_email ?? "").toLowerCase() === userEmail ||
+        String(job?.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
+        (context.accountId && job?.employer_account_id === context.accountId)
       );
     });
 
@@ -66,6 +75,9 @@ export async function PATCH(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
+    const context = await getEmployerAccountContext(user);
+    if (!context.canUpdateCandidateStatuses) return NextResponse.json({ error: "Not authorized to update candidates." }, { status: 403 });
+
     const payload = (await request.json().catch(() => null)) as { id?: string; status?: string } | null;
     const id = payload?.id?.trim();
     const status = payload?.status?.trim().toLowerCase();
@@ -79,7 +91,7 @@ export async function PATCH(request: Request) {
 
     const { data: existing, error: lookupError } = await supabaseAdmin
       .from("candidate_submissions")
-      .select("id,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email)")
+      .select("id,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email,employer_account_id)")
       .eq("id", id)
       .maybeSingle();
 
@@ -88,9 +100,14 @@ export async function PATCH(request: Request) {
     const job = row?.jobs && typeof row.jobs === "object" ? (row.jobs as Record<string, unknown>) : null;
     const ownsSubmission =
       row?.employer_user_id === user.id ||
+      row?.employer_user_id === context.ownerUserId ||
       String(row?.employer_email ?? "").toLowerCase() === user.email.toLowerCase() ||
+      String(row?.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
       job?.employer_user_id === user.id ||
-      String(job?.employer_email ?? "").toLowerCase() === user.email.toLowerCase();
+      job?.employer_user_id === context.ownerUserId ||
+      String(job?.employer_email ?? "").toLowerCase() === user.email.toLowerCase() ||
+      String(job?.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
+      (context.accountId && job?.employer_account_id === context.accountId);
 
     if (!row || !ownsSubmission) return NextResponse.json({ error: "Not found." }, { status: 404 });
 

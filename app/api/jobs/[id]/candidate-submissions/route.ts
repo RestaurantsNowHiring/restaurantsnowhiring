@@ -25,7 +25,12 @@ type JobRow = {
   status?: string | null;
   employer_user_id: string | null;
   employer_email: string | null;
+  employer_account_id?: string | null;
   apply_email?: string | null;
+  candidate_notification_email?: string | null;
+  candidate_notification_routing?: string | null;
+  posted_by_email?: string | null;
+  employer_accounts?: { owner_email?: string | null; support_email?: string | null; default_candidate_notification_routing?: string | null } | null;
 };
 
 function cleanString(value: FormDataEntryValue | null, maxLength: number) {
@@ -107,6 +112,20 @@ type CandidateSubmissionRow = {
   created_at: string;
 };
 
+function resolveCandidateNotificationEmail(job: JobRow) {
+  const routing = job.candidate_notification_routing || job.employer_accounts?.default_candidate_notification_routing || "job_poster";
+  const candidates =
+    routing === "account_owner"
+      ? [job.employer_accounts?.owner_email, job.employer_email, job.apply_email]
+      : routing === "company_support"
+        ? [job.employer_accounts?.support_email, job.apply_email, job.employer_email]
+        : routing === "custom_job_email"
+          ? [job.candidate_notification_email, job.apply_email, job.employer_email]
+          : [job.posted_by_email, job.apply_email, job.employer_email];
+
+  return candidates.find((candidate) => typeof candidate === "string" && EMAIL_PATTERN.test(candidate.trim()))?.trim().toLowerCase() ?? "";
+}
+
 async function sendEmployerNotification(input: { to: string; submission: CandidateSubmissionRow; job: JobRow }) {
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) return { ok: false as const, reason: "missing_resend_api_key" };
@@ -177,7 +196,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   const { data: jobData, error: jobError } = await supabaseAdmin
     .from("jobs")
-    .select("id,title,restaurant_name,city,state,active,status,employer_user_id,employer_email,apply_email")
+    .select("id,title,restaurant_name,city,state,active,status,employer_user_id,employer_email,employer_account_id,apply_email,candidate_notification_email,candidate_notification_routing,posted_by_email,employer_accounts(owner_email,support_email,default_candidate_notification_routing)")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -191,7 +210,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "This job is no longer accepting candidate submissions." }, { status: 404 });
   }
 
-  const employerEmail = (job.apply_email || job.employer_email || "").trim().toLowerCase();
+  const employerEmail = resolveCandidateNotificationEmail(job);
   if (!job.employer_user_id && !employerEmail) {
     return NextResponse.json({ error: "This employer is missing contact details." }, { status: 400 });
   }
@@ -212,6 +231,7 @@ export async function POST(request: Request, context: RouteContext) {
       job_id: job.id,
       employer_user_id: job.employer_user_id,
       employer_email: employerEmail || job.employer_email,
+      employer_account_id: job.employer_account_id ?? null,
       candidate_name: candidateName,
       candidate_email: candidateEmail,
       candidate_phone: candidatePhone,

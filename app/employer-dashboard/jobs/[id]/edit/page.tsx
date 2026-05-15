@@ -25,7 +25,11 @@ type JobRecord = {
   description: string | null;
   active: boolean;
   created_at: string;
+  candidate_notification_email: string | null;
+  candidate_notification_routing: string | null;
 };
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function formatDate(isoDate: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -66,7 +70,7 @@ function parseLocationInput(location: string) {
 }
 
 async function loadOwnedJob(jobId: string, owner: EmployerOwner) {
-  const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at";
+  const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at,candidate_notification_email,candidate_notification_routing";
 
   const userIdResult = await supabase
     .from("jobs")
@@ -206,6 +210,12 @@ function EmployerJobEditForm() {
     const schedule = String(formData.get("schedule") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const benefits = String(formData.get("benefits") ?? "").trim();
+    const candidateNotificationEmail = String(formData.get("candidate_notification_email") ?? "").trim().toLowerCase();
+
+    if (candidateNotificationEmail && !EMAIL_PATTERN.test(candidateNotificationEmail)) {
+      setMessage("Enter a valid candidate notification email address.");
+      return;
+    }
 
     const { city, state } = parseLocationInput(location);
     const composedDescription = [
@@ -225,6 +235,8 @@ function EmployerJobEditForm() {
       city,
       state,
       description: composedDescription || null,
+      candidate_notification_email: candidateNotificationEmail || null,
+      candidate_notification_routing: candidateNotificationEmail ? "custom_job_email" : "job_poster",
     };
 
     setIsSaving(true);
@@ -443,6 +455,21 @@ function EmployerJobEditForm() {
                         className="rn-edit-field"
                         style={editFieldStyle}
                       />
+                    </label>
+
+                    <label style={{ color: homeTheme.text, fontWeight: 700 }}>
+                      Where should candidate interest emails be sent?
+                      <input
+                        name="candidate_notification_email"
+                        type="email"
+                        defaultValue={job.candidate_notification_email || ""}
+                        placeholder="location-manager@restaurant.com"
+                        className="rn-edit-field"
+                        style={editFieldStyle}
+                      />
+                      <span style={{ display: "block", marginTop: 6, color: homeTheme.muted, fontSize: 13 }}>
+                        This can be the restaurant/location email, hiring manager, or another contact who should receive candidate submissions.
+                      </span>
                     </label>
 
                     <label style={{ color: homeTheme.text, fontWeight: 700 }}>

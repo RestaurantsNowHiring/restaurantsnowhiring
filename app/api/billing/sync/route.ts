@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest, syncSubscriptionQuantityForEmployer } from "../../../../lib/billing";
+import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
 
 export async function POST(request: Request) {
   try {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    await syncSubscriptionQuantityForEmployer(user.id);
+    const context = await getEmployerAccountContext(user);
+    if (!context.canManageBilling) return NextResponse.json({ error: "Only Account Owners can manage billing." }, { status: 403 });
+
+    await syncSubscriptionQuantityForEmployer(context.ownerUserId);
     return NextResponse.json({ ok: true });
   } catch (error) {
     console.error("Billing quantity sync failed", { error });
