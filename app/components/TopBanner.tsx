@@ -91,6 +91,7 @@ export default function TopBanner() {
               className="top-banner__menu-button"
               aria-expanded={isMobileMenuOpen}
               aria-controls="top-banner-menu"
+              aria-label={isMobileMenuOpen ? "Close navigation menu" : "Open navigation menu"}
               onClick={() => setIsMobileMenuOpen((isOpen) => !isOpen)}
             >
               {isMobileMenuOpen ? "CLOSE" : "MENU"}
