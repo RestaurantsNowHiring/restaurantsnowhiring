@@ -5,6 +5,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 type Job = {
   id: string;
+  slug?: string;
   title: string;
   restaurant_name: string;
   city: string;
@@ -520,7 +521,7 @@ export default function JobsFilterPanel({
               >
                 <div style={{ minWidth: 0 }}>
                   <Link
-                    href={`/jobs/${job.id}`}
+                    href={`/jobs/${job.slug ?? job.id}`}
                     style={{
                       display: "inline-block",
                       fontWeight: 900,
@@ -549,7 +550,7 @@ export default function JobsFilterPanel({
                 </div>
 
                 <Link
-                  href={`/jobs/${job.id}`}
+                  href={`/jobs/${job.slug ?? job.id}`}
                   className="rn-btn-view"
                   style={{
                     backgroundColor: "#35806e",

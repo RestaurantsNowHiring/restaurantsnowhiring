@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "../../../lib/supabase";
 import {
@@ -9,13 +10,20 @@ import {
   isPubliclyVisibleJob,
 } from "../../../lib/jobStatus";
 import { absoluteUrl, noIndexRobots, truncateMetaDescription } from "../../../lib/seo";
+import {
+  buildJobSlugBase,
+  buildUniqueJobSlugMap,
+  extractShortIdFromJobSlug,
+  getJobPath,
+  isUuidRouteParam,
+} from "../../../lib/jobSlugs";
 
 type JobRouteParams = { id?: string };
 
 const JOB_DETAIL_FIELDS =
   "id,title,restaurant_name,city,state,description,created_at,approved_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
 
-async function fetchPublicJobForSeo(id?: string) {
+async function fetchPublicJobById(id?: string) {
   if (!id) return null;
 
   const result = await supabase.from("jobs").select(JOB_DETAIL_FIELDS).eq("id", id).limit(1);
@@ -36,6 +44,75 @@ async function fetchPublicJobForSeo(id?: string) {
   if (result.error) return null;
   const job = result.data?.[0] as Job | undefined;
   return job && isPubliclyVisibleJob(job.status, job.active) ? job : null;
+}
+
+type SlugLookupJob = Pick<Job, "id" | "title" | "city" | "state" | "active" | "status">;
+
+async function fetchVisibleSlugJobs() {
+  const initialResult = await supabase
+    .from("jobs")
+    .select("id,title,city,state,active,status")
+    .order("created_at", { ascending: false })
+    .limit(5000);
+
+  const result = isMissingStatusColumnError(initialResult.error)
+    ? await supabase
+        .from("jobs")
+        .select("id,title,city,state,active")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(5000)
+    : initialResult;
+
+  if (result.error) return [];
+  return ((result.data ?? []) as SlugLookupJob[]).filter((job) =>
+    isPubliclyVisibleJob(job.status, job.active)
+  );
+}
+
+async function getCanonicalJobPath(job: Job) {
+  const visibleJobs = await fetchVisibleSlugJobs();
+  const slugById = buildUniqueJobSlugMap(
+    visibleJobs.some((entry) => entry.id === job.id) ? visibleJobs : [...visibleJobs, job]
+  );
+
+  return getJobPath(job, slugById);
+}
+
+async function resolvePublicJobRouteParam(routeParam?: string) {
+  if (!routeParam) return null;
+
+  if (isUuidRouteParam(routeParam)) {
+    const job = await fetchPublicJobById(routeParam);
+    return job ? { job, canonicalPath: await getCanonicalJobPath(job) } : null;
+  }
+
+  const shortId = extractShortIdFromJobSlug(routeParam);
+  if (shortId) {
+    const result = await supabase
+      .from("jobs")
+      .select(JOB_DETAIL_FIELDS)
+      .ilike("id", `${shortId}%`)
+      .limit(2);
+
+    if (!result.error) {
+      const job = ((result.data ?? []) as Job[]).find((entry) =>
+        isPubliclyVisibleJob(entry.status, entry.active)
+      );
+
+      if (job) return { job, canonicalPath: await getCanonicalJobPath(job) };
+    }
+  }
+
+  const visibleJobs = await fetchVisibleSlugJobs();
+  const baseMatches = visibleJobs.filter((job) => buildJobSlugBase(job) === routeParam);
+  if (baseMatches.length !== 1) return null;
+
+  const job = await fetchPublicJobById(baseMatches[0].id);
+  if (!job) return null;
+
+  const slugById = buildUniqueJobSlugMap(visibleJobs);
+  return { job, canonicalPath: getJobPath(job, slugById) };
 }
 
 function formatEmploymentType(value: string | null | undefined) {
@@ -82,8 +159,8 @@ function buildJobMetaDescription(job: Job) {
   );
 }
 
-function buildJobPostingSchema(job: Job) {
-  const jobUrl = absoluteUrl(`/jobs/${job.id}`);
+function buildJobPostingSchema(job: Job, canonicalPath: string) {
+  const jobUrl = absoluteUrl(canonicalPath);
   const locationName = job.city && job.state ? `${job.city}, ${job.state}` : undefined;
   const orgUrl = safeExternalUrl(job.company_website);
 
@@ -133,7 +210,8 @@ export async function generateMetadata({
   params: JobRouteParams | Promise<JobRouteParams>;
 }): Promise<Metadata> {
   const resolvedParams = await Promise.resolve(params);
-  const job = await fetchPublicJobForSeo(resolvedParams?.id);
+  const resolvedRoute = await resolvePublicJobRouteParam(resolvedParams?.id);
+  const job = resolvedRoute?.job ?? null;
 
   if (!job) {
     return {
@@ -149,7 +227,7 @@ export async function generateMetadata({
   const location = job.city && job.state ? `${job.city}, ${job.state}` : "Restaurant Job";
   const title = `${job.title} at ${job.restaurant_name} - ${location}`;
   const description = buildJobMetaDescription(job);
-  const url = absoluteUrl(`/jobs/${job.id}`);
+  const url = absoluteUrl(resolvedRoute?.canonicalPath ?? getJobPath(job));
 
   return {
     title,
@@ -201,7 +279,9 @@ export default async function JobDetailsPage({
   params: { id?: string } | Promise<{ id?: string }>;
 }) {
   const resolvedParams = await Promise.resolve(params);
-  const id = resolvedParams?.id;
+  const routeParam = resolvedParams?.id;
+  const resolvedRoute = await resolvePublicJobRouteParam(routeParam);
+  const id = resolvedRoute?.job.id ?? (isUuidRouteParam(routeParam) ? routeParam : undefined);
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const serviceRoleClient =
@@ -314,6 +394,10 @@ export default async function JobDetailsPage({
   let job: Job | undefined = (data?.[0] as Job | undefined) ?? undefined;
 
   const notFound = !id || !!error || !job || !isPubliclyVisibleJob(job.status, job.active);
+
+  if (!notFound && resolvedRoute?.canonicalPath && routeParam !== resolvedRoute.canonicalPath.replace(/^\/jobs\//, "")) {
+    redirect(resolvedRoute.canonicalPath);
+  }
 
   if (!notFound && !missingViews && job) {
     const currentViews = typeof job.views === "number" && Number.isFinite(job.views) ? job.views : 0;
@@ -437,7 +521,8 @@ export default async function JobDetailsPage({
   };
 
   const visibleJob = job as Job;
-  const jobPostingSchema = !notFound && job ? buildJobPostingSchema(visibleJob) : null;
+  const canonicalPath = !notFound && job ? resolvedRoute?.canonicalPath ?? getJobPath(visibleJob) : null;
+  const jobPostingSchema = !notFound && job && canonicalPath ? buildJobPostingSchema(visibleJob, canonicalPath) : null;
 
   return (
     <main

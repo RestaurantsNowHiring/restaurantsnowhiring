@@ -9,6 +9,7 @@ import {
   homeTheme,
 } from "../styles/homepageDesignSystem";
 import { buildPageMetadata } from "../../lib/seo";
+import { buildUniqueJobSlugMap } from "../../lib/jobSlugs";
 
 type JobsSearchParamsShape = { [key: string]: string | string[] | undefined };
 
@@ -109,6 +110,30 @@ export default async function JobsPage({
     isPubliclyVisibleJob(job.status, job.active)
   );
 
+  const allJobsForSlugsResult = rolesArray.length
+    ? await supabase
+        .from("jobs")
+        .select("id,title,restaurant_name,city,state,created_at,active,status,role_category,pay_range,employment_type")
+        .order("created_at", { ascending: false })
+    : { data: activeJobs, error: null };
+
+  const allJobsForSlugsFallback = isMissingStatusColumnError(allJobsForSlugsResult.error)
+    ? await supabase
+        .from("jobs")
+        .select("id,title,restaurant_name,city,state,created_at,active,role_category,pay_range,employment_type")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+    : allJobsForSlugsResult;
+
+  const visibleJobsForSlugs = ((allJobsForSlugsFallback.data ?? []) as Job[]).filter((job) =>
+    isPubliclyVisibleJob(job.status, job.active)
+  );
+  const slugById = buildUniqueJobSlugMap(visibleJobsForSlugs);
+  const jobsWithSlugs = activeJobs.map((job) => ({
+    ...job,
+    slug: slugById.get(job.id) ?? job.id,
+  }));
+
   return (
     <main
       style={{
@@ -205,7 +230,7 @@ export default async function JobsPage({
               Could not load jobs yet: {error.message}
             </div>
           ) : (
-            <JobsFilterPanel jobs={activeJobs} initialRoleCategories={rolesArray} />
+            <JobsFilterPanel jobs={jobsWithSlugs} initialRoleCategories={rolesArray} />
           )}
         </div>
       </section>
