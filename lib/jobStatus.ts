@@ -95,53 +95,29 @@ export function getEmployerPauseResumeUpdate(status: string | null | undefined, 
     : { nextActive: true, nextStatus: "active" };
 }
 
-export function isMissingStatusColumnError(error: { code?: string; message?: string } | null): boolean {
+function isMissingColumnError(error: { code?: string; message?: string } | null, column: string): boolean {
   if (!error) return false;
 
   const message = (error.message ?? "").toLowerCase();
-  if (error.code === "PGRST204" || error.code === "42703") {
-    return true;
-  }
-
-  if (!message.includes("status")) return false;
+  if (!message.includes(column.toLowerCase())) return false;
 
   return (
-    message.includes("could not find the 'status' column") ||
-    message.includes("column \"status\" does not exist") ||
-    message.includes("jobs.status does not exist")
+    error.code === "PGRST204" ||
+    error.code === "42703" ||
+    message.includes(`could not find the '${column}' column`) ||
+    message.includes(`column "${column}" does not exist`) ||
+    message.includes(`jobs.${column} does not exist`)
   );
+}
+
+export function isMissingStatusColumnError(error: { code?: string; message?: string } | null): boolean {
+  return isMissingColumnError(error, "status");
 }
 
 export function isMissingViewsColumnError(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-
-  const message = (error.message ?? "").toLowerCase();
-  if (error.code === "PGRST204" || error.code === "42703") {
-    return true;
-  }
-
-  if (!message.includes("views")) return false;
-
-  return (
-    message.includes("could not find the 'views' column") ||
-    message.includes("column \"views\" does not exist") ||
-    message.includes("jobs.views does not exist")
-  );
+  return isMissingColumnError(error, "views");
 }
 
 export function isMissingApprovedAtColumnError(error: { code?: string; message?: string } | null): boolean {
-  if (!error) return false;
-
-  const message = (error.message ?? "").toLowerCase();
-  if (error.code === "PGRST204" || error.code === "42703") {
-    return true;
-  }
-
-  if (!message.includes("approved_at")) return false;
-
-  return (
-    message.includes("could not find the 'approved_at' column") ||
-    message.includes('column "approved_at" does not exist') ||
-    message.includes("jobs.approved_at does not exist")
-  );
+  return isMissingColumnError(error, "approved_at");
 }
