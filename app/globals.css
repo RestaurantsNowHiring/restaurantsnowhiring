@@ -390,3 +390,137 @@ html, body {
   clip: auto;
   white-space: normal;
 }
+
+/* ===== Mobile Top Banner Layout ===== */
+.top-banner__mobile-header,
+.top-banner__mobile-spacer {
+  display: none;
+}
+
+.top-banner__menu {
+  display: contents;
+}
+
+@media (max-width: 767px) {
+  .top-banner {
+    width: 100% !important;
+    height: auto !important;
+    min-height: 64px;
+  }
+
+  .top-banner__inner {
+    height: auto !important;
+    min-height: 64px;
+    padding: 10px 16px !important;
+    align-items: stretch !important;
+    flex-direction: column;
+    gap: 10px;
+    box-sizing: border-box;
+  }
+
+  .top-banner__mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .top-banner__brand {
+    color: #fef5ea;
+    font-family: var(--font-coldsmith);
+    font-size: 24px;
+    font-weight: 400;
+    letter-spacing: 1px;
+    line-height: 1.05;
+    text-transform: uppercase;
+    text-decoration: none;
+    min-width: 0;
+  }
+
+  .top-banner__brand:hover {
+    color: #fef5ea;
+    text-decoration: none;
+  }
+
+  .top-banner__menu-button {
+    flex: 0 0 auto;
+    border: 1px solid #eae7e2;
+    border-radius: 999px;
+    background: transparent;
+    color: #fef5ea;
+    cursor: pointer;
+    font-family: var(--font-coldsmith);
+    font-size: 18px;
+    font-weight: 400;
+    letter-spacing: 1.1px;
+    line-height: 1;
+    padding: 8px 12px;
+    text-transform: uppercase;
+  }
+
+  .top-banner__menu {
+    display: none;
+  }
+
+  .top-banner--menu-open .top-banner__menu {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding-bottom: 4px;
+  }
+
+  .top-banner__nav,
+  .top-banner__auth {
+    flex-wrap: wrap;
+    gap: 10px 16px !important;
+  }
+
+  .top-banner__nav {
+    border-top: 1px solid rgba(234, 231, 226, 0.35);
+    padding-top: 12px;
+  }
+
+  .top-banner__nav .banner-link,
+  .top-banner__auth .banner-link--login,
+  .top-banner__sign-out {
+    font-size: 20px !important;
+    line-height: 1.1;
+    white-space: normal;
+  }
+
+  .top-banner__auth .banner-link--login {
+    overflow-wrap: anywhere;
+  }
+
+  .top-banner__mobile-spacer {
+    display: block;
+    height: 64px;
+  }
+
+  .top-banner__mobile-spacer--menu-open {
+    height: 208px;
+  }
+}
+
+@media (max-width: 390px) {
+  .top-banner__brand {
+    font-size: 22px;
+    letter-spacing: 0.8px;
+  }
+
+  .top-banner__menu-button {
+    font-size: 17px;
+    padding: 8px 10px;
+  }
+}
+
+@media (max-width: 375px) {
+  .top-banner__inner {
+    padding-inline: 12px !important;
+  }
+
+  .top-banner__brand {
+    font-size: 20px;
+  }
+}
