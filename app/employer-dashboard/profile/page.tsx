@@ -266,7 +266,7 @@ export default function EmployerProfilePage() {
 
         <section className="rn-profile-summary" aria-label="Signed-in account summary">
           <div>
-            <p>Signed in as</p>
+            <p>Signed-in email</p>
             <strong>{displayValue(profile?.login_email)}</strong>
           </div>
           <div>
