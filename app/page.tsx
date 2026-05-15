@@ -7,6 +7,7 @@ import LatestJobsPanel from "./components/LatestJobsPanel";
 import TopRolesSection from "./components/TopRolesSection";
 import { ClipboardList, Search, ShieldCheck } from "lucide-react";
 import { buildPageMetadata } from "../lib/seo";
+import { buildUniqueJobSlugMap } from "../lib/jobSlugs";
 
 export const metadata = buildPageMetadata({
   title: "Restaurant Jobs Hiring Now",
@@ -50,9 +51,14 @@ export default async function HomePage() {
         .order("created_at", { ascending: false })
     : initialResult;
 
-  const latestJobs: Job[] = ((jobs ?? []) as Job[])
-    .filter((job) => isPubliclyVisibleJob(job.status, job.active))
-    .slice(0, 6);
+  const visibleJobs: Job[] = ((jobs ?? []) as Job[]).filter((job) =>
+    isPubliclyVisibleJob(job.status, job.active)
+  );
+  const slugById = buildUniqueJobSlugMap(visibleJobs);
+  const latestJobs = visibleJobs.slice(0, 6).map((job) => ({
+    ...job,
+    slug: slugById.get(job.id) ?? job.id,
+  }));
 
   // Theme tokens
   const GREEN = "#35806e";
