@@ -286,65 +286,65 @@ export default function EmployerProfilePage() {
 
         <div className="rn-profile-stack">
           <section style={homeCardStyle}>
-              <h2 className="rn-profile-section-title">Edit Profile</h2>
-              <p className="rn-profile-section-copy">
-                These safe fields are used for employer contact and location details only. Billing, admin, and Stripe fields cannot be edited here.
-              </p>
-              <form onSubmit={handleSave} className="rn-profile-form">
-                <div>
-                  <label htmlFor="company-name" style={labelStyle}>Company / Restaurant name</label>
-                  <input id="company-name" value={form.company_name} onChange={(event) => updateField("company_name", event.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label htmlFor="contact-name" style={labelStyle}>Contact name</label>
-                  <input id="contact-name" value={form.contact_name} onChange={(event) => updateField("contact_name", event.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label htmlFor="phone" style={labelStyle}>Phone number</label>
-                  <input id="phone" type="tel" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label htmlFor="support-email" style={labelStyle}>Support / contact email</label>
-                  <input id="support-email" type="email" value={form.support_email} onChange={(event) => updateField("support_email", event.target.value)} style={inputStyle} placeholder={profile?.login_email ?? "jobs@restaurant.com"} />
-                </div>
-                <div className="rn-profile-form-full">
-                  <label htmlFor="address" style={labelStyle}>Business / location address</label>
-                  <input id="address" value={form.address} onChange={(event) => updateField("address", event.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label htmlFor="city" style={labelStyle}>City</label>
-                  <input id="city" value={form.city} onChange={(event) => updateField("city", event.target.value)} style={inputStyle} />
-                </div>
-                <div>
-                  <label htmlFor="state" style={labelStyle}>State</label>
-                  <select id="state" value={form.state} onChange={(event) => updateField("state", event.target.value)} style={inputStyle}>
-                    <option value="">Select state</option>
-                    {STATES.map((state) => (
-                      <option key={state} value={state}>{state}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label htmlFor="postal-code" style={labelStyle}>ZIP / Postal code</label>
-                  <input id="postal-code" value={form.postal_code} onChange={(event) => updateField("postal_code", event.target.value)} style={inputStyle} />
-                </div>
-                <div className="rn-profile-form-actions">
-                  <button type="submit" style={homePrimaryButton} className="rn-btn-primary" disabled={isSaving}>
-                    {isSaving ? "Saving…" : "Save Profile"}
-                  </button>
-                </div>
-              </form>
-            </section>
+            <h2 className="rn-profile-section-title">Edit Profile</h2>
+            <p className="rn-profile-section-copy">
+              These safe fields are used for employer contact and location details only. Billing, admin, and Stripe fields cannot be edited here.
+            </p>
+            <form onSubmit={handleSave} className="rn-profile-form">
+              <div>
+                <label htmlFor="company-name" style={labelStyle}>Company / Restaurant name</label>
+                <input id="company-name" value={form.company_name} onChange={(event) => updateField("company_name", event.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label htmlFor="contact-name" style={labelStyle}>Contact name</label>
+                <input id="contact-name" value={form.contact_name} onChange={(event) => updateField("contact_name", event.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label htmlFor="phone" style={labelStyle}>Phone number</label>
+                <input id="phone" type="tel" value={form.phone} onChange={(event) => updateField("phone", event.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label htmlFor="support-email" style={labelStyle}>Support / contact email</label>
+                <input id="support-email" type="email" value={form.support_email} onChange={(event) => updateField("support_email", event.target.value)} style={inputStyle} placeholder={profile?.login_email ?? "jobs@restaurant.com"} />
+              </div>
+              <div className="rn-profile-form-full">
+                <label htmlFor="address" style={labelStyle}>Business / location address</label>
+                <input id="address" value={form.address} onChange={(event) => updateField("address", event.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label htmlFor="city" style={labelStyle}>City</label>
+                <input id="city" value={form.city} onChange={(event) => updateField("city", event.target.value)} style={inputStyle} />
+              </div>
+              <div>
+                <label htmlFor="state" style={labelStyle}>State</label>
+                <select id="state" value={form.state} onChange={(event) => updateField("state", event.target.value)} style={inputStyle}>
+                  <option value="">Select state</option>
+                  {STATES.map((state) => (
+                    <option key={state} value={state}>{state}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="postal-code" style={labelStyle}>ZIP / Postal code</label>
+                <input id="postal-code" value={form.postal_code} onChange={(event) => updateField("postal_code", event.target.value)} style={inputStyle} />
+              </div>
+              <div className="rn-profile-form-actions">
+                <button type="submit" style={homePrimaryButton} className="rn-btn-primary" disabled={isSaving}>
+                  {isSaving ? "Saving…" : "Save Profile"}
+                </button>
+              </div>
+            </form>
+          </section>
 
-            <section style={homeCardStyle}>
-              <h2 className="rn-profile-section-title">Password Management</h2>
-              <p className="rn-profile-section-copy">
-                For security, your current password is never shown. We will email a Supabase password reset link to your signed-in email address.
-              </p>
-              <button type="button" style={homeSecondaryButton} className="rn-btn-secondary" onClick={handleSendPasswordReset} disabled={isSendingReset}>
-                {isSendingReset ? "Sending…" : "Send Password Reset Email"}
-              </button>
-            </section>
+          <section style={homeCardStyle}>
+            <h2 className="rn-profile-section-title">Password Management</h2>
+            <p className="rn-profile-section-copy">
+              For security, your current password is never shown. We will email a Supabase password reset link to your signed-in email address.
+            </p>
+            <button type="button" style={homeSecondaryButton} className="rn-btn-secondary" onClick={handleSendPasswordReset} disabled={isSendingReset}>
+              {isSendingReset ? "Sending…" : "Send Password Reset Email"}
+            </button>
+          </section>
         </div>
       </div>
 
@@ -419,7 +419,8 @@ export default function EmployerProfilePage() {
           display: grid;
           gap: 10px;
           grid-template-columns: repeat(2, minmax(0, 1fr));
-          margin-bottom: 16px;
+          margin: 0 auto 16px;
+          max-width: 900px;
           padding: 14px;
         }
 
