@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSiteUrl } from "../../../../../lib/billing";
 import { isPubliclyVisibleJob } from "../../../../../lib/jobStatus";
+import { buildCandidateSubmissionEmailHtml, buildCandidateSubmissionEmailText } from "../../../../../lib/candidateSubmissionEmail";
 import { getSupabaseAdminClient } from "../../../../../lib/supabaseAdmin";
 
 const RESUME_BUCKET = "candidate-resumes";
@@ -45,64 +46,6 @@ function getExtension(filename: string) {
   return filename.split(".").pop()?.toLowerCase() ?? "";
 }
 
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function formatLocation(job: JobRow) {
-  return [job.restaurant_name, [job.city, job.state].filter(Boolean).join(", ")].filter(Boolean).join(" — ") || "—";
-}
-
-function buildEmailText(input: { submission: CandidateSubmissionRow; job: JobRow; dashboardUrl: string }) {
-  const { submission, job, dashboardUrl } = input;
-  return [
-    "New candidate interested in your job ad",
-    "",
-    `Candidate name: ${submission.candidate_name}`,
-    `Candidate email: ${submission.candidate_email}`,
-    `Candidate phone: ${submission.candidate_phone}`,
-    `Job title: ${job.title}`,
-    `Restaurant/location: ${formatLocation(job)}`,
-    `Optional message: ${submission.message || "—"}`,
-    "",
-    `View candidates: ${dashboardUrl}`,
-  ].join("\n");
-}
-
-function buildEmailHtml(input: { submission: CandidateSubmissionRow; job: JobRow; dashboardUrl: string }) {
-  const { submission, job, dashboardUrl } = input;
-  const rows = [
-    ["Candidate name", submission.candidate_name],
-    ["Candidate email", submission.candidate_email],
-    ["Candidate phone", submission.candidate_phone],
-    ["Job title", job.title],
-    ["Restaurant/location", formatLocation(job)],
-    ["Optional message", submission.message || "—"],
-  ];
-
-  return `
-    <h2>New candidate interested in your job ad</h2>
-    <table style="border-collapse:collapse;width:100%;max-width:720px">
-      ${rows
-        .map(
-          ([label, value]) => `
-            <tr>
-              <th style="border:1px solid #ddd;padding:8px;text-align:left;vertical-align:top;background:#f7f7f7;width:170px">${escapeHtml(label)}</th>
-              <td style="border:1px solid #ddd;padding:8px;white-space:pre-wrap">${escapeHtml(value)}</td>
-            </tr>
-          `,
-        )
-        .join("")}
-    </table>
-    <p><a href="${escapeHtml(dashboardUrl)}">Open employer dashboard candidates</a></p>
-  `;
-}
-
 type CandidateSubmissionRow = {
   id: string;
   candidate_name: string;
@@ -132,6 +75,7 @@ async function sendEmployerNotification(input: { to: string; submission: Candida
 
   const fromEmail = process.env.CANDIDATE_NOTIFICATION_FROM ?? process.env.CONTACT_NOTIFICATION_FROM ?? "Restaurants Now Hiring <notifications@restaurantsnowhiring.com>";
   const dashboardUrl = `${getSiteUrl()}/employer-dashboard#interested-candidates`;
+  const resumeUrl = `${getSiteUrl()}/employer-dashboard#candidate-${encodeURIComponent(input.submission.id)}`;
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -143,8 +87,8 @@ async function sendEmployerNotification(input: { to: string; submission: Candida
       to: input.to,
       subject: "New candidate interested in your job ad",
       reply_to: input.submission.candidate_email,
-      text: buildEmailText({ ...input, dashboardUrl }),
-      html: buildEmailHtml({ ...input, dashboardUrl }),
+      text: buildCandidateSubmissionEmailText({ ...input, dashboardUrl, resumeUrl }),
+      html: buildCandidateSubmissionEmailHtml({ ...input, dashboardUrl, resumeUrl }),
     }),
   });
 
