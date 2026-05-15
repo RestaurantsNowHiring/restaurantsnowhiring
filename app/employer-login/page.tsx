@@ -24,7 +24,8 @@ function EmployerLoginForm() {
   // Signup fields
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
-  const [companyName, setCompanyName] = useState("");
+  const [employerAccountName, setEmployerAccountName] = useState("");
+  const [restaurantBrandName, setRestaurantBrandName] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [jobsOpen, setJobsOpen] = useState("");
 
@@ -135,7 +136,8 @@ function EmployerLoginForm() {
       if (
         !firstName.trim() ||
         !lastName.trim() ||
-        !companyName.trim() ||
+        !employerAccountName.trim() ||
+        !restaurantBrandName.trim() ||
         !jobTitle.trim() ||
         !jobsOpen
       ) {
@@ -152,7 +154,9 @@ function EmployerLoginForm() {
           data: {
             first_name: firstName.trim(),
             last_name: lastName.trim(),
-            company_name: companyName.trim(),
+            employer_account_name: employerAccountName.trim(),
+            restaurant_brand_name: restaurantBrandName.trim(),
+            company_name: restaurantBrandName.trim(),
             job_title: jobTitle.trim(),
             jobs_open: jobsOpen,
             role: "employer",
@@ -369,7 +373,7 @@ function EmployerLoginForm() {
             >
               {mode === "login"
                 ? "Access your employer dashboard, manage listings, and continue posting restaurant jobs."
-                : "Set up your employer profile to post restaurant jobs and manage listings in one place."}
+                : "Only create a new employer account when you are starting a new company, franchise, or operator workspace."}
             </p>
 
             <div
@@ -387,8 +391,8 @@ function EmployerLoginForm() {
                   body: "Create and manage job listings from one dashboard.",
                 },
                 {
-                  title: "Track activity",
-                  body: "Keep employer access organized and easy to maintain.",
+                  title: "Account isolation",
+                  body: "Billing, jobs, candidates, and team access stay inside the current employer account.",
                 },
                 {
                   title: "Built for restaurants",
@@ -548,6 +552,61 @@ function EmployerLoginForm() {
                 {/* STEP 1 */}
                 {signupStep === 1 && (
                   <form onSubmit={handleSignupEmailContinue} style={{ display: "grid", gap: 16 }}>
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 12,
+                      }}
+                    >
+                      <div
+                        style={{
+                          border: "1px solid rgba(53,128,110,0.24)",
+                          backgroundColor: "rgba(53,128,110,0.08)",
+                          borderRadius: 16,
+                          padding: 16,
+                        }}
+                      >
+                        <h2 style={{ margin: 0, color: GREEN, fontFamily: "var(--font-body)", fontSize: 18 }}>
+                          Creating a new employer account?
+                        </h2>
+                        <p style={{ margin: "8px 0 0 0", color: TEXT, fontFamily: "var(--font-body)", fontWeight: 750, lineHeight: 1.5 }}>
+                          Continue here only if you are starting a new company, franchise, or operator account. You will become the Account Owner and get a separate workspace for billing, jobs, candidates, and team access.
+                        </p>
+                      </div>
+
+                      <div
+                        style={{
+                          border: `1px solid ${BORDER}`,
+                          backgroundColor: "#fff",
+                          borderRadius: 16,
+                          padding: 16,
+                        }}
+                      >
+                        <h2 style={{ margin: 0, color: TEXT, fontFamily: "var(--font-body)", fontSize: 18 }}>
+                          Joining an existing employer account?
+                        </h2>
+                        <p style={{ margin: "8px 0 0 0", color: MUTED, fontFamily: "var(--font-body)", fontWeight: 750, lineHeight: 1.5 }}>
+                          If your company already invited you, please use the invitation link from your email so you are added to the correct employer account.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div
+                      role="note"
+                      style={{
+                        border: "1px solid rgba(176,0,32,0.18)",
+                        backgroundColor: "rgba(176,0,32,0.06)",
+                        borderRadius: 14,
+                        padding: 14,
+                        color: TEXT,
+                        fontFamily: "var(--font-body)",
+                        fontWeight: 850,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      Already invited by your company? Do not create a new employer account. Use your invitation link or contact your account owner.
+                    </div>
+
                     <div>
                       <label htmlFor="signup-work-email" style={labelStyle}>Work Email</label>
                       <input
@@ -726,14 +785,28 @@ function EmployerLoginForm() {
                     </div>
 
                     <div>
-                      <label htmlFor="signup-company" style={labelStyle}>Company *</label>
+                      <label htmlFor="signup-account-name" style={labelStyle}>Employer Account Name *</label>
                       <input
-                        id="signup-company"
-                        aria-invalid={!!message && mode === "signup" && signupStep === 3 && !companyName.trim()}
+                        id="signup-account-name"
+                        aria-invalid={!!message && mode === "signup" && signupStep === 3 && !employerAccountName.trim()}
                         aria-describedby={message && mode === "signup" && signupStep === 3 ? "signup-step-3-message" : undefined}
                         required
-                        value={companyName}
-                        onChange={(e) => setCompanyName(e.target.value)}
+                        value={employerAccountName}
+                        onChange={(e) => setEmployerAccountName(e.target.value)}
+                        style={inputStyle}
+                        placeholder="Acme Restaurant Group"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="signup-restaurant-brand" style={labelStyle}>Restaurant Brand Name *</label>
+                      <input
+                        id="signup-restaurant-brand"
+                        aria-invalid={!!message && mode === "signup" && signupStep === 3 && !restaurantBrandName.trim()}
+                        aria-describedby={message && mode === "signup" && signupStep === 3 ? "signup-step-3-message" : undefined}
+                        required
+                        value={restaurantBrandName}
+                        onChange={(e) => setRestaurantBrandName(e.target.value)}
                         style={inputStyle}
                         placeholder="MISSION BBQ"
                       />
@@ -781,6 +854,21 @@ function EmployerLoginForm() {
                         style={{ ...inputStyle, backgroundColor: "rgba(0,0,0,.04)" }}
                         disabled
                       />
+                    </div>
+
+                    <div
+                      style={{
+                        border: "1px solid rgba(53,128,110,0.18)",
+                        backgroundColor: "rgba(53,128,110,0.08)",
+                        borderRadius: 14,
+                        padding: 14,
+                        color: TEXT,
+                        fontFamily: "var(--font-body)",
+                        fontWeight: 800,
+                        lineHeight: 1.5,
+                      }}
+                    >
+                      This creates a new, isolated employer account. The first user is the Account Owner; invited teammates should use their invitation instead.
                     </div>
 
                     <p

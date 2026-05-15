@@ -18,6 +18,8 @@ create table if not exists public.employer_accounts (
   id uuid primary key default gen_random_uuid(),
   owner_user_id uuid not null references auth.users(id) on delete cascade,
   owner_email text not null,
+  account_name text,
+  restaurant_brand_name text,
   company_name text,
   support_email text,
   default_candidate_notification_routing public.candidate_notification_routing not null default 'job_poster',
@@ -27,7 +29,9 @@ create table if not exists public.employer_accounts (
   constraint employer_accounts_support_email_format check (support_email is null or support_email ~* '^[^\s@]+@[^\s@]+\.[^\s@]+$')
 );
 
-create unique index if not exists employer_accounts_owner_user_unique
+drop index if exists employer_accounts_owner_user_unique;
+
+create index if not exists employer_accounts_owner_user_idx
 on public.employer_accounts (owner_user_id);
 
 create table if not exists public.employer_team_members (
@@ -51,6 +55,10 @@ on public.employer_team_members (account_id, email);
 create unique index if not exists employer_team_members_account_user_unique
 on public.employer_team_members (account_id, user_id)
 where user_id is not null;
+
+alter table public.employer_accounts
+  add column if not exists account_name text,
+  add column if not exists restaurant_brand_name text;
 
 alter table public.employer_profiles
   add column if not exists employer_account_id uuid references public.employer_accounts(id) on delete cascade;
@@ -95,10 +103,12 @@ before update on public.employer_team_members
 for each row execute function public.touch_updated_at();
 
 -- Backfill path: every existing single-employer auth user/job owner becomes an Account Owner.
-insert into public.employer_accounts (owner_user_id, owner_email, company_name, support_email)
+insert into public.employer_accounts (owner_user_id, owner_email, account_name, restaurant_brand_name, company_name, support_email)
 select distinct on (source.owner_user_id)
   source.owner_user_id,
   source.owner_email,
+  source.company_name,
+  source.company_name,
   source.company_name,
   source.support_email
 from (
@@ -123,13 +133,22 @@ from (
   where job.employer_user_id is not null
   group by job.employer_user_id, coalesce(nullif(job.employer_email, ''), auth_user.email)
 ) source
-where source.owner_user_id is not null and source.owner_email is not null
-on conflict (owner_user_id) do update
+where source.owner_user_id is not null
+  and source.owner_email is not null
+  and not exists (
+    select 1
+    from public.employer_team_members existing_member
+    where existing_member.user_id = source.owner_user_id
+      and existing_member.role = 'account_owner'
+      and existing_member.status = 'active'
+  );
+
+update public.employer_accounts
 set
-  owner_email = excluded.owner_email,
-  company_name = coalesce(public.employer_accounts.company_name, excluded.company_name),
-  support_email = coalesce(public.employer_accounts.support_email, excluded.support_email),
-  updated_at = now();
+  account_name = coalesce(account_name, company_name),
+  restaurant_brand_name = coalesce(restaurant_brand_name, company_name)
+where account_name is null
+   or restaurant_brand_name is null;
 
 insert into public.employer_team_members (account_id, user_id, email, role, status, can_manage_notification_routing)
 select account.id, account.owner_user_id, lower(account.owner_email), 'account_owner', 'active', true
