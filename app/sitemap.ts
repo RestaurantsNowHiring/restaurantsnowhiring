@@ -3,6 +3,7 @@ import { supabase } from "../lib/supabase";
 import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../lib/jobStatus";
 import { absoluteUrl } from "../lib/seo";
 import { buildUniqueJobSlugMap, getJobPath } from "../lib/jobSlugs";
+import { restaurantRolePages } from "../lib/restaurantRolePages";
 
 type SitemapJob = {
   id: string;
@@ -15,6 +16,7 @@ type SitemapJob = {
 };
 
 const staticRoutes = ["/", "/jobs", "/contact", "/about", "/pricing", "/terms", "/privacy"];
+const roleRoutes = restaurantRolePages.map((role) => `/${role.slug}`);
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
@@ -22,6 +24,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: new Date(),
     changeFrequency: route === "/jobs" || route === "/" ? "daily" : "monthly",
     priority: route === "/" ? 1 : route === "/jobs" ? 0.9 : 0.6,
+  }));
+
+  const roleEntries: MetadataRoute.Sitemap = roleRoutes.map((route) => ({
+    url: absoluteUrl(route),
+    lastModified: new Date(),
+    changeFrequency: "daily",
+    priority: 0.85,
   }));
 
   const initialResult = await supabase
@@ -51,5 +60,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  return [...staticEntries, ...jobEntries];
+  return [...staticEntries, ...roleEntries, ...jobEntries];
 }

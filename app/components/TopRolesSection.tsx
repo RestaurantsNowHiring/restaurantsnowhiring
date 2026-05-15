@@ -4,6 +4,7 @@ type RoleCard = {
   title: string;
   imageSrc: string;
   roleFilters: string[]; // role_category values
+  href?: string;
   objectPosition?: string;
   imageScale?: number; // ✅ allows "zoom" per image
 };
@@ -26,6 +27,7 @@ export default function TopRolesSection() {
       title: "Line / Prep Cooks",
       imageSrc: "/roles/line-cooks.JPG",
       roleFilters: ["Line", "Prep"],
+      href: "/line-cook-jobs",
       objectPosition: "center 20%",
       imageScale: 1.03,
     },
@@ -33,6 +35,7 @@ export default function TopRolesSection() {
       title: "Cashier / Server",
       imageSrc: "/roles/servers.jpg",
       roleFilters: ["Cashier", "Server"],
+      href: "/server-jobs",
       objectPosition: "center 25%",
       imageScale: 1.03,
     },
@@ -40,6 +43,7 @@ export default function TopRolesSection() {
       title: "Managers",
       imageSrc: "/roles/managers.jpg",
       roleFilters: ["Manager"],
+      href: "/restaurant-manager-jobs",
       // ✅ tweak these two until it feels perfect
       objectPosition: "center center", // move “camera” up/down
       imageScale: 1.8, // zoom in
@@ -57,7 +61,7 @@ export default function TopRolesSection() {
         }}
       >
         {roles.map((r) => {
-          const href = buildJobsHref(r.roleFilters);
+          const href = r.href ?? buildJobsHref(r.roleFilters);
 
           return (
             <div
