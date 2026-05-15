@@ -100,7 +100,7 @@ export default function TeamAccessPage() {
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ email, role, can_manage_notification_routing: canRouteNotifications }),
     });
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    const payload = (await response.json().catch(() => null)) as { error?: string; inviteEmailWarning?: string | null } | null;
 
     if (!response.ok) {
       setMessage(payload?.error || "Could not save team user.");
@@ -111,7 +111,7 @@ export default function TeamAccessPage() {
     setEmail("");
     setRole("viewer");
     setCanRouteNotifications(false);
-    setMessage("Team access saved.");
+    setMessage(payload?.inviteEmailWarning || "Team access saved and invitation email sent.");
     setBusy(false);
     await loadTeam();
   }
@@ -133,6 +133,25 @@ export default function TeamAccessPage() {
       return;
     }
     await loadTeam();
+  }
+
+
+  async function resendInvite(member: TeamMember) {
+    const token = await getAccessToken();
+    if (!token) return;
+    setBusy(true);
+    setMessage(null);
+    const response = await fetch(`/api/employer/team/${encodeURIComponent(member.id)}/invite`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+    setBusy(false);
+    if (!response.ok) {
+      setMessage(payload?.error || "Could not resend the invitation email.");
+      return;
+    }
+    setMessage(`Invitation email resent to ${member.email}.`);
   }
 
   async function removeMember(member: TeamMember) {
@@ -158,6 +177,7 @@ export default function TeamAccessPage() {
   }
 
   const canManage = Boolean(access?.canManageTeam);
+  const isSuccessMessage = Boolean(message && !message.startsWith("Warning:") && (message.includes("saved") || message.includes("sent") || message.includes("resent")));
 
   return (
     <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, paddingBottom: 72, backgroundColor: homeTheme.bg }}>
@@ -175,7 +195,7 @@ export default function TeamAccessPage() {
         </section>
 
         {message ? (
-          <div role="alert" style={{ ...homeCardStyle, marginBottom: 16, color: message.includes("saved") ? homeTheme.green : "#8a2f2f", fontWeight: 900 }}>
+          <div role="alert" style={{ ...homeCardStyle, marginBottom: 16, color: isSuccessMessage ? homeTheme.green : "#8a2f2f", fontWeight: 900 }}>
             {message}
           </div>
         ) : null}
@@ -253,6 +273,9 @@ export default function TeamAccessPage() {
                         >
                           {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}
                         </select>
+                        <button type="button" className="rn-btn-secondary rn-team-resend-button" style={homeSecondaryButton} onClick={() => resendInvite(member)} disabled={busy}>
+                          Resend invite
+                        </button>
                         <button type="button" className="rn-btn-secondary rn-team-remove-button" style={homeSecondaryButton} onClick={() => removeMember(member)} disabled={busy || member.role === "account_owner"}>
                           Remove
                         </button>
