@@ -27,7 +27,7 @@ The custom invitation includes the available account context:
 ## Brand requirements covered
 
 - Primary green: `#35806e`
-- Warm off-white/cream email background
+- Pure white outer email background with a warm off-white/cream rounded card
 - Rounded cards and pill-shaped CTA buttons
 - Centered brand header: `RestaurantsNOWHiring.com` and `Restaurant Hiring Platform`
 - Supporting line: `Built for restaurant operators, hiring managers, and restaurant teams.`
