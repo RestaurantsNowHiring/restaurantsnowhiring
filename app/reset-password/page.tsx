@@ -2,45 +2,146 @@
 
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
 
 type AccountType = "employer" | "admin";
+type RecoveryStatus = "checking" | "ready" | "invalid" | "complete";
+type ResetUrlState = {
+  isRecoveryLink: boolean;
+  errorDescription: string | null;
+  code: string | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+};
+
+const PASSWORD_MIN_LENGTH = 8;
+const PASSWORD_REQUIREMENTS = [
+  `At least ${PASSWORD_MIN_LENGTH} characters`,
+  "At least one letter",
+  "At least one number",
+];
 
 function getAccountType(value: string | null): AccountType {
   return value === "admin" ? "admin" : "employer";
 }
 
+function getResetUrlState(): ResetUrlState {
+  if (typeof window === "undefined") {
+    return { isRecoveryLink: false, errorDescription: null, code: null, accessToken: null, refreshToken: null };
+  }
+
+  const queryParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const linkType = hashParams.get("type") ?? queryParams.get("type");
+  const errorDescription =
+    hashParams.get("error_description") ??
+    queryParams.get("error_description") ??
+    hashParams.get("error") ??
+    queryParams.get("error");
+
+  return {
+    isRecoveryLink: linkType === "recovery" || queryParams.has("code"),
+    errorDescription,
+    code: queryParams.get("code"),
+    accessToken: hashParams.get("access_token"),
+    refreshToken: hashParams.get("refresh_token"),
+  };
+}
+
+function getPasswordValidationMessage(value: string) {
+  if (value.length < PASSWORD_MIN_LENGTH) {
+    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters.`;
+  }
+
+  if (!/[A-Za-z]/.test(value)) {
+    return "Password must include at least one letter.";
+  }
+
+  if (!/\d/.test(value)) {
+    return "Password must include at least one number.";
+  }
+
+  return null;
+}
+
 function ResetPasswordForm() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const accountType = getAccountType(searchParams.get("type"));
   const loginHref = accountType === "admin" ? "/admin/login" : "/employer-login";
+  const successHref = accountType === "admin" ? "/admin" : "/employer-dashboard";
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [messageType, setMessageType] = useState<"success" | "error">("success");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [hasRecoverySession, setHasRecoverySession] = useState(false);
+  const [recoveryStatus, setRecoveryStatus] = useState<RecoveryStatus>("checking");
+  const [isRecoveryLink, setIsRecoveryLink] = useState(false);
 
   const passwordsMatch = useMemo(() => password === confirmPassword, [confirmPassword, password]);
+  const passwordValidationMessage = useMemo(() => getPasswordValidationMessage(password), [password]);
+  const canSubmit = recoveryStatus === "ready" && !isSubmitting;
 
   useEffect(() => {
     let mounted = true;
+    const resetUrlState = getResetUrlState();
 
-    async function checkRecoverySession() {
-      const { data } = await supabase.auth.getSession();
-      if (mounted) {
-        setHasRecoverySession(Boolean(data.session));
+    setIsRecoveryLink(resetUrlState.isRecoveryLink);
+
+    async function prepareRecoverySession() {
+      if (resetUrlState.errorDescription) {
+        if (!mounted) return;
+        setRecoveryStatus("invalid");
+        setMessageType("error");
+        setMessage(decodeURIComponent(resetUrlState.errorDescription.replace(/\+/g, " ")));
+        return;
       }
+
+      if (resetUrlState.accessToken && resetUrlState.refreshToken) {
+        const { error } = await supabase.auth.setSession({
+          access_token: resetUrlState.accessToken,
+          refresh_token: resetUrlState.refreshToken,
+        });
+        if (error) {
+          if (!mounted) return;
+          setRecoveryStatus("invalid");
+          setMessageType("error");
+          setMessage(error.message);
+          return;
+        }
+      } else if (resetUrlState.code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(resetUrlState.code);
+        if (error) {
+          if (!mounted) return;
+          setRecoveryStatus("invalid");
+          setMessageType("error");
+          setMessage(error.message);
+          return;
+        }
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (!mounted) return;
+
+      if (resetUrlState.isRecoveryLink && data.session) {
+        setRecoveryStatus("ready");
+        return;
+      }
+
+      setRecoveryStatus("invalid");
     }
 
-    checkRecoverySession();
+    prepareRecoverySession();
 
     const { data: listener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "PASSWORD_RECOVERY" || session) {
-        setHasRecoverySession(Boolean(session));
+      if (!mounted) return;
+
+      if (event === "PASSWORD_RECOVERY" && session) {
+        setIsRecoveryLink(true);
+        setRecoveryStatus("ready");
       }
     });
 
@@ -54,9 +155,15 @@ function ResetPasswordForm() {
     event.preventDefault();
     setMessage(null);
 
-    if (password.length < 6) {
+    if (recoveryStatus !== "ready") {
       setMessageType("error");
-      setMessage("Password must be at least 6 characters.");
+      setMessage("Open the password reset link from your email before choosing a new password.");
+      return;
+    }
+
+    if (passwordValidationMessage) {
+      setMessageType("error");
+      setMessage(passwordValidationMessage);
       return;
     }
 
@@ -79,9 +186,13 @@ function ResetPasswordForm() {
 
       setPassword("");
       setConfirmPassword("");
-      setHasRecoverySession(true);
+      setRecoveryStatus("complete");
       setMessageType("success");
-      setMessage("Your password has been updated. You can now return to login.");
+      setMessage("Password updated successfully. Redirecting you now…");
+
+      window.setTimeout(() => {
+        router.replace(`${successHref}?passwordUpdated=1`);
+      }, 1200);
     } finally {
       setIsSubmitting(false);
     }
@@ -110,7 +221,7 @@ function ResetPasswordForm() {
             Update password
           </div>
 
-          <h1 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 44, lineHeight: 1 }}>
+          <h1 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: "clamp(34px, 8vw, 44px)", lineHeight: 1 }}>
             Create a new password
           </h1>
           <p
@@ -125,7 +236,25 @@ function ResetPasswordForm() {
             Enter and confirm your new password to finish the reset process.
           </p>
 
-          {!hasRecoverySession && (
+          {recoveryStatus === "checking" && (
+            <div
+              role="status"
+              style={{
+                marginTop: 16,
+                borderRadius: 12,
+                border: "1px solid rgba(53,128,110,.25)",
+                backgroundColor: "rgba(53,128,110,.08)",
+                color: homeTheme.green,
+                padding: "10px 12px",
+                fontWeight: 700,
+                fontSize: 14,
+              }}
+            >
+              Verifying your secure reset link…
+            </div>
+          )}
+
+          {recoveryStatus === "invalid" && (
             <div
               role="status"
               style={{
@@ -139,7 +268,9 @@ function ResetPasswordForm() {
                 fontSize: 14,
               }}
             >
-              Use the reset link from your email to update your password. If the link expired, request a new one.
+              {isRecoveryLink
+                ? "This reset link is invalid or expired. Please request a new password reset email."
+                : "Use the reset link from your email to update your password. If the link expired, request a new one."}
             </div>
           )}
 
@@ -151,7 +282,9 @@ function ResetPasswordForm() {
                 autoComplete="new-password"
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
+                minLength={PASSWORD_MIN_LENGTH}
                 required
+                disabled={recoveryStatus === "checking" || recoveryStatus === "complete"}
                 style={homeInputStyle}
               />
             </label>
@@ -163,10 +296,32 @@ function ResetPasswordForm() {
                 autoComplete="new-password"
                 value={confirmPassword}
                 onChange={(event) => setConfirmPassword(event.target.value)}
+                minLength={PASSWORD_MIN_LENGTH}
                 required
+                disabled={recoveryStatus === "checking" || recoveryStatus === "complete"}
                 style={homeInputStyle}
               />
             </label>
+
+            <div
+              style={{
+                borderRadius: 14,
+                border: "1px solid rgba(0,0,0,.08)",
+                backgroundColor: "rgba(255,255,255,.55)",
+                color: homeTheme.muted,
+                padding: "12px 14px",
+                fontFamily: "var(--font-body)",
+                fontSize: 13,
+                fontWeight: 700,
+              }}
+            >
+              <p style={{ margin: "0 0 6px 0", fontWeight: 900, color: homeTheme.text }}>Password requirements</p>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                {PASSWORD_REQUIREMENTS.map((requirement) => (
+                  <li key={requirement}>{requirement}</li>
+                ))}
+              </ul>
+            </div>
 
             {message && (
               <div
@@ -186,7 +341,7 @@ function ResetPasswordForm() {
               </div>
             )}
 
-            <button type="submit" disabled={isSubmitting || !hasRecoverySession} style={homePrimaryButton} className="rn-btn-primary">
+            <button type="submit" disabled={!canSubmit} style={homePrimaryButton} className="rn-btn-primary">
               {isSubmitting ? "Updating…" : "Update password"}
             </button>
           </form>
