@@ -1328,7 +1328,7 @@ export default function EmployerDashboardPage() {
           ) : (
             <div className="rn-candidate-list">
               {filteredCandidates.map((candidate) => (
-                <article className="rn-candidate-card" key={candidate.id}>
+                <article className="rn-candidate-card" id={`candidate-${candidate.id}`} key={candidate.id}>
                   <div className="rn-candidate-card-header">
                     <div>
                       <h3>{candidate.candidate_name}</h3>

@@ -24,6 +24,10 @@ export type BrandedEmailOptions = {
     label: string;
     href: string;
   };
+  secondaryCta?: {
+    label: string;
+    href: string;
+  };
   contextRows?: EmailContextRow[];
   footerNote?: string;
 };
@@ -75,6 +79,15 @@ export function buildBrandedEmailHtml(options: BrandedEmailOptions) {
         </tr>
       </table>`
     : "";
+  const secondaryCta = options.secondaryCta
+    ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin:14px auto 8px;">
+        <tr>
+          <td align="center" style="border-radius:999px;background:#ffffff;border:1px solid rgba(53,128,110,.32);">
+            <a href="${escapeHtml(options.secondaryCta.href)}" style="display:inline-block;padding:13px 22px;border-radius:999px;color:${BRAND.darkGreen};font-size:14px;line-height:1.2;font-weight:900;text-decoration:none;letter-spacing:.01em;">${escapeHtml(options.secondaryCta.label)}</a>
+          </td>
+        </tr>
+      </table>`
+    : "";
 
   return `<!doctype html>
 <html lang="en">
@@ -117,6 +130,7 @@ export function buildBrandedEmailHtml(options: BrandedEmailOptions) {
                 ${options.bodyHtml ? `<div style="margin-top:28px;font-size:16px;line-height:1.7;font-weight:650;color:${BRAND.ink};">${options.bodyHtml}</div>` : ""}
                 ${renderContextRows(options.contextRows)}
                 ${cta}
+                ${secondaryCta}
               </td>
             </tr>
             <tr>
@@ -150,6 +164,7 @@ export function buildBrandedEmailText(options: BrandedEmailOptions) {
   }
 
   if (options.cta) lines.push("", `${options.cta.label}: ${options.cta.href}`);
+  if (options.secondaryCta) lines.push(`${options.secondaryCta.label}: ${options.secondaryCta.href}`);
   lines.push("", "RestaurantsNOWHiring.com", options.footerNote ?? "Hiring built for restaurants.");
 
   return lines.join("\n");
