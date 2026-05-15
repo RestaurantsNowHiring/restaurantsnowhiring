@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { EmployerRole, getEmployerAccountContext } from "../../../../lib/employerAccounts";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
+import { sendTeamInviteEmail } from "../../../../lib/teamInviteEmail";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ROLES = new Set<EmployerRole>(["account_owner", "hiring_manager", "viewer"]);
@@ -13,12 +14,47 @@ type TeamPayload = {
   can_manage_notification_routing?: boolean;
 };
 
+type TeamMemberRow = {
+  id: string;
+  email: string;
+  user_id: string | null;
+  role: EmployerRole;
+  status: string;
+  can_manage_notification_routing: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
 function cleanEmail(value: unknown) {
   return typeof value === "string" ? value.trim().toLowerCase().slice(0, 254) : "";
 }
 
 function cleanRole(value: unknown): EmployerRole | null {
   return ROLES.has(value as EmployerRole) ? (value as EmployerRole) : null;
+}
+
+async function sendInviteForMember(input: {
+  member: TeamMemberRow;
+  accountName: string | null;
+  inviterEmail: string | null;
+}) {
+  const result = await sendTeamInviteEmail({
+    toEmail: input.member.email,
+    accountName: input.accountName,
+    role: input.member.role,
+    inviterEmail: input.inviterEmail,
+  });
+
+  if (!result.ok) {
+    console.warn("Employer team invite email was not sent", {
+      reason: result.reason,
+      memberId: input.member.id,
+      toEmail: input.member.email,
+      accountName: input.accountName,
+    });
+  }
+
+  return result;
 }
 
 export async function GET(request: Request) {
@@ -90,7 +126,18 @@ export async function POST(request: Request) {
       .single();
 
     if (error) throw new Error(error.message || "Could not save team user.");
-    return NextResponse.json({ member: data });
+
+    const inviteEmail = await sendInviteForMember({
+      member: data as TeamMemberRow,
+      accountName: context.accountName,
+      inviterEmail: user.email,
+    });
+
+    return NextResponse.json({
+      member: data,
+      inviteEmailSent: inviteEmail.ok,
+      inviteEmailWarning: inviteEmail.ok ? null : "Warning: Team access was saved, but the invitation email could not be sent. Use Resend invite to try again.",
+    });
   } catch (error) {
     console.error("Employer team save failed", { error });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not save team user." }, { status: 500 });

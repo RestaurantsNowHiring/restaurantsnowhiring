@@ -211,6 +211,33 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
   }
 
   let memberships = await loadMemberships();
+  if (memberships.length > 0) {
+    const lowerEmail = user.email.toLowerCase();
+    const unlinkedMembershipAccountIds = memberships
+      .filter((membership) => cleanString(membership.email, 254)?.toLowerCase() === lowerEmail && !membership.user_id)
+      .map((membership) => cleanString(membership.account_id, 80))
+      .filter((accountId): accountId is string => Boolean(accountId));
+
+    if (unlinkedMembershipAccountIds.length > 0) {
+      const { error: linkError } = await admin
+        .from("employer_team_members")
+        .update({ user_id: user.id, updated_at: new Date().toISOString() })
+        .eq("email", lowerEmail)
+        .is("user_id", null)
+        .in("account_id", unlinkedMembershipAccountIds);
+
+      if (linkError) {
+        console.warn("Could not link invited employer team membership to signed-in user", {
+          error: linkError.message,
+          userId: user.id,
+          email: lowerEmail,
+        });
+      } else {
+        memberships = await loadMemberships();
+      }
+    }
+  }
+
   if (memberships.length === 0) {
     await provisionNewEmployerAccount(user);
     memberships = await loadMemberships();
