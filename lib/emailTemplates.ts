@@ -1,7 +1,7 @@
 const BRAND = {
   green: "#35806e",
   darkGreen: "#276455",
-  cream: "#f7f2e8",
+  outer: "#ffffff",
   warmCard: "#fffaf1",
   ink: "#1f2a26",
   muted: "#5f6f67",
@@ -109,9 +109,9 @@ export function buildBrandedEmailHtml(options: BrandedEmailOptions) {
       }
     </style>
   </head>
-  <body style="margin:0;padding:0;background:${BRAND.cream};-webkit-text-size-adjust:100%;text-size-adjust:100%;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${BRAND.ink};">
+  <body bgcolor="${BRAND.outer}" style="margin:0;padding:0;background:${BRAND.outer};-webkit-text-size-adjust:100%;text-size-adjust:100%;font-family:Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:${BRAND.ink};">
     ${preheader ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">${preheader}</div>` : ""}
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:${BRAND.cream};border-collapse:collapse;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" bgcolor="${BRAND.outer}" style="background:${BRAND.outer};border-collapse:collapse;">
       <tr>
         <td class="rn-email-shell" align="center" style="padding:36px 14px;">
           <table role="presentation" class="rn-email-card" width="100%" cellspacing="0" cellpadding="0" style="max-width:640px;border-collapse:separate;border-spacing:0;background:${BRAND.warmCard};border:1px solid rgba(53,128,110,.18);border-radius:28px;overflow:hidden;box-shadow:0 22px 50px rgba(31,42,38,.10);">
