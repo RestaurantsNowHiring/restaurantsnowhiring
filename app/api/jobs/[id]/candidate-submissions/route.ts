@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { getSiteUrl } from "../../../../../lib/billing";
 import { isPubliclyVisibleJob } from "../../../../../lib/jobStatus";
 import { buildCandidateSubmissionEmailHtml, buildCandidateSubmissionEmailText } from "../../../../../lib/candidateSubmissionEmail";
+import { EMAIL_PATTERN, normalizeCandidateNotificationEmails } from "../../../../../lib/candidateNotificationEmails";
 import { getSupabaseAdminClient } from "../../../../../lib/supabaseAdmin";
 
 const RESUME_BUCKET = "candidate-resumes";
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_RESUME_BYTES = 5 * 1024 * 1024;
 const ALLOWED_RESUME_MIME_TYPES = new Set([
   "application/pdf",
@@ -29,6 +29,7 @@ type JobRow = {
   employer_account_id?: string | null;
   apply_email?: string | null;
   candidate_notification_email?: string | null;
+  candidate_notification_emails?: string[] | null;
   candidate_notification_routing?: string | null;
   posted_by_email?: string | null;
   employer_accounts?: { owner_email?: string | null; support_email?: string | null; default_candidate_notification_routing?: string | null } | null;
@@ -55,21 +56,27 @@ type CandidateSubmissionRow = {
   created_at: string;
 };
 
-function resolveCandidateNotificationEmail(job: JobRow) {
+function resolveCandidateNotificationEmails(job: JobRow) {
   const routing = job.candidate_notification_routing || job.employer_accounts?.default_candidate_notification_routing || "job_poster";
-  const candidates =
+  const customEmails = normalizeCandidateNotificationEmails(
+    job.candidate_notification_emails?.length ? job.candidate_notification_emails : job.candidate_notification_email,
+  ).filter((email) => EMAIL_PATTERN.test(email));
+
+  const fallbackCandidates =
     routing === "account_owner"
       ? [job.employer_accounts?.owner_email, job.employer_email, job.apply_email]
       : routing === "company_support"
         ? [job.employer_accounts?.support_email, job.apply_email, job.employer_email]
         : routing === "custom_job_email"
-          ? [job.candidate_notification_email, job.apply_email, job.employer_email]
+          ? [job.apply_email, job.employer_email]
           : [job.posted_by_email, job.apply_email, job.employer_email];
 
-  return candidates.find((candidate) => typeof candidate === "string" && EMAIL_PATTERN.test(candidate.trim()))?.trim().toLowerCase() ?? "";
+  const fallbackEmail = fallbackCandidates.find((candidate) => typeof candidate === "string" && EMAIL_PATTERN.test(candidate.trim()))?.trim().toLowerCase();
+  if (routing === "custom_job_email" && customEmails.length > 0) return customEmails;
+  return fallbackEmail ? [fallbackEmail] : [];
 }
 
-async function sendEmployerNotification(input: { to: string; submission: CandidateSubmissionRow; job: JobRow }) {
+async function sendEmployerNotification(input: { to: string[]; submission: CandidateSubmissionRow; job: JobRow }) {
   const resendApiKey = process.env.RESEND_API_KEY;
   if (!resendApiKey) return { ok: false as const, reason: "missing_resend_api_key" };
 
@@ -151,7 +158,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   const { data: jobData, error: jobError } = await supabaseAdmin
     .from("jobs")
-    .select("id,title,restaurant_name,city,state,active,status,employer_user_id,employer_email,employer_account_id,apply_email,candidate_notification_email,candidate_notification_routing,posted_by_email,employer_accounts(owner_email,support_email,default_candidate_notification_routing)")
+    .select("id,title,restaurant_name,city,state,active,status,employer_user_id,employer_email,employer_account_id,apply_email,candidate_notification_email,candidate_notification_emails,candidate_notification_routing,posted_by_email,employer_accounts(owner_email,support_email,default_candidate_notification_routing)")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -165,8 +172,9 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "This job is no longer accepting candidate submissions." }, { status: 404 });
   }
 
-  const employerEmail = resolveCandidateNotificationEmail(job);
-  if (!job.employer_user_id && !employerEmail) {
+  const employerEmails = resolveCandidateNotificationEmails(job);
+  const primaryEmployerEmail = employerEmails[0] ?? job.employer_email ?? "";
+  if (!job.employer_user_id && employerEmails.length === 0) {
     return NextResponse.json({ error: "This employer is missing contact details." }, { status: 400 });
   }
 
@@ -185,7 +193,7 @@ export async function POST(request: Request, context: RouteContext) {
     .insert({
       job_id: job.id,
       employer_user_id: job.employer_user_id,
-      employer_email: employerEmail || job.employer_email,
+      employer_email: primaryEmployerEmail,
       employer_account_id: job.employer_account_id ?? null,
       candidate_name: candidateName,
       candidate_email: candidateEmail,
@@ -206,10 +214,15 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const submission = submissionData as CandidateSubmissionRow;
-  if (employerEmail) {
-    const emailResult = await sendEmployerNotification({ to: employerEmail, submission, job });
+  if (employerEmails.length > 0) {
+    const emailResult = await sendEmployerNotification({ to: employerEmails, submission, job });
     if (!emailResult.ok) {
-      console.error("Candidate submission stored without employer email", { submissionId: submission.id, reason: emailResult.reason });
+      console.error("Candidate submission stored without employer email", {
+        submissionId: submission.id,
+        jobId: job.id,
+        recipients: employerEmails,
+        reason: emailResult.reason,
+      });
     }
   }
 

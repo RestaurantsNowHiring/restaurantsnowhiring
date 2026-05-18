@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../../../../lib/candidateNotificationEmails";
 import { supabase } from "../../../../../lib/supabase";
 import {
   homeCardStyle,
@@ -26,10 +27,9 @@ type JobRecord = {
   active: boolean;
   created_at: string;
   candidate_notification_email: string | null;
+  candidate_notification_emails?: string[] | null;
   candidate_notification_routing: string | null;
 };
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function formatDate(isoDate: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -70,7 +70,7 @@ function parseLocationInput(location: string) {
 }
 
 async function loadOwnedJob(jobId: string, owner: EmployerOwner) {
-  const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at,candidate_notification_email,candidate_notification_routing";
+  const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at,candidate_notification_email,candidate_notification_emails,candidate_notification_routing";
 
   const userIdResult = await supabase
     .from("jobs")
@@ -210,12 +210,16 @@ function EmployerJobEditForm() {
     const schedule = String(formData.get("schedule") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const benefits = String(formData.get("benefits") ?? "").trim();
-    const candidateNotificationEmail = String(formData.get("candidate_notification_email") ?? "").trim().toLowerCase();
+    const candidateNotificationInput = String(formData.get("candidate_notification_email") ?? "");
+    const parsedNotificationEmails = parseCandidateNotificationEmails(candidateNotificationInput);
 
-    if (candidateNotificationEmail && !EMAIL_PATTERN.test(candidateNotificationEmail)) {
-      setMessage("Enter a valid candidate notification email address.");
+    if (!parsedNotificationEmails.ok) {
+      setMessage(parsedNotificationEmails.message);
       return;
     }
+
+    const candidateNotificationEmails = parsedNotificationEmails.emails;
+    const candidateNotificationEmail = parsedNotificationEmails.value;
 
     const { city, state } = parseLocationInput(location);
     const composedDescription = [
@@ -236,7 +240,8 @@ function EmployerJobEditForm() {
       state,
       description: composedDescription || null,
       candidate_notification_email: candidateNotificationEmail || null,
-      candidate_notification_routing: candidateNotificationEmail ? "custom_job_email" : "job_poster",
+      candidate_notification_emails: candidateNotificationEmails.length > 0 ? candidateNotificationEmails : null,
+      candidate_notification_routing: candidateNotificationEmails.length > 0 ? "custom_job_email" : "job_poster",
     };
 
     setIsSaving(true);
@@ -461,14 +466,15 @@ function EmployerJobEditForm() {
                       Where should candidate interest emails be sent?
                       <input
                         name="candidate_notification_email"
-                        type="email"
-                        defaultValue={job.candidate_notification_email || ""}
-                        placeholder="location-manager@restaurant.com"
+                        type="text"
+                        inputMode="email"
+                        defaultValue={formatCandidateNotificationEmails(job.candidate_notification_emails?.length ? job.candidate_notification_emails : job.candidate_notification_email)}
+                        placeholder="gm@example.com, op@example.com, hr@example.com"
                         className="rn-edit-field"
                         style={editFieldStyle}
                       />
                       <span style={{ display: "block", marginTop: 6, color: homeTheme.muted, fontSize: 13 }}>
-                        This can be the restaurant/location email, hiring manager, or another contact who should receive candidate submissions.
+                        Enter one or more email addresses. Separate multiple emails with commas.
                       </span>
                     </label>
 

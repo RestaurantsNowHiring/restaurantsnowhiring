@@ -71,6 +71,7 @@ alter table public.jobs
   add column if not exists posted_by_user_id uuid references auth.users(id) on delete set null,
   add column if not exists posted_by_email text,
   add column if not exists candidate_notification_email text,
+  add column if not exists candidate_notification_emails text[],
   add column if not exists candidate_notification_routing public.candidate_notification_routing not null default 'job_poster';
 
 alter table public.candidate_submissions
@@ -174,10 +175,23 @@ set
   posted_by_user_id = coalesce(job.posted_by_user_id, job.employer_user_id),
   posted_by_email = coalesce(job.posted_by_email, job.employer_email),
   candidate_notification_email = coalesce(job.candidate_notification_email, job.apply_email),
+  candidate_notification_emails = coalesce(
+    job.candidate_notification_emails,
+    case
+      when nullif(trim(coalesce(job.candidate_notification_email, job.apply_email, '')), '') is null then null
+      else array[lower(trim(coalesce(job.candidate_notification_email, job.apply_email)))]
+    end
+  ),
   candidate_notification_routing = coalesce(job.candidate_notification_routing, 'job_poster')
 from public.employer_accounts account
 where job.employer_user_id = account.owner_user_id
   and job.employer_account_id is null;
+
+
+update public.jobs job
+set candidate_notification_emails = array[lower(trim(job.candidate_notification_email))]
+where job.candidate_notification_emails is null
+  and nullif(trim(coalesce(job.candidate_notification_email, '')), '') is not null;
 
 update public.candidate_submissions submission
 set employer_account_id = job.employer_account_id
@@ -436,5 +450,6 @@ with check (
 
 comment on table public.employer_accounts is 'Company-level employer account. Billing, profile, jobs, users, and notification defaults attach here.';
 comment on table public.employer_team_members is 'Role-based users/invites for employer account access.';
-comment on column public.jobs.candidate_notification_email is 'Optional per-job/location email for candidate submission notifications.';
+comment on column public.jobs.candidate_notification_email is 'Legacy comma-separated per-job/location email list for candidate submission notifications.';
+comment on column public.jobs.candidate_notification_emails is 'Normalized per-job/location email array for candidate submission notifications.';
 comment on column public.jobs.candidate_notification_routing is 'Controls whether candidate emails use owner, poster, company support, or custom job email.';
