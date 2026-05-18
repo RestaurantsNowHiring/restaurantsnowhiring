@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../lib/candidateNotificationEmails";
 import { supabase } from "../../lib/supabase";
 import {
   homePrimaryButton,
@@ -13,7 +14,6 @@ import {
 type Step = 1 | 2 | 3 | 4;
 type PayMode = "range" | "minimum" | "maximum" | "rate";
 type EmployerAccess = { accountId: string | null; canManageJobs: boolean; canManageNotificationRouting: boolean; defaultCandidateNotificationRouting: string; supportEmail: string | null; };
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function PostJobPage() {
   const router = useRouter();
@@ -63,6 +63,7 @@ export default function PostJobPage() {
   const SOFT_GREEN = "#dfe7e3";
   const CARD = "#ffffff";
   const ERROR = "#b00020";
+  const canManageCandidateNotificationRouting = employerAccess?.canManageNotificationRouting !== false;
 
   const EMPLOYEE_OPTIONS = ["1-10", "11-25", "26-50", "51-100", "100+"];
   const RESTAURANT_TYPES = [
@@ -287,9 +288,12 @@ export default function PostJobPage() {
         return false;
       }
 
-      if (candidateNotificationEmail.trim() && !EMAIL_PATTERN.test(candidateNotificationEmail.trim())) {
-        setMessage("Please enter a valid candidate notification email address.");
-        return false;
+      if (canManageCandidateNotificationRouting) {
+        const parsedNotificationEmails = parseCandidateNotificationEmails(candidateNotificationEmail);
+        if (!parsedNotificationEmails.ok) {
+          setMessage(parsedNotificationEmails.message);
+          return false;
+        }
       }
 
       return true;
@@ -358,12 +362,16 @@ export default function PostJobPage() {
       return;
     }
 
-    const notificationEmail = candidateNotificationEmail.trim().toLowerCase();
-    if (notificationEmail && !EMAIL_PATTERN.test(notificationEmail)) {
-      setMessage("Please enter a valid candidate notification email address.");
+    const parsedNotificationEmails = canManageCandidateNotificationRouting
+      ? parseCandidateNotificationEmails(candidateNotificationEmail)
+      : ({ ok: true, emails: [], value: "" } as const);
+    if (!parsedNotificationEmails.ok) {
+      setMessage(parsedNotificationEmails.message);
       setStep(3);
       return;
     }
+    const notificationEmails = parsedNotificationEmails.emails;
+    const notificationEmail = parsedNotificationEmails.value;
 
     setIsSubmitting(true);
 
@@ -418,7 +426,8 @@ export default function PostJobPage() {
       posted_by_user_id: employerUserId,
       posted_by_email: employerEmail,
       candidate_notification_email: notificationEmail || null,
-      candidate_notification_routing: notificationEmail ? "custom_job_email" : employerAccess?.defaultCandidateNotificationRouting ?? "job_poster",
+      candidate_notification_emails: notificationEmails.length > 0 ? notificationEmails : null,
+      candidate_notification_routing: notificationEmails.length > 0 ? "custom_job_email" : employerAccess?.defaultCandidateNotificationRouting ?? "job_poster",
     };
 
     const insertResult = await supabase.from("jobs").insert([jobPayload]);
@@ -1093,15 +1102,21 @@ export default function PostJobPage() {
                 <label htmlFor="candidate-notification-email" style={labelStyle}>Where should candidate interest emails be sent?</label>
                 <input
                   id="candidate-notification-email"
-                  type="email"
-                  aria-invalid={!!message && !!candidateNotificationEmail.trim() && !EMAIL_PATTERN.test(candidateNotificationEmail.trim())}
+                  type="text"
+                  inputMode="email"
+                  aria-invalid={!!message && canManageCandidateNotificationRouting && !parseCandidateNotificationEmails(candidateNotificationEmail).ok}
                   aria-describedby={message ? "post-job-form-error" : undefined}
                   value={candidateNotificationEmail}
                   onChange={(e) => setCandidateNotificationEmail(e.target.value)}
                   style={inputStyle}
-                  placeholder="location-manager@restaurant.com"
+                  placeholder="gm@example.com, op@example.com, hr@example.com"
+                  disabled={!canManageCandidateNotificationRouting}
                 />
-                <div style={helperStyle}>This can be the restaurant/location email, hiring manager, or another contact who should receive candidate submissions.</div>
+                <div style={helperStyle}>
+                  {canManageCandidateNotificationRouting
+                    ? "Enter one or more email addresses. Separate multiple emails with commas."
+                    : "Your account role cannot edit candidate notification routing. Account defaults will be used."}
+                </div>
               </div>
 
               <div style={{ marginTop: 16 }}>
@@ -1192,7 +1207,7 @@ export default function PostJobPage() {
                   <div><strong>Website:</strong> {companyWebsite || "—"}</div>
                   <div><strong>Address:</strong> {address || "—"}</div>
                   <div><strong>How to apply:</strong> {howToApply || "—"}</div>
-                  <div><strong>Candidate notification email:</strong> {candidateNotificationEmail || "Account default"}</div>
+                  <div><strong>Candidate notification emails:</strong> {canManageCandidateNotificationRouting && candidateNotificationEmail.trim() ? formatCandidateNotificationEmails(candidateNotificationEmail) : "Account default"}</div>
                   <div><strong>Benefits:</strong> {benefits.join(", ") || "—"}</div>
 
                   <div style={{ height: 6 }} />
