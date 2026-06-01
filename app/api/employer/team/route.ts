@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { EmployerRole, getEmployerAccountContext } from "../../../../lib/employerAccounts";
@@ -23,6 +24,7 @@ type TeamMemberRow = {
   can_manage_notification_routing: boolean;
   created_at: string;
   updated_at: string;
+  invite_token: string | null;
 };
 
 function cleanEmail(value: unknown) {
@@ -43,6 +45,7 @@ async function sendInviteForMember(input: {
     accountName: input.accountName,
     role: input.member.role,
     inviterEmail: input.inviterEmail,
+    inviteToken: input.member.invite_token ?? input.member.id,
   });
 
   if (!result.ok) {
@@ -72,7 +75,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("employer_team_members")
-      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at")
+      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .eq("account_id", context.accountId)
       .order("created_at", { ascending: true });
 
@@ -115,14 +118,16 @@ export async function POST(request: Request) {
           email,
           user_id: matchedUser?.id ?? null,
           role,
-          status: "active",
+          status: matchedUser ? "active" : "invited",
+          invite_token: randomUUID(),
+          invite_accepted_at: matchedUser ? new Date().toISOString() : null,
           can_manage_notification_routing: Boolean(payload?.can_manage_notification_routing),
           invited_by_user_id: user.id,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "account_id,email" },
       )
-      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at")
+      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .single();
 
     if (error) throw new Error(error.message || "Could not save team user.");
@@ -171,7 +176,7 @@ export async function PATCH(request: Request) {
       })
       .eq("id", id)
       .eq("account_id", context.accountId)
-      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at")
+      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .single();
 
     if (error) throw new Error(error.message || "Could not update team user.");

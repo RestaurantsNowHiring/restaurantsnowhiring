@@ -607,7 +607,7 @@ function EmployerLoginForm() {
                         lineHeight: 1.45,
                       }}
                     >
-                      <strong style={{ color: TEXT, fontWeight: 850 }}>Already invited?</strong> Do not create a new employer account. Use your invitation email or contact your Account Owner.
+                      <strong style={{ color: TEXT, fontWeight: 850 }}>Were you invited to an existing team?</strong> Use the invitation link from your email instead of creating a new employer workspace.
                     </div>
 
                     <div>

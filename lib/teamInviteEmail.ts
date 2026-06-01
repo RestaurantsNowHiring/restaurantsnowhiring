@@ -15,6 +15,7 @@ export type TeamInviteEmailInput = {
   accountName: string | null;
   role: EmployerRole;
   inviterEmail?: string | null;
+  inviteToken: string;
 };
 
 export type TeamInviteEmailResult =
@@ -25,7 +26,7 @@ function buildEmailHtml(input: TeamInviteEmailInput) {
   const accountName = normalizeEmailText(input.accountName, "an employer account");
   const roleLabel = ROLE_LABELS[input.role];
   const inviterEmail = normalizeEmailText(input.inviterEmail, "your account owner");
-  const loginUrl = absoluteUrl("/employer-login");
+  const inviteUrl = absoluteUrl(`/invite/${encodeURIComponent(input.inviteToken)}`);
   const invitedEmail = input.toEmail;
 
   return buildBrandedEmailHtml({
@@ -34,10 +35,11 @@ function buildEmailHtml(input: TeamInviteEmailInput) {
     intro: `${inviterEmail} invited you to access ${accountName} on RestaurantsNOWHiring.com.`,
     bodyHtml: `<p style="margin:0;">Use <strong>${escapeHtml(invitedEmail)}</strong> when you create an account or sign in. If you already have an account with this email, sign in and your team access will be applied automatically.</p>`,
     cta: {
-      label: "Sign up or log in",
-      href: loginUrl,
+      label: "Accept invite",
+      href: inviteUrl,
     },
     contextRows: [
+      { label: "Invited Email Address", value: invitedEmail },
       { label: "Employer Account Name", value: accountName },
       { label: "Access Level", value: roleLabel },
       { label: "Invited By", value: inviterEmail },
@@ -54,13 +56,14 @@ function buildEmailText(input: TeamInviteEmailInput) {
     title: "You’re invited to join your team",
     intro: `${inviter} invited you to access ${accountName} on RestaurantsNOWHiring.com.`,
     contextRows: [
+      { label: "Invited Email Address", value: input.toEmail },
       { label: "Employer Account Name", value: accountName },
       { label: "Access Level", value: ROLE_LABELS[input.role] },
       { label: "Invited By", value: inviter },
     ],
     cta: {
-      label: "Sign up or log in",
-      href: absoluteUrl("/employer-login"),
+      label: "Accept invite",
+      href: absoluteUrl(`/invite/${encodeURIComponent(input.inviteToken)}`),
     },
     footerNote: `This invitation was sent because ${input.toEmail} was added to ${accountName}. Hiring built for restaurants.`,
   });
