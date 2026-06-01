@@ -92,9 +92,51 @@ export function getRolePermissions(role: EmployerRole) {
   return ROLE_PERMISSIONS[role];
 }
 
+async function activateInvitedEmployerTeamMemberships(user: { id: string; email: string }) {
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
+
+  const lowerEmail = user.email.trim().toLowerCase();
+  const now = new Date().toISOString();
+
+  const { data: invitedRows, error: invitedRowsError } = await supabaseAdmin
+    .from("employer_team_members")
+    .select("account_id,email,status,user_id")
+    .ilike("email", lowerEmail);
+
+  if (invitedRowsError) {
+    if (invitedRowsError.code === "42P01" || invitedRowsError.code === "42703") return false;
+    throw new Error(invitedRowsError.message || "Could not check invited employer team access.");
+  }
+
+  const accountIds = (invitedRows ?? [])
+    .map((row) => cleanString(row.account_id, 80))
+    .filter((accountId): accountId is string => Boolean(accountId));
+
+  if (accountIds.length === 0) return false;
+
+  const { error: activateError } = await supabaseAdmin
+    .from("employer_team_members")
+    .update({
+      user_id: user.id,
+      status: "active",
+      invite_accepted_at: now,
+      updated_at: now,
+    })
+    .ilike("email", lowerEmail)
+    .in("account_id", accountIds);
+
+  if (activateError) throw new Error(activateError.message || "Could not activate invited employer team access.");
+
+  return true;
+}
+
 async function provisionNewEmployerAccount(user: { id: string; email: string }) {
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
+
+  const wasInvitedTeamMember = await activateInvitedEmployerTeamMemberships(user);
+  if (wasInvitedTeamMember) return null;
 
   const { data: authUserData, error: authUserError } = await supabaseAdmin.auth.admin.getUserById(user.id);
   if (authUserError) throw new Error(authUserError.message || "Could not load employer signup details.");
@@ -184,7 +226,7 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
     const { data, error } = await admin
       .from("employer_team_members")
       .select("account_id,user_id,email,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email)")
-      .or(`user_id.eq.${user.id},email.eq.${user.email.toLowerCase()}`)
+      .or(`user_id.eq.${user.id},email.ilike.${user.email.trim().toLowerCase()}`)
       .eq("status", "active")
       .order("created_at", { ascending: true });
 
@@ -196,7 +238,7 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
       const fallback = await admin
         .from("employer_team_members")
         .select("account_id,user_id,email,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,company_name,default_candidate_notification_routing,support_email)")
-        .or(`user_id.eq.${user.id},email.eq.${user.email.toLowerCase()}`)
+        .or(`user_id.eq.${user.id},email.ilike.${user.email.trim().toLowerCase()}`)
         .eq("status", "active")
         .order("created_at", { ascending: true });
 
@@ -211,31 +253,9 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
   }
 
   let memberships = await loadMemberships();
-  if (memberships.length > 0) {
-    const lowerEmail = user.email.toLowerCase();
-    const unlinkedMembershipAccountIds = memberships
-      .filter((membership) => cleanString(membership.email, 254)?.toLowerCase() === lowerEmail && !membership.user_id)
-      .map((membership) => cleanString(membership.account_id, 80))
-      .filter((accountId): accountId is string => Boolean(accountId));
-
-    if (unlinkedMembershipAccountIds.length > 0) {
-      const { error: linkError } = await admin
-        .from("employer_team_members")
-        .update({ user_id: user.id, updated_at: new Date().toISOString() })
-        .eq("email", lowerEmail)
-        .is("user_id", null)
-        .in("account_id", unlinkedMembershipAccountIds);
-
-      if (linkError) {
-        console.warn("Could not link invited employer team membership to signed-in user", {
-          error: linkError.message,
-          userId: user.id,
-          email: lowerEmail,
-        });
-      } else {
-        memberships = await loadMemberships();
-      }
-    }
+  const wasInvitedTeamMember = await activateInvitedEmployerTeamMemberships(user);
+  if (wasInvitedTeamMember) {
+    memberships = await loadMemberships();
   }
 
   if (memberships.length === 0) {
