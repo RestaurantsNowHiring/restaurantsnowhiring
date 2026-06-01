@@ -21,6 +21,7 @@ type TeamMember = {
   status: string;
   can_manage_notification_routing: boolean;
   created_at: string;
+  updated_at: string;
 };
 
 const ROLE_LABELS: Record<EmployerRole, string> = {
@@ -34,6 +35,25 @@ const ROLE_HELP: Record<EmployerRole, string> = {
   hiring_manager: "Can post and manage jobs and candidates, but cannot access billing, company profile, or team settings.",
   viewer: "Can view the dashboard, jobs, and candidates, and update candidate statuses only.",
 };
+
+const JOINED_DATE_FORMATTER = new Intl.DateTimeFormat("en", {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+function getAccountStatus(member: TeamMember) {
+  return member.user_id ? "Active" : "Invitation Pending";
+}
+
+function getJoinedDisplay(member: TeamMember) {
+  if (!member.user_id) return "-";
+
+  const joinedDate = new Date(member.updated_at);
+  if (Number.isNaN(joinedDate.getTime())) return "-";
+
+  return JOINED_DATE_FORMATTER.format(joinedDate);
+}
 
 export default function TeamAccessPage() {
   const router = useRouter();
@@ -256,16 +276,35 @@ export default function TeamAccessPage() {
             <section className="rn-team-panel" style={{ ...homeCardStyle, marginBottom: 16 }}>
               <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Current team users</h2>
               <div className="rn-team-users-list" style={{ display: "grid", gap: 12 }}>
+                {members.length === 0 ? (
+                  <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>No team users have been added yet.</p>
+                ) : null}
                 {members.map((member) => (
                   <article key={member.id} className="rn-team-user-card" style={{ border: `1px solid ${homeTheme.border}`, borderRadius: 16, padding: 18, backgroundColor: "#fff" }}>
                     <div className="rn-team-user-card__top" style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                      <div className="rn-team-user-card__identity">
-                        <strong style={{ color: homeTheme.text }}>{member.email}</strong>
-                        <span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span>
-                        <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 700 }}>{member.user_id ? "Matched login user" : "Invited by email; access applies after signup with this email"}</p>
+                      <div className="rn-team-user-card__summary" aria-label={`Team member details for ${member.email}`}>
+                        <div className="rn-team-user-card__field rn-team-user-card__field--email">
+                          <span className="rn-team-user-card__label">Email</span>
+                          <strong style={{ color: homeTheme.text }}>{member.email}</strong>
+                        </div>
+                        <div className="rn-team-user-card__field">
+                          <span className="rn-team-user-card__label">Role</span>
+                          <span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span>
+                        </div>
+                        <div className="rn-team-user-card__field">
+                          <span className="rn-team-user-card__label">Account Status</span>
+                          <span className={member.user_id ? "rn-team-status-pill rn-team-status-pill--active" : "rn-team-status-pill rn-team-status-pill--pending"}>
+                            {getAccountStatus(member)}
+                          </span>
+                        </div>
+                        <div className="rn-team-user-card__field">
+                          <span className="rn-team-user-card__label">Joined</span>
+                          <span className="rn-team-joined-value">{getJoinedDisplay(member)}</span>
+                        </div>
                       </div>
                       <div className="rn-team-user-card__actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                         <select
+                          aria-label={`Change role for ${member.email}`}
                           className="rn-team-member-select"
                           value={member.role}
                           onChange={(event) => updateMember(member, event.target.value as EmployerRole)}
