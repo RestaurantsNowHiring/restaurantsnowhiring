@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../../../lib/supabaseAdmin";
 import { getEmployerAccountContext } from "../../../../../../lib/employerAccounts";
+import { canUserAccessJob } from "../../../../../../lib/employerJobAccess";
 
 const RESUME_BUCKET = "candidate-resumes";
 
@@ -24,7 +25,7 @@ export async function GET(request: Request, context: RouteContext) {
 
     const { data, error } = await supabaseAdmin
       .from("candidate_submissions")
-      .select("id,resume_path,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email,employer_account_id)")
+      .select("id,resume_path,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails)")
       .eq("id", id)
       .maybeSingle();
 
@@ -43,7 +44,7 @@ export async function GET(request: Request, context: RouteContext) {
       String(job?.employer_email ?? "").toLowerCase() === accountContext.ownerEmail.toLowerCase() ||
       (accountContext.accountId && job?.employer_account_id === accountContext.accountId);
 
-    if (!row || !ownsSubmission || !resumePath) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!row || !ownsSubmission || !canUserAccessJob(user, accountContext.role, job) || !resumePath) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
     const { data: signed, error: signedUrlError } = await supabaseAdmin.storage
       .from(RESUME_BUCKET)

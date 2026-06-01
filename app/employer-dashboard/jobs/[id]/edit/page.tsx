@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../../../../lib/candidateNotificationEmails";
+import { canUserAccessJob } from "../../../../../lib/employerJobAccess";
 import { supabase } from "../../../../../lib/supabase";
 import {
   homeCardStyle,
@@ -12,7 +13,9 @@ import {
   homeTheme,
 } from "../../../../styles/homepageDesignSystem";
 
-type EmployerOwner = { userId: string; email: string };
+type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
+type EmployerAccess = { role: EmployerRole; accountId: string | null; ownerUserId: string; ownerEmail: string; canManageJobs: boolean; };
+type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string; role?: EmployerRole; canManageJobs?: boolean };
 
 type JobRecord = {
   id: string;
@@ -71,34 +74,33 @@ function parseLocationInput(location: string) {
 
 async function loadOwnedJob(jobId: string, owner: EmployerOwner) {
   const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at,candidate_notification_email,candidate_notification_emails,candidate_notification_routing";
+  const queries = [];
 
-  const userIdResult = await supabase
-    .from("jobs")
-    .select(fields)
-    .eq("id", jobId)
-    .eq("employer_user_id", owner.userId)
-    .limit(1);
-
-  if (userIdResult.error) {
-    return { job: null, error: userIdResult.error };
+  if (owner.accountId) {
+    queries.push(
+      supabase.from("jobs").select(fields).eq("id", jobId).eq("employer_account_id", owner.accountId).limit(1),
+    );
   }
 
-  if (userIdResult.data?.[0]) {
-    return { job: userIdResult.data[0] as JobRecord, error: null };
+  queries.push(
+    supabase.from("jobs").select(fields).eq("id", jobId).eq("employer_user_id", owner.ownerUserId ?? owner.userId).limit(1),
+    supabase.from("jobs").select(fields).eq("id", jobId).eq("employer_email", owner.ownerEmail ?? owner.email).limit(1),
+  );
+
+  for (const query of queries) {
+    const result = await query;
+    if (result.error) return { job: null, error: result.error };
+    const job = result.data?.[0] as JobRecord | undefined;
+    if (job) {
+      // Team Members/Viewers are location/email-scoped by the job's
+      // "Where should candidate interest emails be sent?" candidate email field.
+      return canUserAccessJob({ email: owner.email }, owner.role ?? "account_owner", job)
+        ? { job, error: null }
+        : { job: null, error: null };
+    }
   }
 
-  const emailResult = await supabase
-    .from("jobs")
-    .select(fields)
-    .eq("id", jobId)
-    .eq("employer_email", owner.email)
-    .limit(1);
-
-  if (emailResult.error) {
-    return { job: null, error: emailResult.error };
-  }
-
-  return { job: (emailResult.data?.[0] as JobRecord | undefined) ?? null, error: null };
+  return { job: null, error: null };
 }
 
 const editFieldStyle: React.CSSProperties = {
@@ -169,7 +171,24 @@ function EmployerJobEditForm() {
         return;
       }
 
-      const currentOwner = { userId, email };
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      let access: EmployerAccess | null = null;
+      if (accessToken) {
+        const accessResponse = await fetch("/api/employer/me", { headers: { Authorization: `Bearer ${accessToken}` } });
+        const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
+        access = accessPayload?.employer ?? null;
+      }
+
+      const currentOwner = {
+        userId,
+        email,
+        accountId: access?.accountId ?? null,
+        ownerUserId: access?.ownerUserId ?? userId,
+        ownerEmail: access?.ownerEmail ?? email,
+        role: access?.role ?? "account_owner",
+        canManageJobs: access?.canManageJobs ?? true,
+      };
       const result = await loadOwnedJob(jobId, currentOwner);
 
       if (!mounted) return;
@@ -198,6 +217,11 @@ function EmployerJobEditForm() {
 
     if (!jobId || !owner) {
       setMessage("We could not save this listing because the employer session is unavailable. Please refresh and try again.");
+      return;
+    }
+
+    if (!owner.canManageJobs) {
+      setMessage("Your employer role can view this listing, but cannot edit jobs. Contact your account admin to make changes.");
       return;
     }
 
@@ -247,11 +271,21 @@ function EmployerJobEditForm() {
     setIsSaving(true);
     setMessage(null);
 
-    const updateByUserId = await supabase
-      .from("jobs")
-      .update(payload, { count: "exact" })
-      .eq("id", jobId)
-      .eq("employer_user_id", owner.userId);
+    const updateByAccountId = owner.accountId
+      ? await supabase
+          .from("jobs")
+          .update(payload, { count: "exact" })
+          .eq("id", jobId)
+          .eq("employer_account_id", owner.accountId)
+      : null;
+
+    const updateByUserId = updateByAccountId && !updateByAccountId.error && updateByAccountId.count && updateByAccountId.count > 0
+      ? updateByAccountId
+      : await supabase
+          .from("jobs")
+          .update(payload, { count: "exact" })
+          .eq("id", jobId)
+          .eq("employer_user_id", owner.ownerUserId ?? owner.userId);
 
     const updateResult =
       !updateByUserId.error && updateByUserId.count && updateByUserId.count > 0
@@ -260,7 +294,7 @@ function EmployerJobEditForm() {
             .from("jobs")
             .update(payload, { count: "exact" })
             .eq("id", jobId)
-            .eq("employer_email", owner.email);
+            .eq("employer_email", owner.ownerEmail ?? owner.email);
 
     setIsSaving(false);
 
