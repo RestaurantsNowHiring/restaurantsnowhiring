@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
 import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
+import { canUserAccessJob } from "../../../../lib/employerJobAccess";
 
 const ALLOWED_STATUSES = new Set(["new", "reviewed", "contacted", "archived"]);
 
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("candidate_submissions")
-      .select("id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email,employer_account_id)")
+      .select("id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails)")
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -47,7 +48,7 @@ export async function GET(request: Request) {
     const visibleRows = (data ?? []).filter((entry) => {
       const row = entry as Record<string, unknown>;
       const job = row.jobs && typeof row.jobs === "object" ? (row.jobs as Record<string, unknown>) : null;
-      return (
+      const belongsToEmployerAccount = Boolean(
         row.employer_user_id === user.id ||
         row.employer_user_id === context.ownerUserId ||
         String(row.employer_email ?? "").toLowerCase() === userEmail ||
@@ -58,6 +59,9 @@ export async function GET(request: Request) {
         String(job?.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
         (context.accountId && job?.employer_account_id === context.accountId)
       );
+
+      // Team Members/Viewers are location/email-scoped by the job's candidate interest email field.
+      return belongsToEmployerAccount && canUserAccessJob(user, context.role, job);
     });
 
     return NextResponse.json({ candidates: visibleRows.map((row) => serializeSubmission(row as Record<string, unknown>)) });
@@ -91,7 +95,7 @@ export async function PATCH(request: Request) {
 
     const { data: existing, error: lookupError } = await supabaseAdmin
       .from("candidate_submissions")
-      .select("id,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email,employer_account_id)")
+      .select("id,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails)")
       .eq("id", id)
       .maybeSingle();
 
@@ -109,7 +113,7 @@ export async function PATCH(request: Request) {
       String(job?.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
       (context.accountId && job?.employer_account_id === context.accountId);
 
-    if (!row || !ownsSubmission) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!row || !ownsSubmission || !canUserAccessJob(user, context.role, job)) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
     const { data, error } = await supabaseAdmin
       .from("candidate_submissions")
