@@ -17,6 +17,7 @@ type TeamMemberRow = {
   can_manage_notification_routing: boolean;
   created_at: string;
   updated_at: string;
+  invite_token: string | null;
 };
 
 export async function POST(request: Request, context: RouteContext) {
@@ -38,7 +39,7 @@ export async function POST(request: Request, context: RouteContext) {
 
     const { data: member, error } = await supabaseAdmin
       .from("employer_team_members")
-      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at")
+      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .eq("id", memberId)
       .eq("account_id", accountContext.accountId)
       .single();
@@ -50,6 +51,7 @@ export async function POST(request: Request, context: RouteContext) {
       accountName: accountContext.accountName,
       role: (member as TeamMemberRow).role,
       inviterEmail: user.email,
+      inviteToken: (member as TeamMemberRow).invite_token ?? (member as TeamMemberRow).id,
     });
 
     if (!result.ok) {
