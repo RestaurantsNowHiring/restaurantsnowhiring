@@ -969,18 +969,42 @@ iframe {
   transform: translateY(-1px);
 }
 
-.rn-team-user-card__identity {
+.rn-team-user-card__summary {
   display: grid;
-  gap: 4px;
-  min-width: 220px;
+  flex: 1 1 620px;
+  gap: 14px;
+  grid-template-columns: minmax(220px, 1.6fr) minmax(140px, 0.9fr) minmax(150px, 1fr) minmax(120px, 0.8fr);
+  min-width: 0;
 }
 
-.rn-team-user-card__identity strong {
+.rn-team-user-card__field {
+  align-content: start;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rn-team-user-card__field--email {
+  overflow-wrap: anywhere;
+}
+
+.rn-team-user-card__field strong,
+.rn-team-joined-value {
   font-size: 16px;
   line-height: 1.25;
 }
 
-.rn-team-role-pill {
+.rn-team-user-card__label {
+  color: rgba(0, 0, 0, 0.52);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.rn-team-role-pill,
+.rn-team-status-pill {
   align-items: center;
   background: rgba(53, 128, 110, 0.1);
   border: 1px solid rgba(53, 128, 110, 0.22);
@@ -993,6 +1017,23 @@ iframe {
   letter-spacing: 0.2px;
   padding: 5px 10px;
   text-transform: uppercase;
+}
+
+.rn-team-status-pill--active {
+  background: rgba(53, 128, 110, 0.1);
+  border-color: rgba(53, 128, 110, 0.22);
+  color: #1d5b4d;
+}
+
+.rn-team-status-pill--pending {
+  background: rgba(245, 158, 11, 0.13);
+  border-color: rgba(245, 158, 11, 0.28);
+  color: #8a5800;
+}
+
+.rn-team-joined-value {
+  color: rgba(0, 0, 0, 0.78);
+  font-weight: 900;
 }
 
 .rn-team-user-card__actions {
@@ -1030,8 +1071,8 @@ iframe {
     flex-direction: column;
   }
 
-  .rn-team-user-card__identity {
-    min-width: 0;
+  .rn-team-user-card__summary {
+    grid-template-columns: 1fr;
   }
 
   .rn-team-member-select,
