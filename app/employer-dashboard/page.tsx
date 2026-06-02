@@ -27,6 +27,7 @@ type OwnershipMatch = "employer_user_id" | "employer_email";
 type DashboardJob = {
   id: string;
   title: string;
+  restaurant_name: string | null;
   city: string | null;
   state: string | null;
   active: boolean;
@@ -104,6 +105,22 @@ const DELETE_CONFIRMATION_MESSAGE =
 const CANDIDATE_STATUS_OPTIONS = ["new", "reviewed", "contacted", "archived"] as const;
 type CandidateStatusOption = (typeof CANDIDATE_STATUS_OPTIONS)[number];
 type CandidateFilter = "all" | CandidateStatusOption;
+type JobStatusFilter = "all" | "Active" | "Paused" | "Pending" | "Rejected";
+type JobSortOption = "newest" | "oldest" | "most_viewed";
+
+const JOB_STATUS_FILTER_OPTIONS: Array<{ value: JobStatusFilter; label: string }> = [
+  { value: "all", label: "All" },
+  { value: "Active", label: "Active" },
+  { value: "Paused", label: "Paused" },
+  { value: "Pending", label: "Pending Review" },
+  { value: "Rejected", label: "Rejected" },
+];
+
+const JOB_SORT_OPTIONS: Array<{ value: JobSortOption; label: string }> = [
+  { value: "newest", label: "Newest First" },
+  { value: "oldest", label: "Oldest First" },
+  { value: "most_viewed", label: "Most Viewed" },
+];
 
 const CANDIDATE_FILTER_OPTIONS: Array<{ value: CandidateFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -189,12 +206,12 @@ function isMissingEmployerUserIdColumnError(error: SupabaseActionError | null | 
 
 const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   {
-    fields: "id,title,city,state,active,status,created_at,views,employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails",
+    fields: "id,title,restaurant_name,city,state,active,status,created_at,views,employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails",
     includesStatus: true,
     includesViews: true,
   },
   {
-    fields: "id,title,city,state,active,status,created_at,employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails",
+    fields: "id,title,restaurant_name,city,state,active,status,created_at,employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails",
     includesStatus: true,
     includesViews: false,
   },
@@ -307,6 +324,9 @@ export default function EmployerDashboardPage() {
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [candidates, setCandidates] = useState<CandidateSubmission[]>([]);
   const [candidateFilter, setCandidateFilter] = useState<CandidateFilter>("all");
+  const [jobSearchQuery, setJobSearchQuery] = useState("");
+  const [jobStatusFilter, setJobStatusFilter] = useState<JobStatusFilter>("all");
+  const [jobSortOption, setJobSortOption] = useState<JobSortOption>("newest");
   const [areCandidatesExpanded, setAreCandidatesExpanded] = useState(false);
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidateBusyId, setCandidateBusyId] = useState<string | null>(null);
@@ -540,6 +560,7 @@ export default function EmployerDashboardPage() {
         return {
           id: String(job.id ?? ""),
           title: String(job.title ?? ""),
+          restaurant_name: typeof job.restaurant_name === "string" && job.restaurant_name.trim() ? job.restaurant_name.trim() : null,
           city: typeof job.city === "string" ? job.city : null,
           state: typeof job.state === "string" ? job.state : null,
           active,
@@ -984,6 +1005,34 @@ export default function EmployerDashboardPage() {
     if (candidateFilter === "all") return candidates;
     return candidates.filter((candidate) => candidate.status === candidateFilter);
   }, [candidateFilter, candidates]);
+
+
+  const filteredJobs = useMemo(() => {
+    const normalizedSearch = jobSearchQuery.trim().toLowerCase();
+
+    return jobs
+      .filter((job) => {
+        const matchesStatus = jobStatusFilter === "all" || job.dashboard_status === jobStatusFilter;
+        if (!matchesStatus) return false;
+        if (!normalizedSearch) return true;
+
+        return [job.title, job.city, job.state, job.restaurant_name]
+          .filter(Boolean)
+          .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+      })
+      .sort((a, b) => {
+        if (jobSortOption === "most_viewed") {
+          const viewDifference = b.views - a.views;
+          if (viewDifference !== 0) return viewDifference;
+        }
+
+        const aCreated = new Date(a.created_at).getTime();
+        const bCreated = new Date(b.created_at).getTime();
+
+        if (jobSortOption === "oldest") return aCreated - bCreated;
+        return bCreated - aCreated;
+      });
+  }, [jobSearchQuery, jobSortOption, jobStatusFilter, jobs]);
 
   const metrics = useMemo(() => {
     const active = jobs.filter((job) => job.dashboard_status === "Active").length;
@@ -1531,6 +1580,53 @@ export default function EmployerDashboardPage() {
             </div>
           ) : (
             <>
+              <div className="rn-job-listing-controls" aria-label="Filter and sort job listings">
+                <label className="rn-job-listing-control rn-job-listing-search">
+                  <span>Search jobs</span>
+                  <input
+                    type="search"
+                    value={jobSearchQuery}
+                    onChange={(event) => setJobSearchQuery(event.target.value)}
+                    placeholder="Search by title, city, state, or restaurant"
+                    aria-label="Search job listings by title, city, state, or restaurant"
+                  />
+                </label>
+                <label className="rn-job-listing-control">
+                  <span>Status</span>
+                  <select
+                    value={jobStatusFilter}
+                    onChange={(event) => setJobStatusFilter(event.target.value as JobStatusFilter)}
+                    aria-label="Filter job listings by status"
+                  >
+                    {JOB_STATUS_FILTER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="rn-job-listing-control">
+                  <span>Sort</span>
+                  <select
+                    value={jobSortOption}
+                    onChange={(event) => setJobSortOption(event.target.value as JobSortOption)}
+                    aria-label="Sort job listings"
+                  >
+                    {JOB_SORT_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              {filteredJobs.length === 0 ? (
+                <div className="rn-job-listing-empty" role="status">
+                  No matching job listings found.
+                </div>
+              ) : (
+                <>
               <div className="rn-dashboard-table-wrap">
                 <table className="rn-dashboard-table">
                   <thead>
@@ -1544,7 +1640,7 @@ export default function EmployerDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {jobs.map((job) => (
+                    {filteredJobs.map((job) => (
                       <tr key={job.id}>
                         <td>{job.title}</td>
                         <td>
@@ -1603,7 +1699,7 @@ export default function EmployerDashboardPage() {
               </div>
 
               <div className="rn-dashboard-mobile-list">
-                {jobs.map((job) => (
+                {filteredJobs.map((job) => (
                   <article key={`mobile-${job.id}`} className="rn-dashboard-mobile-card">
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                       <h3 style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
@@ -1661,6 +1757,8 @@ export default function EmployerDashboardPage() {
                   </article>
                 ))}
               </div>
+                </>
+              )}
             </>
           )}
         </section>
@@ -1743,6 +1841,74 @@ export default function EmployerDashboardPage() {
           font-weight: 900;
           text-decoration: underline;
           text-underline-offset: 3px;
+        }
+
+
+        .rn-job-listing-controls {
+          align-items: end;
+          display: grid;
+          gap: 12px;
+          grid-template-columns: minmax(260px, 1fr) minmax(180px, 220px) minmax(180px, 220px);
+          margin: 18px 0 16px;
+        }
+
+        .rn-job-listing-control {
+          color: ${homeTheme.muted};
+          display: grid;
+          font-family: var(--font-body);
+          font-size: 12px;
+          font-weight: 900;
+          gap: 7px;
+          letter-spacing: 0.35px;
+          text-transform: uppercase;
+        }
+
+        .rn-job-listing-control input,
+        .rn-job-listing-control select {
+          appearance: none;
+          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid ${homeTheme.border};
+          border-radius: 14px;
+          color: ${homeTheme.text};
+          font-family: var(--font-body);
+          font-size: 14px;
+          font-weight: 800;
+          min-height: 46px;
+          outline: 0;
+          padding: 0 14px;
+          text-transform: none;
+          width: 100%;
+        }
+
+        .rn-job-listing-control select {
+          background-image: linear-gradient(45deg, transparent 50%, ${homeTheme.green} 50%), linear-gradient(135deg, ${homeTheme.green} 50%, transparent 50%);
+          background-position: calc(100% - 18px) 19px, calc(100% - 13px) 19px;
+          background-repeat: no-repeat;
+          background-size: 5px 5px, 5px 5px;
+          cursor: pointer;
+          padding-right: 36px;
+        }
+
+        .rn-job-listing-control input:focus,
+        .rn-job-listing-control select:focus {
+          border-color: rgba(31, 79, 68, 0.34);
+          box-shadow: 0 0 0 3px rgba(31, 79, 68, 0.12);
+        }
+
+        .rn-job-listing-control input::placeholder {
+          color: rgba(85, 99, 93, 0.72);
+        }
+
+        .rn-job-listing-empty {
+          background: rgba(255, 255, 255, 0.65);
+          border: 1px dashed ${homeTheme.border};
+          border-radius: 16px;
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-weight: 800;
+          margin-top: 16px;
+          padding: 24px;
+          text-align: center;
         }
 
         .rn-billing-grid {
@@ -2246,6 +2412,10 @@ export default function EmployerDashboardPage() {
         }
 
         @media (max-width: 760px) {
+          .rn-job-listing-controls {
+            grid-template-columns: 1fr;
+          }
+
           .rn-dashboard-table-wrap {
             display: none;
           }
