@@ -6,6 +6,7 @@ export type CandidateNotificationRouting = "account_owner" | "job_poster" | "com
 export type EmployerAccountMembership = {
   accountId: string;
   accountName: string;
+  locationName: string | null;
   role: EmployerRole;
 };
 
@@ -13,6 +14,7 @@ export type EmployerAccountContext = {
   accountId: string | null;
   accountName: string | null;
   restaurantBrandName: string | null;
+  locationName: string | null;
   role: EmployerRole;
   memberships: EmployerAccountMembership[];
   userId: string;
@@ -225,7 +227,7 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
   async function loadMemberships() {
     const { data, error } = await admin
       .from("employer_team_members")
-      .select("account_id,user_id,email,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email)")
+      .select("account_id,user_id,email,location_name,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email)")
       .or(`user_id.eq.${user.id},email.ilike.${user.email.trim().toLowerCase()}`)
       .eq("status", "active")
       .order("created_at", { ascending: true });
@@ -282,6 +284,7 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
       return {
         accountId,
         accountName: accountDisplayName(membershipAccount),
+        locationName: cleanString(membership.location_name, 180),
         role: normalizeRole(membership.role),
       };
     })
@@ -292,6 +295,7 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
       accountId: String(account.id),
       accountName: accountDisplayName(account),
       restaurantBrandName: cleanString(account.restaurant_brand_name, 180) ?? cleanString(account.company_name, 180),
+      locationName: cleanString(memberRow.location_name, 180),
       role,
       memberships: membershipSummaries,
       userId: user.id,
@@ -309,6 +313,7 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
     accountId: null,
     accountName: null,
     restaurantBrandName: null,
+    locationName: null,
     role: "account_owner",
     memberships: [],
     userId: user.id,

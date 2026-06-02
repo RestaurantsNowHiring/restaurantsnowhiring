@@ -20,8 +20,8 @@ import { canUserAccessJob } from "../../lib/employerJobAccess";
 
 type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string };
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
-type EmployerAccountMembership = { accountId: string; accountName: string; role: EmployerRole };
-type EmployerAccess = { role: EmployerRole; accountId: string | null; accountName: string | null; restaurantBrandName: string | null; memberships: EmployerAccountMembership[]; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
+type EmployerAccountMembership = { accountId: string; accountName: string; locationName: string | null; role: EmployerRole };
+type EmployerAccess = { role: EmployerRole; accountId: string | null; accountName: string | null; restaurantBrandName: string | null; locationName: string | null; memberships: EmployerAccountMembership[]; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
 type OwnershipMatch = "employer_user_id" | "employer_email";
 
 type DashboardJob = {
@@ -1082,7 +1082,7 @@ export default function EmployerDashboardPage() {
                 }}
               >
                 <div>
-                  Current Employer Account: {employerAccess?.accountName ?? "Employer Account"}
+                  Current Employer Account: {employerAccess?.locationName ?? employerAccess?.accountName ?? "Employer Account"}
                 </div>
                 <div>
                   Role: {formatEmployerRole(employerAccess?.role)}
@@ -1106,7 +1106,7 @@ export default function EmployerDashboardPage() {
                     >
                       {employerAccess?.memberships.map((membership) => (
                         <option key={membership.accountId} value={membership.accountId}>
-                          {membership.accountName} — {formatEmployerRole(membership.role)}
+                          {membership.locationName ?? membership.accountName} — {formatEmployerRole(membership.role)}
                         </option>
                       ))}
                     </select>

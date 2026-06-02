@@ -16,6 +16,7 @@ type EmployerAccess = {
 type TeamMember = {
   id: string;
   email: string;
+  location_name: string | null;
   user_id: string | null;
   role: EmployerRole;
   status: string;
@@ -36,6 +37,12 @@ const ROLE_HELP: Record<EmployerRole, string> = {
   viewer: "Can view the dashboard, jobs, and candidates, and update candidate statuses only.",
 };
 
+const LOCATION_NAME_EXAMPLES = [
+  "MISSION BBQ Columbia, MD",
+  "MISSION BBQ Ellicott City, MD",
+  "MISSION BBQ Annapolis, MD",
+];
+
 const JOINED_DATE_FORMATTER = new Intl.DateTimeFormat("en", {
   month: "short",
   day: "numeric",
@@ -44,6 +51,10 @@ const JOINED_DATE_FORMATTER = new Intl.DateTimeFormat("en", {
 
 function getAccountStatus(member: TeamMember) {
   return member.user_id ? "Active" : "Invitation Pending";
+}
+
+function getTeamMemberDisplayName(member: TeamMember) {
+  return member.location_name?.trim() || member.email;
 }
 
 function getJoinedDisplay(member: TeamMember) {
@@ -63,6 +74,8 @@ export default function TeamAccessPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<EmployerRole>("viewer");
   const [canRouteNotifications, setCanRouteNotifications] = useState(false);
+  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [editingLocationName, setEditingLocationName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -136,7 +149,12 @@ export default function TeamAccessPage() {
     await loadTeam();
   }
 
-  async function updateMember(member: TeamMember, nextRole: EmployerRole, nextCanRoute = member.can_manage_notification_routing) {
+  async function updateMember(
+    member: TeamMember,
+    nextRole: EmployerRole,
+    nextCanRoute = member.can_manage_notification_routing,
+    nextLocationName = member.location_name,
+  ) {
     const token = await getAccessToken();
     if (!token) return;
     setBusy(true);
@@ -144,7 +162,7 @@ export default function TeamAccessPage() {
     const response = await fetch("/api/employer/team", {
       method: "PATCH",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ id: member.id, role: nextRole, can_manage_notification_routing: nextCanRoute }),
+      body: JSON.stringify({ id: member.id, role: nextRole, can_manage_notification_routing: nextCanRoute, location_name: nextLocationName }),
     });
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
     setBusy(false);
@@ -152,9 +170,25 @@ export default function TeamAccessPage() {
       setMessage(payload?.error || "Could not update team user.");
       return;
     }
+    setEditingMemberId(null);
+    setEditingLocationName("");
     await loadTeam();
   }
 
+  function startEditingLocation(member: TeamMember) {
+    setEditingMemberId(member.id);
+    setEditingLocationName(member.location_name ?? "");
+    setMessage(null);
+  }
+
+  async function saveLocationName(member: TeamMember) {
+    await updateMember(member, member.role, member.can_manage_notification_routing, editingLocationName);
+  }
+
+  function cancelEditingLocation() {
+    setEditingMemberId(null);
+    setEditingLocationName("");
+  }
 
   async function resendInvite(member: TeamMember) {
     const token = await getAccessToken();
@@ -282,7 +316,30 @@ export default function TeamAccessPage() {
                 {members.map((member) => (
                   <article key={member.id} className="rn-team-user-card" style={{ border: `1px solid ${homeTheme.border}`, borderRadius: 16, padding: 18, backgroundColor: "#fff" }}>
                     <div className="rn-team-user-card__top" style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                      <div className="rn-team-user-card__summary" aria-label={`Team member details for ${member.email}`}>
+                      <div className="rn-team-user-card__summary" aria-label={`Team member details for ${getTeamMemberDisplayName(member)}`}>
+                        <div className="rn-team-user-card__field rn-team-user-card__field--location">
+                          <span className="rn-team-user-card__label">Location</span>
+                          {editingMemberId === member.id ? (
+                            <div style={{ display: "grid", gap: 8 }}>
+                              <input
+                                type="text"
+                                value={editingLocationName}
+                                onChange={(event) => setEditingLocationName(event.target.value)}
+                                placeholder="MISSION BBQ Columbia, MD"
+                                className="rn-team-input"
+                                style={{ ...homeInputStyle, minHeight: 42 }}
+                                maxLength={180}
+                                disabled={busy}
+                                aria-label={`Location name for ${member.email}`}
+                              />
+                              <span style={{ color: homeTheme.muted, fontSize: 12, fontWeight: 800 }}>
+                                Examples: {LOCATION_NAME_EXAMPLES.join("; ")}
+                              </span>
+                            </div>
+                          ) : (
+                            <strong style={{ color: homeTheme.text }}>{getTeamMemberDisplayName(member)}</strong>
+                          )}
+                        </div>
                         <div className="rn-team-user-card__field rn-team-user-card__field--email">
                           <span className="rn-team-user-card__label">Email</span>
                           <strong style={{ color: homeTheme.text }}>{member.email}</strong>
@@ -303,6 +360,20 @@ export default function TeamAccessPage() {
                         </div>
                       </div>
                       <div className="rn-team-user-card__actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                        {editingMemberId === member.id ? (
+                          <>
+                            <button type="button" className="rn-btn-primary" style={homePrimaryButton} onClick={() => saveLocationName(member)} disabled={busy}>
+                              Save location
+                            </button>
+                            <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={cancelEditingLocation} disabled={busy}>
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => startEditingLocation(member)} disabled={busy}>
+                            Edit
+                          </button>
+                        )}
                         <select
                           aria-label={`Change role for ${member.email}`}
                           className="rn-team-member-select"

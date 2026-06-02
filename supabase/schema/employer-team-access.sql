@@ -39,6 +39,7 @@ create table if not exists public.employer_team_members (
   account_id uuid not null references public.employer_accounts(id) on delete cascade,
   user_id uuid references auth.users(id) on delete cascade,
   email text not null,
+  location_name text,
   role public.employer_user_role not null default 'viewer',
   status text not null default 'active',
   can_manage_notification_routing boolean not null default false,
@@ -63,6 +64,7 @@ alter table public.employer_accounts
   add column if not exists restaurant_brand_name text;
 
 alter table public.employer_team_members
+  add column if not exists location_name text,
   add column if not exists invite_token uuid not null default gen_random_uuid(),
   add column if not exists invite_accepted_at timestamptz;
 
