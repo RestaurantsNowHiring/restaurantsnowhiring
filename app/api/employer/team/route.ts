@@ -13,11 +13,13 @@ type TeamPayload = {
   email?: string;
   role?: EmployerRole;
   can_manage_notification_routing?: boolean;
+  location_name?: string | null;
 };
 
 type TeamMemberRow = {
   id: string;
   email: string;
+  location_name: string | null;
   user_id: string | null;
   role: EmployerRole;
   status: string;
@@ -33,6 +35,12 @@ function cleanEmail(value: unknown) {
 
 function cleanRole(value: unknown): EmployerRole | null {
   return ROLES.has(value as EmployerRole) ? (value as EmployerRole) : null;
+}
+
+function cleanLocationName(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, 180) : null;
 }
 
 async function sendInviteForMember(input: {
@@ -75,7 +83,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("employer_team_members")
-      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+      .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .eq("account_id", context.accountId)
       .order("created_at", { ascending: true });
 
@@ -127,7 +135,7 @@ export async function POST(request: Request) {
         },
         { onConflict: "account_id,email" },
       )
-      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+      .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .single();
 
     if (error) throw new Error(error.message || "Could not save team user.");
@@ -162,6 +170,7 @@ export async function PATCH(request: Request) {
     const payload = (await request.json().catch(() => null)) as TeamPayload | null;
     const id = payload?.id?.trim();
     const role = cleanRole(payload?.role);
+    const locationName = cleanLocationName(payload?.location_name);
     if (!id || !role) return NextResponse.json({ error: "Choose a team member and valid access level." }, { status: 400 });
 
     const supabaseAdmin = getSupabaseAdminClient();
@@ -171,12 +180,13 @@ export async function PATCH(request: Request) {
       .from("employer_team_members")
       .update({
         role,
+        location_name: locationName,
         can_manage_notification_routing: Boolean(payload?.can_manage_notification_routing),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .eq("account_id", context.accountId)
-      .select("id,email,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+      .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .single();
 
     if (error) throw new Error(error.message || "Could not update team user.");
