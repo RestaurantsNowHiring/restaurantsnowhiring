@@ -636,6 +636,13 @@ export default function AdminPageClient() {
             >
               Admin Management
             </button>
+            <Link
+              href="/admin/blog"
+              style={tabBtn(false)}
+              className="rn-btn-secondary"
+            >
+              Blog Drafts
+            </Link>
           </div>
         </section>
 
