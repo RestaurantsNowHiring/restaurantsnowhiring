@@ -57,6 +57,7 @@ export async function POST(request: Request) {
         user_id: billingUserId,
         email: billingEmail,
         stripe_customer_id: customerId,
+        employer_account_id: context.accountId,
         billing_status: existingBilling?.billing_status ?? "checkout_started",
         updated_at: new Date().toISOString(),
       },
