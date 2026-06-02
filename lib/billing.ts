@@ -12,6 +12,7 @@ export type BillingRecord = {
   trial_started_at: string | null;
   trial_ends_at: string | null;
   subscription_current_period_end: string | null;
+  employer_account_id: string | null;
 };
 
 type StripeRequestOptions = {
@@ -134,7 +135,7 @@ export async function getBillingRecord(userId: string) {
 
   const { data, error } = await supabaseAdmin
     .from("employer_billing")
-    .select("user_id,email,stripe_customer_id,stripe_subscription_id,billing_status,trial_started_at,trial_ends_at,subscription_current_period_end")
+    .select("user_id,email,stripe_customer_id,stripe_subscription_id,billing_status,trial_started_at,trial_ends_at,subscription_current_period_end,employer_account_id")
     .eq("user_id", userId)
     .maybeSingle();
 
@@ -223,8 +224,14 @@ function unixToIso(timestamp?: number | null) {
   return timestamp ? new Date(timestamp * 1000).toISOString() : null;
 }
 
-function stripeId(value: string | { id: string }) {
+function stripeId(value?: string | { id: string } | null) {
+  if (!value) return null;
   return typeof value === "string" ? value : value.id;
+}
+
+function metadataValue(metadata: Record<string, string> | null | undefined, key: string) {
+  const value = metadata?.[key]?.trim();
+  return value || null;
 }
 
 export async function upsertBillingFromSubscription(subscription: StripeSubscription, fallbackUserId?: string | null) {
@@ -232,14 +239,23 @@ export async function upsertBillingFromSubscription(subscription: StripeSubscrip
   if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
   const customerId = stripeId(subscription.customer);
-  const metadataUserId = subscription.metadata?.user_id ?? null;
-  let userId = fallbackUserId ?? metadataUserId;
+  if (!customerId) throw new Error("Stripe subscription is missing a customer id.");
+
+  const metadataUserId = metadataValue(subscription.metadata, "user_id");
+  const metadataEmployerAccountId = metadataValue(subscription.metadata, "employer_account_id");
+  let userId = metadataUserId || fallbackUserId || null;
 
   if (!userId) {
+    const filters = [
+      `stripe_subscription_id.eq.${subscription.id}`,
+      `stripe_customer_id.eq.${customerId}`,
+      metadataEmployerAccountId ? `employer_account_id.eq.${metadataEmployerAccountId}` : null,
+    ].filter(Boolean);
+
     const { data, error } = await supabaseAdmin
       .from("employer_billing")
       .select("user_id")
-      .or(`stripe_subscription_id.eq.${subscription.id},stripe_customer_id.eq.${customerId}`)
+      .or(filters.join(","))
       .maybeSingle();
 
     if (error) throw new Error(error.message || "Could not find billing owner.");
@@ -248,22 +264,25 @@ export async function upsertBillingFromSubscription(subscription: StripeSubscrip
 
   if (!userId) return null;
 
+  const billingUpdate: Record<string, string | null> = {
+    user_id: userId,
+    stripe_customer_id: customerId,
+    stripe_subscription_id: subscription.id,
+    billing_status: subscription.status,
+    trial_started_at: unixToIso(subscription.trial_start),
+    trial_ends_at: unixToIso(subscription.trial_end),
+    subscription_current_period_end: unixToIso(subscription.current_period_end),
+    updated_at: new Date().toISOString(),
+  };
+
+  if (metadataEmployerAccountId) {
+    billingUpdate.employer_account_id = metadataEmployerAccountId;
+  }
+
   const { data, error } = await supabaseAdmin
     .from("employer_billing")
-    .upsert(
-      {
-        user_id: userId,
-        stripe_customer_id: customerId,
-        stripe_subscription_id: subscription.id,
-        billing_status: subscription.status,
-        trial_started_at: unixToIso(subscription.trial_start),
-        trial_ends_at: unixToIso(subscription.trial_end),
-        subscription_current_period_end: unixToIso(subscription.current_period_end),
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "user_id" },
-    )
-    .select("user_id,email,stripe_customer_id,stripe_subscription_id,billing_status,trial_started_at,trial_ends_at,subscription_current_period_end")
+    .upsert(billingUpdate, { onConflict: "user_id" })
+    .select("user_id,email,stripe_customer_id,stripe_subscription_id,billing_status,trial_started_at,trial_ends_at,subscription_current_period_end,employer_account_id")
     .single();
 
   if (error) throw new Error(error.message || "Could not sync billing record.");

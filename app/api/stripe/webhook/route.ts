@@ -16,21 +16,28 @@ type StripeWebhookEvent = {
   data: { object: Record<string, unknown> };
 };
 
+type StripeIdReference = string | { id: string } | null;
+
 type StripeCheckoutSession = {
   id: string;
-  customer?: string | null;
-  subscription?: string | null;
+  customer?: StripeIdReference;
+  subscription?: StripeIdReference;
   client_reference_id?: string | null;
   metadata?: Record<string, string> | null;
 };
 
 type StripeInvoice = {
-  customer?: string | null;
-  subscription?: string | null;
+  customer?: StripeIdReference;
+  subscription?: StripeIdReference;
 };
 
 function asSubscription(value: Record<string, unknown>) {
   return value as unknown as StripeSubscription;
+}
+
+function stripeObjectId(value?: StripeIdReference) {
+  if (!value) return null;
+  return typeof value === "string" ? value : value.id;
 }
 
 async function findBillingOwnerByStripeIds(customerId?: string | null, subscriptionId?: string | null) {
@@ -54,9 +61,10 @@ async function findBillingOwnerByStripeIds(customerId?: string | null, subscript
 }
 
 async function handleCheckoutCompleted(session: StripeCheckoutSession) {
-  if (!session.subscription) return;
+  const sessionSubscriptionId = stripeObjectId(session.subscription);
+  if (!sessionSubscriptionId) return;
 
-  const subscription = await stripeRequest<StripeSubscription>(`/subscriptions/${session.subscription}?expand%5B%5D=items`);
+  const subscription = await stripeRequest<StripeSubscription>(`/subscriptions/${sessionSubscriptionId}?expand%5B%5D=items`);
   const userId = session.client_reference_id ?? session.metadata?.user_id ?? subscription.metadata?.user_id ?? null;
   const billing = await upsertBillingFromSubscription(subscription, userId);
 
@@ -78,7 +86,7 @@ async function handleSubscriptionDeleted(subscription: StripeSubscription) {
 }
 
 async function handleInvoicePaymentFailed(invoice: StripeInvoice) {
-  const owner = await findBillingOwnerByStripeIds(invoice.customer, invoice.subscription);
+  const owner = await findBillingOwnerByStripeIds(stripeObjectId(invoice.customer), stripeObjectId(invoice.subscription));
   if (!owner) return;
 
   const supabaseAdmin = getSupabaseAdminClient();
