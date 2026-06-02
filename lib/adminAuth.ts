@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getSupabaseAdminClient } from "./supabaseAdmin";
 
 const ADMIN_SESSION_COOKIE = "admin_session";
-const PRIMARY_BOOTSTRAP_ADMIN_EMAIL = "team@restaurantsnowhiring.com";
+export const PRIMARY_BOOTSTRAP_ADMIN_EMAIL = "team@restaurantsnowhiring.com";
 
 function getSupabaseConfig() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -33,6 +33,11 @@ export function getAdminAllowlist() {
       ...parseAdminAllowlist(process.env.ADMIN_ALLOWLIST_EMAILS),
     ]),
   );
+}
+
+
+export function isPrimaryBootstrapAdminEmail(email: string | undefined | null) {
+  return normalizeAdminEmail(email) === PRIMARY_BOOTSTRAP_ADMIN_EMAIL;
 }
 
 export function isEmailInAdminAllowlist(email: string | undefined | null) {
