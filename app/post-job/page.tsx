@@ -306,7 +306,7 @@ export default function PostJobPage() {
       setPayRate(store.minimum_wage);
     }
 
-    const routingEmails = [store.ta_email, store.gm_op_email, store.store_email].filter(Boolean).join(", ");
+    const routingEmails = [store.store_email, store.ta_email, store.gm_op_email].filter(Boolean).join(", ");
     if (routingEmails && canManageCandidateNotificationRouting) setCandidateNotificationEmail(routingEmails);
     if (store.store_email) setWorkEmail(store.store_email);
   }

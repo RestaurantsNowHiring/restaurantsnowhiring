@@ -78,6 +78,13 @@ function formatAddress(store: Store) {
   return [store.address, [store.city, store.state].filter(Boolean).join(", ")].filter(Boolean).join(" • ") || "Address not set";
 }
 
+function formatCandidateRoutingEmails(store: Store) {
+  const emails = [store.store_email, store.ta_email, store.gm_op_email]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+  return emails.length > 0 ? emails.join(", ") : "—";
+}
+
 export default function StoreDirectoryPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -306,9 +313,9 @@ export default function StoreDirectoryPage() {
                   <label style={{ fontWeight: 900 }}>Address<input value={form.address ?? ""} onChange={(event) => updateForm("address", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={{ fontWeight: 900 }}>City<input value={form.city ?? ""} onChange={(event) => updateForm("city", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={{ fontWeight: 900 }}>State<select value={form.state ?? ""} onChange={(event) => updateForm("state", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{STATES.map((state) => <option key={state} value={state}>{state}</option>)}</select></label>
-                  <label style={{ fontWeight: 900 }}>Store email<input type="email" value={form.store_email ?? ""} onChange={(event) => updateForm("store_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>TA email<input type="email" value={form.ta_email ?? ""} onChange={(event) => updateForm("ta_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>GM/OP email<input type="email" value={form.gm_op_email ?? ""} onChange={(event) => updateForm("gm_op_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={{ fontWeight: 900 }}>Candidate routing email 1<input type="email" value={form.store_email ?? ""} onChange={(event) => updateForm("store_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={{ fontWeight: 900 }}>Candidate routing email 2<input type="email" value={form.ta_email ?? ""} onChange={(event) => updateForm("ta_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={{ fontWeight: 900 }}>Candidate routing email 3<input type="email" value={form.gm_op_email ?? ""} onChange={(event) => updateForm("gm_op_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={{ fontWeight: 900 }}>Minimum wage<input value={form.minimum_wage ?? ""} onChange={(event) => updateForm("minimum_wage", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={{ fontWeight: 900 }}>Pay range<input value={form.pay_range ?? ""} onChange={(event) => updateForm("pay_range", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={{ fontWeight: 900 }}>Default application URL<input value={form.default_application_url ?? ""} onChange={(event) => updateForm("default_application_url", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
@@ -336,9 +343,7 @@ export default function StoreDirectoryPage() {
                 <dl className="rn-store-detail-grid">
                   <div><dt>Full address</dt><dd>{formatAddress(selectedStore)}</dd></div>
                   <div><dt>City/State</dt><dd>{[selectedStore.city, selectedStore.state].filter(Boolean).join(", ") || "—"}</dd></div>
-                  <div><dt>Store email</dt><dd>{selectedStore.store_email || "—"}</dd></div>
-                  <div><dt>TA email</dt><dd>{selectedStore.ta_email || "—"}</dd></div>
-                  <div><dt>GM/OP email</dt><dd>{selectedStore.gm_op_email || "—"}</dd></div>
+                  <div><dt>Candidate routing emails</dt><dd>{formatCandidateRoutingEmails(selectedStore)}</dd></div>
                   <div><dt>Minimum wage</dt><dd>{selectedStore.minimum_wage || "—"}</dd></div>
                   <div><dt>Pay range</dt><dd>{selectedStore.pay_range || "—"}</dd></div>
                   <div><dt>Default application URL</dt><dd>{selectedStore.default_application_url || "—"}</dd></div>

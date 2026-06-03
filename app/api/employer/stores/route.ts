@@ -51,9 +51,9 @@ function buildStoreRow(payload: StorePayload, employerAccountId: string) {
   const taEmail = cleanEmail(payload.ta_email);
   const gmOpEmail = cleanEmail(payload.gm_op_email);
   const emailError =
-    validateEmail(storeEmail, "Store email") ||
-    validateEmail(taEmail, "TA email") ||
-    validateEmail(gmOpEmail, "GM/OP email");
+    validateEmail(storeEmail, "Candidate routing email 1") ||
+    validateEmail(taEmail, "Candidate routing email 2") ||
+    validateEmail(gmOpEmail, "Candidate routing email 3");
   if (emailError) return { error: emailError };
 
   return {
