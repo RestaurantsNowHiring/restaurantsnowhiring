@@ -85,6 +85,7 @@ export async function GET(request: Request) {
       .from("employer_team_members")
       .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .eq("account_id", context.accountId)
+      .in("status", ["active", "invited"])
       .order("created_at", { ascending: true });
 
     if (error) throw new Error(error.message || "Could not load team users.");
@@ -214,15 +215,27 @@ export async function DELETE(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
+    const { data: member, error: memberError } = await supabaseAdmin
+      .from("employer_team_members")
+      .select("id,email,user_id,role,status")
+      .eq("id", id)
+      .eq("account_id", context.accountId)
+      .maybeSingle();
+
+    if (memberError) throw new Error(memberError.message || "Could not find team user.");
+    if (!member) return NextResponse.json({ error: "Team user was not found or was already removed." }, { status: 404 });
+    if (member.role === "account_owner" || member.user_id === context.ownerUserId) {
+      return NextResponse.json({ error: "Account Owners cannot be removed from team access." }, { status: 400 });
+    }
+
     const { error } = await supabaseAdmin
       .from("employer_team_members")
       .delete()
-      .eq("id", id)
-      .eq("account_id", context.accountId)
-      .neq("user_id", context.ownerUserId);
+      .eq("id", member.id)
+      .eq("account_id", context.accountId);
 
     if (error) throw new Error(error.message || "Could not remove team user.");
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, removedMemberId: member.id });
   } catch (error) {
     console.error("Employer team remove failed", { error });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not remove team user." }, { status: 500 });
