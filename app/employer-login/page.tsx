@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
+import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 
 type Mode = "login" | "signup";
 type SignupStep = 1 | 2 | 3;
@@ -54,6 +55,7 @@ function EmployerLoginForm() {
         return;
       }
 
+      await acceptPendingTeamInvitesForCurrentUser();
       router.replace(nextUrl);
     }
 
@@ -121,6 +123,7 @@ function EmployerLoginForm() {
         return;
       }
 
+      await acceptPendingTeamInvitesForCurrentUser();
       router.replace(nextUrl);
     } finally {
       setIsSubmitting(false);
@@ -170,8 +173,13 @@ function EmployerLoginForm() {
       }
 
       if (data.user?.email_confirmed_at) {
+        await acceptPendingTeamInvitesForCurrentUser();
         router.replace(nextUrl);
         return;
+      }
+
+      if (data.user) {
+        void acceptPendingTeamInvitesForCurrentUser();
       }
 
       router.replace(`/check-email?email=${encodeURIComponent(signupEmail)}`);

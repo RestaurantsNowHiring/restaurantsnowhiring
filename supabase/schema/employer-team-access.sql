@@ -48,16 +48,22 @@ create table if not exists public.employer_team_members (
   invited_by_user_id uuid references auth.users(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  constraint employer_team_members_status_allowed check (status in ('invited', 'active', 'disabled')),
+  constraint employer_team_members_status_allowed check (status in ('invited', 'pending', 'active', 'disabled')),
   constraint employer_team_members_email_format check (email ~* '^[^\s@]+@[^\s@]+\.[^\s@]+$')
 );
 
-create unique index if not exists employer_team_members_account_email_unique
-on public.employer_team_members (account_id, email);
+drop index if exists employer_team_members_account_email_unique;
+
+create unique index if not exists employer_team_members_account_normalized_email_unique
+on public.employer_team_members (account_id, lower(btrim(email)));
 
 create unique index if not exists employer_team_members_account_user_unique
 on public.employer_team_members (account_id, user_id)
 where user_id is not null;
+
+create unique index if not exists employer_team_members_account_auth_user_unique
+on public.employer_team_members (account_id, auth_user_id)
+where auth_user_id is not null;
 
 alter table public.employer_accounts
   add column if not exists account_name text,
@@ -65,8 +71,18 @@ alter table public.employer_accounts
 
 alter table public.employer_team_members
   add column if not exists location_name text,
+  add column if not exists auth_user_id uuid references auth.users(id) on delete cascade,
   add column if not exists invite_token uuid not null default gen_random_uuid(),
   add column if not exists invite_accepted_at timestamptz;
+
+alter table public.employer_team_members
+  drop constraint if exists employer_team_members_status_allowed,
+  add constraint employer_team_members_status_allowed check (status in ('invited', 'pending', 'active', 'disabled'));
+
+update public.employer_team_members
+set auth_user_id = user_id
+where auth_user_id is null
+  and user_id is not null;
 
 create unique index if not exists employer_team_members_invite_token_unique
 on public.employer_team_members (invite_token);
@@ -223,7 +239,8 @@ as $$
     and member.status = 'active'
     and (
       member.user_id = auth.uid()
-      or lower(member.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      or member.auth_user_id = auth.uid()
+      or lower(btrim(member.email)) = lower(btrim(coalesce(auth.email(), auth.jwt() ->> 'email', '')))
     )
   order by case member.role when 'account_owner' then 1 when 'hiring_manager' then 2 else 3 end
   limit 1;
@@ -273,7 +290,8 @@ as $$
       and member.status = 'active'
       and (
         member.user_id = auth.uid()
-        or lower(member.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+        or member.auth_user_id = auth.uid()
+        or lower(btrim(member.email)) = lower(btrim(coalesce(auth.email(), auth.jwt() ->> 'email', '')))
       )
       and (member.role = 'account_owner' or member.can_manage_notification_routing)
   );
@@ -330,6 +348,38 @@ on public.employer_team_members
 for delete
 to authenticated
 using (public.can_manage_employer_account(account_id));
+
+create or replace function public.accept_pending_team_invites_for_current_user()
+returns integer
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  accepted_count integer := 0;
+  current_user_id uuid := auth.uid();
+  current_user_email text := lower(btrim(coalesce(auth.email(), auth.jwt() ->> 'email', '')));
+begin
+  if current_user_id is null or current_user_email = '' then
+    return 0;
+  end if;
+
+  update public.employer_team_members member
+  set
+    user_id = current_user_id,
+    auth_user_id = current_user_id,
+    status = 'active',
+    invite_accepted_at = now(),
+    updated_at = now()
+  where lower(btrim(member.email)) = current_user_email
+    and member.status in ('invited', 'pending');
+
+  get diagnostics accepted_count = row_count;
+  return accepted_count;
+end;
+$$;
+
+grant execute on function public.accept_pending_team_invites_for_current_user() to authenticated;
 
 -- Replace single-user job policies with account-aware policies while preserving legacy owner/email fallback.
 drop policy if exists "Employers can read their own jobs" on public.jobs;

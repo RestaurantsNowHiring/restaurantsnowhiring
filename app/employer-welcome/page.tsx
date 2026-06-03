@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 import {
   homeCardStyle,
   homePrimaryButton,
@@ -44,6 +45,9 @@ function EmployerWelcomeContent() {
       }
 
       const isConfirmed = !!user?.email_confirmed_at;
+      if (isConfirmed) {
+        await acceptPendingTeamInvitesForCurrentUser();
+      }
       setConfirmed(isConfirmed);
       setLoading(false);
 

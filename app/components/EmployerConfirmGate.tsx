@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 
 export default function EmployerConfirmGate() {
   const router = useRouter();
@@ -37,6 +38,8 @@ export default function EmployerConfirmGate() {
         router.replace("/employer-welcome");
         return;
       }
+
+      await acceptPendingTeamInvitesForCurrentUser();
 
       // If confirmed but still on welcome: send home
       if (confirmed && pathname === "/employer-welcome") {

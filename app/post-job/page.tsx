@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../lib/candidateNotificationEmails";
 import { supabase } from "../../lib/supabase";
+import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 import {
   homePrimaryButton,
   homeSecondaryButton,
@@ -235,6 +236,8 @@ export default function PostJobPage() {
           setAuthStatus("unconfirmed");
           return;
         }
+
+        await acceptPendingTeamInvitesForCurrentUser();
 
         const accessToken = data.session?.access_token;
         if (accessToken) {

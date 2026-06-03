@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
+import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 import {
   homeCardStyle,
   homePrimaryButton,
@@ -511,6 +512,8 @@ export default function EmployerDashboardPage() {
         }
         return;
       }
+
+      await acceptPendingTeamInvitesForCurrentUser();
 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;

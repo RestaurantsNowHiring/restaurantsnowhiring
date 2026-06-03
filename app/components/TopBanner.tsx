@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase"; // ✅ if TopBanner is in app/components
+import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 
 type BannerLink = {
   href: string;
@@ -20,13 +21,15 @@ export default function TopBanner() {
 
   useEffect(() => {
     // Initial session check
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session) await acceptPendingTeamInvitesForCurrentUser();
       setIsLoggedIn(!!data.session);
       setIsReady(true);
     });
 
     // Keep UI updated on auth changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session) void acceptPendingTeamInvitesForCurrentUser();
       setIsLoggedIn(!!session);
     });
 

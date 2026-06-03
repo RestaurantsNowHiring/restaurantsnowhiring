@@ -80,8 +80,13 @@ const JOINED_DATE_FORMATTER = new Intl.DateTimeFormat("en", {
 
 const STATE_PATTERN = /(?:,|\s)([A-Z]{2})(?:\s|$)/;
 
+function isPendingTeamInvite(member: TeamMember) {
+  const status = member.status?.trim().toLowerCase();
+  return status === "invited" || status === "pending";
+}
+
 function getAccountStatus(member: TeamMember) {
-  return member.user_id ? "Active" : "Invitation Pending";
+  return isPendingTeamInvite(member) ? "Invitation Pending" : "Active";
 }
 
 function getTeamMemberDisplayName(member: TeamMember) {
@@ -89,7 +94,7 @@ function getTeamMemberDisplayName(member: TeamMember) {
 }
 
 function getJoinedDisplay(member: TeamMember) {
-  if (!member.user_id) return "-";
+  if (isPendingTeamInvite(member)) return "-";
 
   const joinedDate = new Date(member.updated_at);
   if (Number.isNaN(joinedDate.getTime())) return "-";
@@ -452,8 +457,8 @@ export default function TeamAccessPage() {
   const uniqueStates = useMemo(() => Array.from(new Set(members.map(getMemberStateDisplay).filter(Boolean))).sort(), [getMemberStateDisplay, members]);
   const uniqueLocations = useMemo(() => Array.from(new Set(members.map((member) => member.location_name?.trim()).filter((location): location is string => Boolean(location)))).sort(), [members]);
   const teamSummary = useMemo(() => {
-    const active = members.filter((member) => member.user_id).length;
-    const pending = members.filter((member) => !member.user_id).length;
+    const active = members.filter((member) => !isPendingTeamInvite(member)).length;
+    const pending = members.filter(isPendingTeamInvite).length;
     const routingEnabled = members.filter((member) => member.can_manage_notification_routing).length;
     return {
       total: members.length,
@@ -467,7 +472,7 @@ export default function TeamAccessPage() {
     const normalizedSearch = searchQuery.trim().toLowerCase();
     return members.filter((member) => {
       const state = getMemberStateDisplay(member);
-      const accountStatus = member.user_id ? "active" : "invited";
+      const accountStatus = isPendingTeamInvite(member) ? "invited" : "active";
       const routingStatus = member.can_manage_notification_routing ? "enabled" : "disabled";
       const matchesSearch = !normalizedSearch || [member.location_name, state, member.email, ROLE_LABELS[member.role], getAccountStatus(member)]
         .filter(Boolean)
@@ -649,7 +654,7 @@ export default function TeamAccessPage() {
                     </div>
                     <div className="rn-team-access-card__badges" aria-label={`${ROLE_LABELS[member.role]}, ${getAccountStatus(member)}, candidate routing ${member.can_manage_notification_routing ? "enabled" : "disabled"}`}>
                       <span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span>
-                      <span className={member.user_id ? "rn-team-status-pill rn-team-status-pill--active" : "rn-team-status-pill rn-team-status-pill--pending"}>{getAccountStatus(member)}</span>
+                      <span className={isPendingTeamInvite(member) ? "rn-team-status-pill rn-team-status-pill--pending" : "rn-team-status-pill rn-team-status-pill--active"}>{getAccountStatus(member)}</span>
                       <span className={member.can_manage_notification_routing ? "rn-team-routing-pill rn-team-routing-pill--enabled" : "rn-team-routing-pill"}>{member.can_manage_notification_routing ? "Routing enabled" : "Routing disabled"}</span>
                     </div>
                     <div className="rn-team-access-card__actions">
