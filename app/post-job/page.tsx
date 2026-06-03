@@ -14,6 +14,32 @@ import {
 type Step = 1 | 2 | 3 | 4;
 type PayMode = "range" | "minimum" | "maximum" | "rate";
 type EmployerAccess = { accountId: string | null; canManageJobs: boolean; canManageNotificationRouting: boolean; defaultCandidateNotificationRouting: string; supportEmail: string | null; };
+type EmployerStore = {
+  id: string;
+  location_name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  store_email: string | null;
+  ta_email: string | null;
+  gm_op_email: string | null;
+  minimum_wage: string | null;
+  pay_range: string | null;
+  default_application_url: string | null;
+  active: boolean;
+};
+type JobTemplate = {
+  id: string;
+  template_name: string;
+  job_title: string;
+  role_category: string | null;
+  employment_type: string | null;
+  schedule: string | null;
+  pay_defaults: string | null;
+  job_description: string | null;
+  benefits: string | null;
+  active: boolean;
+};
 
 export default function PostJobPage() {
   const router = useRouter();
@@ -25,6 +51,10 @@ export default function PostJobPage() {
   const [step, setStep] = useState<Step>(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [stores, setStores] = useState<EmployerStore[]>([]);
+  const [jobTemplates, setJobTemplates] = useState<JobTemplate[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const successDialogRef = useRef<HTMLDivElement>(null);
 
@@ -138,6 +168,23 @@ export default function PostJobPage() {
     successDialogRef.current?.focus();
   }, [showSuccessModal]);
 
+  async function loadStoreAndTemplateOptions(accessToken: string) {
+    const [storesResponse, templatesResponse] = await Promise.all([
+      fetch("/api/employer/stores", { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch("/api/employer/job-templates", { headers: { Authorization: `Bearer ${accessToken}` } }),
+    ]);
+
+    if (storesResponse.ok) {
+      const payload = (await storesResponse.json().catch(() => null)) as { stores?: EmployerStore[] } | null;
+      setStores((payload?.stores ?? []).filter((store) => store.active));
+    }
+
+    if (templatesResponse.ok) {
+      const payload = (await templatesResponse.json().catch(() => null)) as { templates?: JobTemplate[] } | null;
+      setJobTemplates((payload?.templates ?? []).filter((template) => template.active));
+    }
+  }
+
   function handleDialogKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     if (e.key === "Escape") {
       setShowSuccessModal(false);
@@ -197,6 +244,7 @@ export default function PostJobPage() {
           const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess; error?: string } | null;
           const nextAccess = accessPayload?.employer ?? null;
           setEmployerAccess(nextAccess);
+          await loadStoreAndTemplateOptions(accessToken);
           if (nextAccess && !nextAccess.canManageJobs) {
             setCanPostJobs(false);
             setMessage("Your Viewer role can view jobs and candidates, but cannot post job ads. Contact your account admin to make changes.");
@@ -234,6 +282,60 @@ export default function PostJobPage() {
       mounted = false;
     };
   }, [router]);
+
+  function applyStoreSelection(storeId: string) {
+    setSelectedStoreId(storeId);
+    const store = stores.find((option) => option.id === storeId);
+    if (!store) return;
+
+    setCompanyName(store.location_name || companyName);
+    setAddress(store.address ?? "");
+    setCity(store.city ?? "");
+    setStateVal(store.state ?? "");
+    if (store.default_application_url) {
+      setHowToApply(store.default_application_url);
+      setCompanyWebsite((current) => current || store.default_application_url || "");
+    }
+    if (store.pay_range) {
+      setPayMode("range");
+      const [min, max] = store.pay_range.split(/\s*[–-]\s*/);
+      setPayMin(min?.trim() ?? store.pay_range);
+      setPayMax(max?.trim() ?? "");
+    } else if (store.minimum_wage) {
+      setPayMode("minimum");
+      setPayRate(store.minimum_wage);
+    }
+
+    const routingEmails = [store.ta_email, store.gm_op_email, store.store_email].filter(Boolean).join(", ");
+    if (routingEmails && canManageCandidateNotificationRouting) setCandidateNotificationEmail(routingEmails);
+    if (store.store_email) setWorkEmail(store.store_email);
+  }
+
+  function splitTemplateValues(value: string | null) {
+    return (value ?? "")
+      .split(/,|\n/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  function applyTemplateSelection(templateId: string) {
+    setSelectedTemplateId(templateId);
+    const template = jobTemplates.find((option) => option.id === templateId);
+    if (!template) return;
+
+    setJobTitle(template.job_title ?? "");
+    setRoleCategories(template.role_category ? [template.role_category] : []);
+    if (template.employment_type) setEmploymentType(template.employment_type);
+    setScheduleTags(splitTemplateValues(template.schedule));
+    if (template.pay_defaults) {
+      setPayMode("range");
+      const [min, max] = template.pay_defaults.split(/\s*[–-]\s*/);
+      setPayMin(min?.trim() ?? template.pay_defaults);
+      setPayMax(max?.trim() ?? "");
+    }
+    setDescription(template.job_description ?? "");
+    setBenefits(splitTemplateValues(template.benefits));
+  }
 
   function toggleValue(value: string, list: string[], setter: (v: string[]) => void) {
     if (list.includes(value)) {
@@ -347,6 +449,8 @@ export default function PostJobPage() {
     setCandidateNotificationEmail(authUserEmail ?? "");
     setDescription("");
     setBenefits([]);
+    setSelectedStoreId("");
+    setSelectedTemplateId("");
   }
 
   async function handleFinalSubmit() {
@@ -428,9 +532,21 @@ export default function PostJobPage() {
       candidate_notification_email: notificationEmail || null,
       candidate_notification_emails: notificationEmails.length > 0 ? notificationEmails : null,
       candidate_notification_routing: notificationEmails.length > 0 ? "custom_job_email" : employerAccess?.defaultCandidateNotificationRouting ?? "job_poster",
+      employer_store_id: selectedStoreId || null,
+      employer_job_template_id: selectedTemplateId || null,
     };
 
-    const insertResult = await supabase.from("jobs").insert([jobPayload]);
+    let insertResult = await supabase.from("jobs").insert([jobPayload]);
+
+    if (
+      insertResult.error &&
+      (insertResult.error.message.includes("employer_store_id") || insertResult.error.message.includes("employer_job_template_id"))
+    ) {
+      const { employer_store_id: _storeId, employer_job_template_id: _templateId, ...legacyJobPayload } = jobPayload;
+      void _storeId;
+      void _templateId;
+      insertResult = await supabase.from("jobs").insert([legacyJobPayload]);
+    }
 
     setIsSubmitting(false);
 
@@ -757,6 +873,45 @@ export default function PostJobPage() {
               </div>
             ))}
           </div>
+
+          <section
+            style={{
+              marginTop: 18,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 18,
+              backgroundColor: "#ffffff",
+              padding: 18,
+              boxShadow: "0 8px 18px rgba(0,0,0,.04)",
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 900, color: TEXT, fontFamily: "var(--font-body)", marginBottom: 12 }}>
+              Optional store and template shortcuts
+            </div>
+            <div className="rn-two-col">
+              <div>
+                <label htmlFor="store-selector" style={labelStyle}>Select Store</label>
+                <select id="store-selector" value={selectedStoreId} onChange={(event) => applyStoreSelection(event.target.value)} style={inputStyle}>
+                  <option value="">No store selected</option>
+                  {stores.map((store) => (
+                    <option key={store.id} value={store.id}>
+                      {[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}
+                    </option>
+                  ))}
+                </select>
+                <div style={helperStyle}>Selecting a store fills available location, routing, pay, and application fields. You can still edit every field.</div>
+              </div>
+              <div>
+                <label htmlFor="template-selector" style={labelStyle}>Select Job Template</label>
+                <select id="template-selector" value={selectedTemplateId} onChange={(event) => applyTemplateSelection(event.target.value)} style={inputStyle}>
+                  <option value="">No template selected</option>
+                  {jobTemplates.map((template) => (
+                    <option key={template.id} value={template.id}>{template.template_name}</option>
+                  ))}
+                </select>
+                <div style={helperStyle}>Selecting a template fills the job title, category, schedule, description, and benefits. All fields remain editable.</div>
+              </div>
+            </div>
+          </section>
 
           <div style={sectionTitleWrap}>
             <div style={sectionTitleLine} />
@@ -1187,6 +1342,8 @@ export default function PostJobPage() {
                     fontFamily: "var(--font-body)",
                   }}
                 >
+                  <div><strong>Selected store:</strong> {stores.find((store) => store.id === selectedStoreId)?.location_name || "—"}</div>
+                  <div><strong>Selected template:</strong> {jobTemplates.find((template) => template.id === selectedTemplateId)?.template_name || "—"}</div>
                   <div><strong>Company:</strong> {companyName || "—"}</div>
                   <div><strong>Employees:</strong> {employeeCount || "—"}</div>
                   <div><strong>Contact:</strong> {contactName || "—"}</div>
