@@ -5,7 +5,14 @@ import localFont from "next/font/local";
 import { Inter, Sora } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import TopBanner from "./components/TopBanner";
-import { getSiteUrl } from "../lib/seo";
+import {
+  buildOrganizationSchema,
+  buildWebSiteSchema,
+  DEFAULT_SITE_DESCRIPTION,
+  DEFAULT_SITE_TITLE,
+  getSiteUrl,
+  serializeJsonLd,
+} from "../lib/seo";
 import { Analytics } from "@vercel/analytics/next";
 
 const inter = Inter({
@@ -31,11 +38,10 @@ export const metadata: Metadata = {
   metadataBase: new URL(getSiteUrl()),
   applicationName: "Restaurants Now Hiring",
   title: {
-    default: "Restaurants Now Hiring | Restaurant Jobs Hiring Now",
+    default: DEFAULT_SITE_TITLE,
     template: "%s | Restaurants Now Hiring",
   },
-  description:
-    "Browse restaurant jobs hiring now or post restaurant openings for review on RestaurantsNowHiring.com.",
+  description: DEFAULT_SITE_DESCRIPTION,
   alternates: {
     canonical: getSiteUrl(),
   },
@@ -55,9 +61,8 @@ export const metadata: Metadata = {
     locale: "en_US",
     url: getSiteUrl(),
     siteName: "Restaurants Now Hiring",
-    title: "Restaurants Now Hiring | Restaurant Jobs Hiring Now",
-    description:
-      "Browse restaurant jobs hiring now or post restaurant openings for review on RestaurantsNowHiring.com.",
+    title: DEFAULT_SITE_TITLE,
+    description: DEFAULT_SITE_DESCRIPTION,
     images: [
       {
         url: "/logo-star.png",
@@ -67,9 +72,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Restaurants Now Hiring | Restaurant Jobs Hiring Now",
-    description:
-      "Browse restaurant jobs hiring now or post restaurant openings for review on RestaurantsNowHiring.com.",
+    title: DEFAULT_SITE_TITLE,
+    description: DEFAULT_SITE_DESCRIPTION,
     images: ["/logo-star.png"],
   },
 };
@@ -81,6 +85,8 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const globalStructuredData = [buildOrganizationSchema(), buildWebSiteSchema()];
+
   return (
     <html
       lang="en"
@@ -94,6 +100,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         }}
       >
         <TopBanner />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(globalStructuredData) }}
+        />
 
         {/* Skip link for accessibility */}
         <a

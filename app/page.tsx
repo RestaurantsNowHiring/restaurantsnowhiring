@@ -6,14 +6,14 @@ import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../lib/jobStat
 import LatestJobsPanel from "./components/LatestJobsPanel";
 import TopRolesSection from "./components/TopRolesSection";
 import { ClipboardList, Search, ShieldCheck } from "lucide-react";
-import { buildPageMetadata } from "../lib/seo";
+import { buildPageMetadata, DEFAULT_SITE_DESCRIPTION, DEFAULT_SITE_TITLE } from "../lib/seo";
 import { buildUniqueJobSlugMap } from "../lib/jobSlugs";
 
 export const metadata = buildPageMetadata({
-  title: "Restaurant Jobs Hiring Now",
-  description:
-    "Find restaurant jobs hiring now across servers, cooks, bartenders, managers, hosts, and more on RestaurantsNowHiring.com.",
+  title: DEFAULT_SITE_TITLE,
+  description: DEFAULT_SITE_DESCRIPTION,
   path: "/",
+  absoluteTitle: true,
 });
 
 export const dynamic = "force-dynamic";
