@@ -10,6 +10,38 @@ type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
 type AccountStatusFilter = "all" | "active" | "invited";
 type RoutingFilter = "all" | "enabled" | "disabled";
 
+type EmployerStore = {
+  id: string;
+  location_name: string;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  store_email: string | null;
+  ta_email: string | null;
+  gm_op_email: string | null;
+  minimum_wage: string | null;
+  pay_range: string | null;
+  default_application_url: string | null;
+  active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+type TeamEditForm = {
+  location_name: string;
+  state: string;
+  address: string;
+  city: string;
+  store_email: string;
+  ta_email: string;
+  gm_op_email: string;
+  minimum_wage: string;
+  pay_range: string;
+  default_application_url: string;
+  can_manage_notification_routing: boolean;
+  role: EmployerRole;
+};
+
 type EmployerAccess = {
   role: EmployerRole;
   canManageTeam: boolean;
@@ -38,12 +70,6 @@ const ROLE_HELP: Record<EmployerRole, string> = {
   hiring_manager: "Can post and manage jobs and candidates, but cannot access billing, company profile, or team settings.",
   viewer: "Can view the dashboard, jobs, and candidates, and update candidate statuses only.",
 };
-
-const LOCATION_NAME_EXAMPLES = [
-  "MISSION BBQ Columbia, MD",
-  "MISSION BBQ Ellicott City, MD",
-  "MISSION BBQ Annapolis, MD",
-];
 
 const JOINED_DATE_FORMATTER = new Intl.DateTimeFormat("en", {
   month: "short",
@@ -80,11 +106,14 @@ export default function TeamAccessPage() {
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [access, setAccess] = useState<EmployerAccess | null>(null);
   const [members, setMembers] = useState<TeamMember[]>([]);
+  const [stores, setStores] = useState<EmployerStore[]>([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<EmployerRole>("viewer");
   const [canRouteNotifications, setCanRouteNotifications] = useState(false);
+  const [detailsMemberId, setDetailsMemberId] = useState<string | null>(null);
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
-  const [editingLocationName, setEditingLocationName] = useState("");
+  const [editForm, setEditForm] = useState<TeamEditForm | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
   const [message, setMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [accountStatusFilter, setAccountStatusFilter] = useState<AccountStatusFilter>("all");
@@ -106,9 +135,10 @@ export default function TeamAccessPage() {
       return;
     }
 
-    const [meResponse, teamResponse] = await Promise.all([
+    const [meResponse, teamResponse, storesResponse] = await Promise.all([
       fetch("/api/employer/me", { headers: { Authorization: `Bearer ${token}` } }),
       fetch("/api/employer/team", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/employer/stores", { headers: { Authorization: `Bearer ${token}` } }),
     ]);
 
     const mePayload = (await meResponse.json().catch(() => null)) as { employer?: EmployerAccess; error?: string } | null;
@@ -123,12 +153,14 @@ export default function TeamAccessPage() {
     }
 
     const teamPayload = (await teamResponse.json()) as { members?: TeamMember[] };
+    const storesPayload = storesResponse.ok ? ((await storesResponse.json().catch(() => null)) as { stores?: EmployerStore[] } | null) : null;
     setMembers(teamPayload.members ?? []);
+    setStores(storesPayload?.stores ?? []);
     setAuthStatus("allowed");
   }, [getAccessToken, router]);
 
   useEffect(() => {
-    loadTeam();
+    void Promise.resolve().then(loadTeam);
   }, [loadTeam]);
 
   async function saveMember(event: FormEvent<HTMLFormElement>) {
@@ -162,47 +194,6 @@ export default function TeamAccessPage() {
     setMessage(payload?.inviteEmailWarning || "Team access saved and invitation email sent.");
     setBusy(false);
     await loadTeam();
-  }
-
-  async function updateMember(
-    member: TeamMember,
-    nextRole: EmployerRole,
-    nextCanRoute = member.can_manage_notification_routing,
-    nextLocationName = member.location_name,
-  ) {
-    const token = await getAccessToken();
-    if (!token) return;
-    setBusy(true);
-    setMessage(null);
-    const response = await fetch("/api/employer/team", {
-      method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ id: member.id, role: nextRole, can_manage_notification_routing: nextCanRoute, location_name: nextLocationName }),
-    });
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setBusy(false);
-    if (!response.ok) {
-      setMessage(payload?.error || "Could not update team user.");
-      return;
-    }
-    setEditingMemberId(null);
-    setEditingLocationName("");
-    await loadTeam();
-  }
-
-  function startEditingLocation(member: TeamMember) {
-    setEditingMemberId(member.id);
-    setEditingLocationName(member.location_name ?? "");
-    setMessage(null);
-  }
-
-  async function saveLocationName(member: TeamMember) {
-    await updateMember(member, member.role, member.can_manage_notification_routing, editingLocationName);
-  }
-
-  function cancelEditingLocation() {
-    setEditingMemberId(null);
-    setEditingLocationName("");
   }
 
   async function resendInvite(member: TeamMember) {
@@ -241,10 +232,151 @@ export default function TeamAccessPage() {
     await loadTeam();
   }
 
+  const normalizeLocation = useCallback((value: string | null | undefined) => {
+    return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+  }, []);
+
+  const findStoreForMember = useCallback((member: TeamMember) => {
+    const locationKey = normalizeLocation(member.location_name);
+    if (!locationKey) return null;
+    return stores.find((store) => normalizeLocation(store.location_name) === locationKey) ?? null;
+  }, [normalizeLocation, stores]);
+
+  const getMemberStateDisplay = useCallback((member: TeamMember) => {
+    return findStoreForMember(member)?.state?.toUpperCase() || getMemberState(member) || "";
+  }, [findStoreForMember]);
+
+  function buildEditForm(member: TeamMember, store = findStoreForMember(member)): TeamEditForm {
+    return {
+      location_name: store?.location_name ?? member.location_name ?? "",
+      state: store?.state ?? getMemberState(member),
+      address: store?.address ?? "",
+      city: store?.city ?? "",
+      store_email: store?.store_email ?? "",
+      ta_email: store?.ta_email ?? "",
+      gm_op_email: store?.gm_op_email ?? "",
+      minimum_wage: store?.minimum_wage ?? "",
+      pay_range: store?.pay_range ?? "",
+      default_application_url: store?.default_application_url ?? "",
+      can_manage_notification_routing: member.can_manage_notification_routing,
+      role: member.role,
+    };
+  }
+
+  function openEditModal(member: TeamMember) {
+    setEditingMemberId(member.id);
+    setEditForm(buildEditForm(member));
+    setMessage(null);
+  }
+
+  function closeEditModal() {
+    setEditingMemberId(null);
+    setEditForm(null);
+  }
+
+  function updateEditField<K extends keyof TeamEditForm>(field: K, value: TeamEditForm[K]) {
+    setEditForm((current) => (current ? { ...current, [field]: value } : current));
+  }
+
+  async function saveEditModal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const member = members.find((candidate) => candidate.id === editingMemberId);
+    if (!member || !editForm) return;
+
+    const token = await getAccessToken();
+    if (!token) {
+      setMessage("Please sign in again before managing team access.");
+      return;
+    }
+
+    setBusy(true);
+    setMessage(null);
+
+    const locationName = editForm.location_name.trim();
+    const teamResponse = await fetch("/api/employer/team", {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: member.id,
+        role: editForm.role,
+        can_manage_notification_routing: editForm.can_manage_notification_routing,
+        location_name: locationName || null,
+      }),
+    });
+    const teamPayload = (await teamResponse.json().catch(() => null)) as { error?: string } | null;
+
+    if (!teamResponse.ok) {
+      setBusy(false);
+      setMessage(teamPayload?.error || "Could not update team user.");
+      return;
+    }
+
+    const store = findStoreForMember(member);
+    const previousLocationName = member.location_name;
+    const hasStoreDetails = Boolean(
+      locationName ||
+      editForm.address.trim() ||
+      editForm.city.trim() ||
+      editForm.state.trim() ||
+      editForm.store_email.trim() ||
+      editForm.ta_email.trim() ||
+      editForm.gm_op_email.trim() ||
+      editForm.minimum_wage.trim() ||
+      editForm.pay_range.trim() ||
+      editForm.default_application_url.trim(),
+    );
+
+    if (hasStoreDetails) {
+      const storePayload = {
+        ...(store?.id ? { id: store.id } : {}),
+        location_name: locationName || member.location_name || member.email,
+        address: editForm.address,
+        city: editForm.city,
+        state: editForm.state,
+        store_email: editForm.store_email,
+        ta_email: editForm.ta_email,
+        gm_op_email: editForm.gm_op_email,
+        minimum_wage: editForm.minimum_wage,
+        pay_range: editForm.pay_range,
+        default_application_url: editForm.default_application_url,
+        active: true,
+      };
+      const storeResponse = await fetch("/api/employer/stores", {
+        method: store?.id ? "PATCH" : "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(storePayload),
+      });
+      const storeResult = (await storeResponse.json().catch(() => null)) as { error?: string } | null;
+      if (!storeResponse.ok) {
+        if (previousLocationName !== locationName) {
+          await fetch("/api/employer/team", {
+            method: "PATCH",
+            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              id: member.id,
+              role: member.role,
+              can_manage_notification_routing: member.can_manage_notification_routing,
+              location_name: previousLocationName,
+            }),
+          });
+        }
+        setBusy(false);
+        setMessage(storeResult?.error || "Could not save team access and store details.");
+        await loadTeam();
+        return;
+      }
+    }
+
+    setBusy(false);
+    closeEditModal();
+    setMessage("Team access and store details saved.");
+    await loadTeam();
+  }
+
   const canManage = Boolean(access?.canManageTeam);
   const isSuccessMessage = Boolean(message && !message.startsWith("Warning:") && (message.includes("saved") || message.includes("sent") || message.includes("resent")));
 
-  const uniqueStates = useMemo(() => Array.from(new Set(members.map(getMemberState).filter(Boolean))).sort(), [members]);
+  const uniqueStates = useMemo(() => Array.from(new Set(members.map(getMemberStateDisplay).filter(Boolean))).sort(), [getMemberStateDisplay, members]);
   const uniqueLocations = useMemo(() => Array.from(new Set(members.map((member) => member.location_name?.trim()).filter((location): location is string => Boolean(location)))).sort(), [members]);
   const teamSummary = useMemo(() => {
     const active = members.filter((member) => member.user_id).length;
@@ -261,7 +393,7 @@ export default function TeamAccessPage() {
   const filteredMembers = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
     return members.filter((member) => {
-      const state = getMemberState(member);
+      const state = getMemberStateDisplay(member);
       const accountStatus = member.user_id ? "active" : "invited";
       const routingStatus = member.can_manage_notification_routing ? "enabled" : "disabled";
       const matchesSearch = !normalizedSearch || [member.location_name, state, member.email, ROLE_LABELS[member.role], getAccountStatus(member)]
@@ -274,7 +406,16 @@ export default function TeamAccessPage() {
         && (roleFilter === "all" || member.role === roleFilter)
         && (routingFilter === "all" || routingFilter === routingStatus);
     });
-  }, [accountStatusFilter, locationFilter, members, roleFilter, routingFilter, searchQuery, stateFilter]);
+  }, [accountStatusFilter, getMemberStateDisplay, locationFilter, members, roleFilter, routingFilter, searchQuery, stateFilter]);
+
+
+  const rowsPerPage = 25;
+  const totalPages = Math.max(1, Math.ceil(filteredMembers.length / rowsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedMembers = filteredMembers.slice((safeCurrentPage - 1) * rowsPerPage, safeCurrentPage * rowsPerPage);
+  const detailsMember = detailsMemberId ? members.find((member) => member.id === detailsMemberId) ?? null : null;
+  const detailsStore = detailsMember ? findStoreForMember(detailsMember) : null;
+  const editingMember = editingMemberId ? members.find((member) => member.id === editingMemberId) ?? null : null;
 
   if (authStatus === "loading") {
     return <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading team access…</main>;
@@ -282,7 +423,7 @@ export default function TeamAccessPage() {
 
   return (
     <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, paddingBottom: 72, backgroundColor: homeTheme.bg }}>
-      <div className="rn-team-container" style={{ maxWidth: 1080, margin: "0 auto", padding: "0 18px" }}>
+      <div className="rn-team-container" style={{ maxWidth: 1280, margin: "0 auto", padding: "0 18px" }}>
         <section className="rn-team-hero" style={{ ...homeCardStyle, marginBottom: 16 }}>
           <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>
             Users & Permissions
@@ -433,61 +574,29 @@ export default function TeamAccessPage() {
                       <th>Role</th>
                       <th>Account status</th>
                       <th>Candidate routing</th>
-                      <th>Joined date</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {filteredMembers.length === 0 ? (
-                      <tr><td colSpan={8}>No team users match these filters.</td></tr>
+                      <tr><td colSpan={7}>No team users match these filters.</td></tr>
                     ) : null}
-                    {filteredMembers.map((member) => (
+                    {paginatedMembers.map((member) => (
                       <tr key={member.id}>
-                        <td>
-                          {editingMemberId === member.id ? (
-                            <div style={{ display: "grid", gap: 8, minWidth: 220 }}>
-                              <input
-                                type="text"
-                                value={editingLocationName}
-                                onChange={(event) => setEditingLocationName(event.target.value)}
-                                placeholder="MISSION BBQ Columbia, MD"
-                                className="rn-team-input"
-                                style={{ ...homeInputStyle, minHeight: 42 }}
-                                maxLength={180}
-                                disabled={busy}
-                                aria-label={`Location name for ${member.email}`}
-                              />
-                              <span style={{ color: homeTheme.muted, fontSize: 12, fontWeight: 800 }}>Examples: {LOCATION_NAME_EXAMPLES.join("; ")}</span>
-                            </div>
-                          ) : (
-                            <strong>{getTeamMemberDisplayName(member)}</strong>
-                          )}
-                        </td>
-                        <td>{getMemberState(member) || "—"}</td>
-                        <td>{member.email}</td>
+                        <td><strong className="rn-team-cell-strong">{getTeamMemberDisplayName(member)}</strong></td>
+                        <td>{getMemberStateDisplay(member) || "—"}</td>
+                        <td><span className="rn-team-email" title={member.email}>{member.email}</span></td>
                         <td><span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span></td>
                         <td><span className={member.user_id ? "rn-team-status-pill rn-team-status-pill--active" : "rn-team-status-pill rn-team-status-pill--pending"}>{getAccountStatus(member)}</span></td>
-                        <td>{member.can_manage_notification_routing ? "Enabled" : "Disabled"}</td>
-                        <td>{getJoinedDisplay(member)}</td>
+                        <td><span className={member.can_manage_notification_routing ? "rn-team-routing-pill rn-team-routing-pill--enabled" : "rn-team-routing-pill"}>{member.can_manage_notification_routing ? "Enabled" : "Disabled"}</span></td>
                         <td>
                           <div className="rn-team-table-actions">
-                            {editingMemberId === member.id ? (
-                              <>
-                                <button type="button" className="rn-btn-primary" style={homePrimaryButton} onClick={() => saveLocationName(member)} disabled={busy}>Save location</button>
-                                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={cancelEditingLocation} disabled={busy}>Cancel</button>
-                              </>
-                            ) : (
-                              <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => startEditingLocation(member)} disabled={busy}>Edit</button>
-                            )}
-                            <select aria-label={`Change role for ${member.email}`} className="rn-team-member-select" value={member.role} onChange={(event) => updateMember(member, event.target.value as EmployerRole)} disabled={busy}>
-                              {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}
-                            </select>
-                            <button type="button" className="rn-btn-secondary rn-team-resend-button" style={homeSecondaryButton} onClick={() => resendInvite(member)} disabled={busy}>Resend invite</button>
+                            <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setDetailsMemberId(member.id)} disabled={busy}>Details</button>
+                            <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => openEditModal(member)} disabled={busy}>Edit</button>
+                            {!member.user_id ? (
+                              <button type="button" className="rn-btn-secondary rn-team-resend-button" style={homeSecondaryButton} onClick={() => resendInvite(member)} disabled={busy}>Resend invite</button>
+                            ) : null}
                             <button type="button" className="rn-btn-secondary rn-team-remove-button" style={homeSecondaryButton} onClick={() => removeMember(member)} disabled={busy || member.role === "account_owner"}>Remove</button>
-                            <label className="rn-team-checkbox-row rn-team-table-checkbox">
-                              <input className="rn-team-checkbox" type="checkbox" checked={member.can_manage_notification_routing} onChange={(event) => updateMember(member, member.role, event.target.checked)} disabled={busy || member.role === "account_owner"} />
-                              <span>Routing</span>
-                            </label>
                           </div>
                         </td>
                       </tr>
@@ -495,9 +604,89 @@ export default function TeamAccessPage() {
                   </tbody>
                 </table>
               </div>
+
+              {filteredMembers.length > rowsPerPage ? (
+                <div className="rn-team-pagination" aria-label="Team access pagination">
+                  <span>Showing {(safeCurrentPage - 1) * rowsPerPage + 1}-{Math.min(safeCurrentPage * rowsPerPage, filteredMembers.length)} of {filteredMembers.length}</span>
+                  <div>
+                    <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))} disabled={safeCurrentPage === 1}>Previous</button>
+                    <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))} disabled={safeCurrentPage === totalPages}>Next</button>
+                  </div>
+                </div>
+              ) : null}
             </section>
           </>
         )}
+
+        {detailsMember ? (
+          <div className="rn-team-modal-backdrop" role="presentation" onClick={() => setDetailsMemberId(null)}>
+            <section className="rn-team-modal" role="dialog" aria-modal="true" aria-labelledby="team-details-title" onClick={(event) => event.stopPropagation()}>
+              <div className="rn-team-modal__header">
+                <div>
+                  <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>Team access details</p>
+                  <h2 id="team-details-title" style={{ margin: "6px 0 0", fontFamily: "var(--font-heading)", color: homeTheme.text }}>{getTeamMemberDisplayName(detailsMember)}</h2>
+                </div>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setDetailsMemberId(null)}>Close</button>
+              </div>
+              <div className="rn-team-detail-grid">
+                {[
+                  ["Location name", detailsStore?.location_name ?? detailsMember.location_name ?? "—"],
+                  ["State", (detailsStore?.state ?? getMemberState(detailsMember)) || "—"],
+                  ["Email", detailsMember.email],
+                  ["Role", ROLE_LABELS[detailsMember.role]],
+                  ["Account status", getAccountStatus(detailsMember)],
+                  ["Joined date", getJoinedDisplay(detailsMember)],
+                  ["Candidate routing", detailsMember.can_manage_notification_routing ? "Enabled" : "Disabled"],
+                  ["Address", detailsStore?.address ?? "—"],
+                  ["City", detailsStore?.city ?? "—"],
+                  ["Store email", detailsStore?.store_email ?? "—"],
+                  ["TA email", detailsStore?.ta_email ?? "—"],
+                  ["GM/OP email", detailsStore?.gm_op_email ?? "—"],
+                  ["Minimum wage", detailsStore?.minimum_wage ?? "—"],
+                  ["Pay range", detailsStore?.pay_range ?? "—"],
+                  ["Default application URL", detailsStore?.default_application_url ?? "—"],
+                ].map(([label, value]) => (
+                  <div key={label} className="rn-team-detail-item">
+                    <span>{label}</span>
+                    <strong>{value}</strong>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </div>
+        ) : null}
+
+        {editingMember && editForm ? (
+          <div className="rn-team-modal-backdrop" role="presentation" onClick={closeEditModal}>
+            <section className="rn-team-modal rn-team-modal--wide" role="dialog" aria-modal="true" aria-labelledby="team-edit-title" onClick={(event) => event.stopPropagation()}>
+              <div className="rn-team-modal__header">
+                <div>
+                  <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>Edit team access</p>
+                  <h2 id="team-edit-title" style={{ margin: "6px 0 0", fontFamily: "var(--font-heading)", color: homeTheme.text }}>{editingMember.email}</h2>
+                </div>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeEditModal} disabled={busy}>Close</button>
+              </div>
+              <form className="rn-team-edit-grid" onSubmit={saveEditModal}>
+                <label>Location name<input className="rn-team-input" style={homeInputStyle} value={editForm.location_name} onChange={(event) => updateEditField("location_name", event.target.value)} maxLength={180} placeholder="MISSION BBQ Columbia, MD" /></label>
+                <label>State<input className="rn-team-input" style={homeInputStyle} value={editForm.state} onChange={(event) => updateEditField("state", event.target.value.toUpperCase().slice(0, 2))} maxLength={2} placeholder="MD" /></label>
+                <label>Address<input className="rn-team-input" style={homeInputStyle} value={editForm.address} onChange={(event) => updateEditField("address", event.target.value)} /></label>
+                <label>City<input className="rn-team-input" style={homeInputStyle} value={editForm.city} onChange={(event) => updateEditField("city", event.target.value)} /></label>
+                <label>Store email<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.store_email} onChange={(event) => updateEditField("store_email", event.target.value)} /></label>
+                <label>TA email<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.ta_email} onChange={(event) => updateEditField("ta_email", event.target.value)} /></label>
+                <label>GM/OP email<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.gm_op_email} onChange={(event) => updateEditField("gm_op_email", event.target.value)} /></label>
+                <label>Minimum wage<input className="rn-team-input" style={homeInputStyle} value={editForm.minimum_wage} onChange={(event) => updateEditField("minimum_wage", event.target.value)} /></label>
+                <label>Pay range<input className="rn-team-input" style={homeInputStyle} value={editForm.pay_range} onChange={(event) => updateEditField("pay_range", event.target.value)} /></label>
+                <label>Default application URL<input className="rn-team-input" style={homeInputStyle} value={editForm.default_application_url} onChange={(event) => updateEditField("default_application_url", event.target.value)} placeholder="https://" /></label>
+                <label>Role<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
+                <label className="rn-team-checkbox-row rn-team-edit-checkbox"><input className="rn-team-checkbox" type="checkbox" checked={editForm.can_manage_notification_routing} onChange={(event) => updateEditField("can_manage_notification_routing", event.target.checked)} disabled={editingMember.role === "account_owner"} /><span>Candidate routing enabled</span></label>
+                <div className="rn-team-modal__actions">
+                  <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeEditModal} disabled={busy}>Cancel</button>
+                  <button type="submit" className="rn-btn-primary" style={homePrimaryButton} disabled={busy}>{busy ? "Saving..." : "Save changes"}</button>
+                </div>
+              </form>
+            </section>
+          </div>
+        ) : null}
 
         <Link href="/employer-dashboard" style={homeSecondaryButton} className="rn-btn-secondary">Back to Dashboard</Link>
       </div>
