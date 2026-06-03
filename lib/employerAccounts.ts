@@ -66,7 +66,7 @@ const ROLE_PERMISSIONS: Record<EmployerRole, Pick<EmployerAccountContext,
     canManageBilling: false,
     canManageJobs: false,
     canViewCandidates: true,
-    canUpdateCandidateStatuses: true,
+    canUpdateCandidateStatuses: false,
     canManageTeam: false,
     canManageNotificationRouting: false,
   },
@@ -288,7 +288,7 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
     const { data: ownedAccounts, error: ownedAccountsError } = await admin
       .from("employer_accounts")
       .select("id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email")
-      .eq("owner_user_id", user.id)
+      .or(`owner_user_id.eq.${user.id},owner_email.ilike.${lowerEmail}`)
       .order("created_at", { ascending: true });
 
     if (ownedAccountsError && ownedAccountsError.code !== "42P01" && ownedAccountsError.code !== "42703") {
