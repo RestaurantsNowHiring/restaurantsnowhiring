@@ -30,6 +30,7 @@ type EmployerStore = {
 };
 type JobTemplate = {
   id: string;
+  employer_account_id: string | null;
   template_name: string;
   job_title: string;
   role_category: string | null;
@@ -905,7 +906,9 @@ export default function PostJobPage() {
                 <select id="template-selector" value={selectedTemplateId} onChange={(event) => applyTemplateSelection(event.target.value)} style={inputStyle}>
                   <option value="">No template selected</option>
                   {jobTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>{template.template_name}</option>
+                    <option key={template.id} value={template.id}>
+                      {template.employer_account_id ? `Custom: ${template.template_name}` : `Default: ${template.template_name}`}
+                    </option>
                   ))}
                 </select>
                 <div style={helperStyle}>Selecting a template fills the job title, category, schedule, description, and benefits. All fields remain editable.</div>
