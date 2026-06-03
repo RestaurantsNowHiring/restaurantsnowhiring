@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../../styles/homepageDesignSystem";
 
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
+type AccountStatusFilter = "all" | "active" | "invited";
+type RoutingFilter = "all" | "enabled" | "disabled";
 
 type EmployerAccess = {
   role: EmployerRole;
@@ -49,6 +51,8 @@ const JOINED_DATE_FORMATTER = new Intl.DateTimeFormat("en", {
   year: "numeric",
 });
 
+const STATE_PATTERN = /(?:,|\s)([A-Z]{2})(?:\s|$)/;
+
 function getAccountStatus(member: TeamMember) {
   return member.user_id ? "Active" : "Invitation Pending";
 }
@@ -66,6 +70,11 @@ function getJoinedDisplay(member: TeamMember) {
   return JOINED_DATE_FORMATTER.format(joinedDate);
 }
 
+function getMemberState(member: TeamMember) {
+  const match = member.location_name?.toUpperCase().match(STATE_PATTERN);
+  return match?.[1] ?? "";
+}
+
 export default function TeamAccessPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -77,6 +86,12 @@ export default function TeamAccessPage() {
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [editingLocationName, setEditingLocationName] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [accountStatusFilter, setAccountStatusFilter] = useState<AccountStatusFilter>("all");
+  const [stateFilter, setStateFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState<"all" | EmployerRole>("all");
+  const [routingFilter, setRoutingFilter] = useState<RoutingFilter>("all");
   const [busy, setBusy] = useState(false);
 
   const getAccessToken = useCallback(async () => {
@@ -226,12 +241,44 @@ export default function TeamAccessPage() {
     await loadTeam();
   }
 
+  const canManage = Boolean(access?.canManageTeam);
+  const isSuccessMessage = Boolean(message && !message.startsWith("Warning:") && (message.includes("saved") || message.includes("sent") || message.includes("resent")));
+
+  const uniqueStates = useMemo(() => Array.from(new Set(members.map(getMemberState).filter(Boolean))).sort(), [members]);
+  const uniqueLocations = useMemo(() => Array.from(new Set(members.map((member) => member.location_name?.trim()).filter((location): location is string => Boolean(location)))).sort(), [members]);
+  const teamSummary = useMemo(() => {
+    const active = members.filter((member) => member.user_id).length;
+    const pending = members.filter((member) => !member.user_id).length;
+    const routingEnabled = members.filter((member) => member.can_manage_notification_routing).length;
+    return {
+      total: members.length,
+      active,
+      pending,
+      routingEnabled,
+      routingDisabled: members.length - routingEnabled,
+    };
+  }, [members]);
+  const filteredMembers = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    return members.filter((member) => {
+      const state = getMemberState(member);
+      const accountStatus = member.user_id ? "active" : "invited";
+      const routingStatus = member.can_manage_notification_routing ? "enabled" : "disabled";
+      const matchesSearch = !normalizedSearch || [member.location_name, state, member.email, ROLE_LABELS[member.role], getAccountStatus(member)]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedSearch));
+      return matchesSearch
+        && (accountStatusFilter === "all" || accountStatusFilter === accountStatus)
+        && (stateFilter === "all" || stateFilter === state)
+        && (locationFilter === "all" || member.location_name === locationFilter)
+        && (roleFilter === "all" || member.role === roleFilter)
+        && (routingFilter === "all" || routingFilter === routingStatus);
+    });
+  }, [accountStatusFilter, locationFilter, members, roleFilter, routingFilter, searchQuery, stateFilter]);
+
   if (authStatus === "loading") {
     return <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading team access…</main>;
   }
-
-  const canManage = Boolean(access?.canManageTeam);
-  const isSuccessMessage = Boolean(message && !message.startsWith("Warning:") && (message.includes("saved") || message.includes("sent") || message.includes("resent")));
 
   return (
     <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, paddingBottom: 72, backgroundColor: homeTheme.bg }}>
@@ -308,19 +355,97 @@ export default function TeamAccessPage() {
             </section>
 
             <section className="rn-team-panel" style={{ ...homeCardStyle, marginBottom: 16 }}>
-              <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Current team users</h2>
-              <div className="rn-team-users-list" style={{ display: "grid", gap: 12 }}>
-                {members.length === 0 ? (
-                  <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>No team users have been added yet.</p>
-                ) : null}
-                {members.map((member) => (
-                  <article key={member.id} className="rn-team-user-card" style={{ border: `1px solid ${homeTheme.border}`, borderRadius: 16, padding: 18, backgroundColor: "#fff" }}>
-                    <div className="rn-team-user-card__top" style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-                      <div className="rn-team-user-card__summary" aria-label={`Team member details for ${getTeamMemberDisplayName(member)}`}>
-                        <div className="rn-team-user-card__field rn-team-user-card__field--location">
-                          <span className="rn-team-user-card__label">Location</span>
+              <div className="rn-team-summary-grid">
+                {[
+                  { label: "Total team users/locations", value: teamSummary.total },
+                  { label: "Active", value: teamSummary.active },
+                  { label: "Invitation pending", value: teamSummary.pending },
+                  { label: "Routing enabled", value: teamSummary.routingEnabled },
+                  { label: "Routing disabled", value: teamSummary.routingDisabled },
+                ].map((metric) => (
+                  <article key={metric.label} className="rn-team-summary-card">
+                    <span>{metric.label}</span>
+                    <strong>{metric.value}</strong>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="rn-team-panel" style={{ ...homeCardStyle, marginBottom: 16 }}>
+              <div className="rn-team-table-header">
+                <div>
+                  <h2 style={{ marginTop: 0, marginBottom: 6, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Current team users</h2>
+                  <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Search and filter team access without changing existing actions.</p>
+                </div>
+              </div>
+
+              <div className="rn-team-filter-grid">
+                <label>
+                  Search
+                  <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Location, email, role, status" className="rn-team-input" style={{ ...homeInputStyle, marginTop: 6 }} />
+                </label>
+                <label>
+                  Account status
+                  <select value={accountStatusFilter} onChange={(event) => setAccountStatusFilter(event.target.value as AccountStatusFilter)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                    <option value="all">All</option>
+                    <option value="active">Active</option>
+                    <option value="invited">Invitation pending</option>
+                  </select>
+                </label>
+                <label>
+                  State
+                  <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                    <option value="all">All states</option>
+                    {uniqueStates.map((state) => <option key={state} value={state}>{state}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Location
+                  <select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                    <option value="all">All locations</option>
+                    {uniqueLocations.map((location) => <option key={location} value={location}>{location}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Role
+                  <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as "all" | EmployerRole)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                    <option value="all">All roles</option>
+                    {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}
+                  </select>
+                </label>
+                <label>
+                  Candidate routing
+                  <select value={routingFilter} onChange={(event) => setRoutingFilter(event.target.value as RoutingFilter)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                    <option value="all">All routing</option>
+                    <option value="enabled">Enabled</option>
+                    <option value="disabled">Disabled</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="rn-team-table-wrap">
+                <table className="rn-team-table">
+                  <thead>
+                    <tr>
+                      <th>Location</th>
+                      <th>State</th>
+                      <th>Email</th>
+                      <th>Role</th>
+                      <th>Account status</th>
+                      <th>Candidate routing</th>
+                      <th>Joined date</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredMembers.length === 0 ? (
+                      <tr><td colSpan={8}>No team users match these filters.</td></tr>
+                    ) : null}
+                    {filteredMembers.map((member) => (
+                      <tr key={member.id}>
+                        <td>
                           {editingMemberId === member.id ? (
-                            <div style={{ display: "grid", gap: 8 }}>
+                            <div style={{ display: "grid", gap: 8, minWidth: 220 }}>
                               <input
                                 type="text"
                                 value={editingLocationName}
@@ -332,77 +457,43 @@ export default function TeamAccessPage() {
                                 disabled={busy}
                                 aria-label={`Location name for ${member.email}`}
                               />
-                              <span style={{ color: homeTheme.muted, fontSize: 12, fontWeight: 800 }}>
-                                Examples: {LOCATION_NAME_EXAMPLES.join("; ")}
-                              </span>
+                              <span style={{ color: homeTheme.muted, fontSize: 12, fontWeight: 800 }}>Examples: {LOCATION_NAME_EXAMPLES.join("; ")}</span>
                             </div>
                           ) : (
-                            <strong style={{ color: homeTheme.text }}>{getTeamMemberDisplayName(member)}</strong>
+                            <strong>{getTeamMemberDisplayName(member)}</strong>
                           )}
-                        </div>
-                        <div className="rn-team-user-card__field rn-team-user-card__field--email">
-                          <span className="rn-team-user-card__label">Email</span>
-                          <strong style={{ color: homeTheme.text }}>{member.email}</strong>
-                        </div>
-                        <div className="rn-team-user-card__field">
-                          <span className="rn-team-user-card__label">Role</span>
-                          <span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span>
-                        </div>
-                        <div className="rn-team-user-card__field">
-                          <span className="rn-team-user-card__label">Account Status</span>
-                          <span className={member.user_id ? "rn-team-status-pill rn-team-status-pill--active" : "rn-team-status-pill rn-team-status-pill--pending"}>
-                            {getAccountStatus(member)}
-                          </span>
-                        </div>
-                        <div className="rn-team-user-card__field">
-                          <span className="rn-team-user-card__label">Joined</span>
-                          <span className="rn-team-joined-value">{getJoinedDisplay(member)}</span>
-                        </div>
-                      </div>
-                      <div className="rn-team-user-card__actions" style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                        {editingMemberId === member.id ? (
-                          <>
-                            <button type="button" className="rn-btn-primary" style={homePrimaryButton} onClick={() => saveLocationName(member)} disabled={busy}>
-                              Save location
-                            </button>
-                            <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={cancelEditingLocation} disabled={busy}>
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
-                          <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => startEditingLocation(member)} disabled={busy}>
-                            Edit
-                          </button>
-                        )}
-                        <select
-                          aria-label={`Change role for ${member.email}`}
-                          className="rn-team-member-select"
-                          value={member.role}
-                          onChange={(event) => updateMember(member, event.target.value as EmployerRole)}
-                          disabled={busy}
-                        >
-                          {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}
-                        </select>
-                        <button type="button" className="rn-btn-secondary rn-team-resend-button" style={homeSecondaryButton} onClick={() => resendInvite(member)} disabled={busy}>
-                          Resend invite
-                        </button>
-                        <button type="button" className="rn-btn-secondary rn-team-remove-button" style={homeSecondaryButton} onClick={() => removeMember(member)} disabled={busy || member.role === "account_owner"}>
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                    <label className="rn-team-checkbox-row rn-team-card-checkbox" style={{ fontWeight: 800, color: homeTheme.text }}>
-                      <input
-                        className="rn-team-checkbox"
-                        type="checkbox"
-                        checked={member.can_manage_notification_routing}
-                        onChange={(event) => updateMember(member, member.role, event.target.checked)}
-                        disabled={busy || member.role === "account_owner"}
-                      />
-                      <span>Can change candidate notification routing</span>
-                    </label>
-                  </article>
-                ))}
+                        </td>
+                        <td>{getMemberState(member) || "—"}</td>
+                        <td>{member.email}</td>
+                        <td><span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span></td>
+                        <td><span className={member.user_id ? "rn-team-status-pill rn-team-status-pill--active" : "rn-team-status-pill rn-team-status-pill--pending"}>{getAccountStatus(member)}</span></td>
+                        <td>{member.can_manage_notification_routing ? "Enabled" : "Disabled"}</td>
+                        <td>{getJoinedDisplay(member)}</td>
+                        <td>
+                          <div className="rn-team-table-actions">
+                            {editingMemberId === member.id ? (
+                              <>
+                                <button type="button" className="rn-btn-primary" style={homePrimaryButton} onClick={() => saveLocationName(member)} disabled={busy}>Save location</button>
+                                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={cancelEditingLocation} disabled={busy}>Cancel</button>
+                              </>
+                            ) : (
+                              <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => startEditingLocation(member)} disabled={busy}>Edit</button>
+                            )}
+                            <select aria-label={`Change role for ${member.email}`} className="rn-team-member-select" value={member.role} onChange={(event) => updateMember(member, event.target.value as EmployerRole)} disabled={busy}>
+                              {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}
+                            </select>
+                            <button type="button" className="rn-btn-secondary rn-team-resend-button" style={homeSecondaryButton} onClick={() => resendInvite(member)} disabled={busy}>Resend invite</button>
+                            <button type="button" className="rn-btn-secondary rn-team-remove-button" style={homeSecondaryButton} onClick={() => removeMember(member)} disabled={busy || member.role === "account_owner"}>Remove</button>
+                            <label className="rn-team-checkbox-row rn-team-table-checkbox">
+                              <input className="rn-team-checkbox" type="checkbox" checked={member.can_manage_notification_routing} onChange={(event) => updateMember(member, member.role, event.target.checked)} disabled={busy || member.role === "account_owner"} />
+                              <span>Routing</span>
+                            </label>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </section>
           </>

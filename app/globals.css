@@ -1086,3 +1086,110 @@ iframe {
     padding: 11px 12px;
   }
 }
+
+.rn-team-summary-grid,
+.rn-team-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.rn-team-summary-card {
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 16px;
+  background: #fff;
+  padding: 14px;
+  box-shadow: 0 8px 18px rgba(0,0,0,.04);
+}
+
+.rn-team-summary-card span {
+  display: block;
+  color: rgba(0,0,0,.62);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+
+.rn-team-summary-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #35806e;
+  font-family: var(--font-heading);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.rn-team-filter-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 16px 0;
+}
+
+.rn-team-filter-grid label {
+  color: rgba(0,0,0,.85);
+  font-weight: 900;
+}
+
+.rn-team-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(0,0,0,.08);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.rn-team-table {
+  width: 100%;
+  min-width: 1080px;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+}
+
+.rn-team-table th,
+.rn-team-table td {
+  padding: 14px;
+  border-bottom: 1px solid rgba(0,0,0,.08);
+  text-align: left;
+  vertical-align: top;
+  color: rgba(0,0,0,.78);
+  font-weight: 800;
+}
+
+.rn-team-table th {
+  color: rgba(0,0,0,.62);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  background: #f6f5f3;
+}
+
+.rn-team-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.rn-team-table-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 360px;
+}
+
+.rn-team-table-actions .rn-btn-primary,
+.rn-team-table-actions .rn-btn-secondary,
+.rn-team-table-actions .rn-team-member-select {
+  min-height: 42px;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.rn-team-table-checkbox {
+  min-height: 42px;
+  padding: 0 8px;
+}
+
+@media (max-width: 900px) {
+  .rn-team-summary-grid,
+  .rn-team-filter-grid {
+    grid-template-columns: 1fr;
+  }
+}
