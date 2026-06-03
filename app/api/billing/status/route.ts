@@ -5,7 +5,7 @@ import {
   getAuthUserFromRequest,
   getBillingRecordForEmployerUser,
 } from "../../../../lib/billing";
-import { getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
+import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 
 export async function GET(request: Request) {
   try {
@@ -13,8 +13,13 @@ export async function GET(request: Request) {
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
     const selectedAccountId = getSelectedEmployerAccountIdFromRequest(request);
-    const billing = await getBillingRecordForEmployerUser(user, selectedAccountId);
-    const activeBillableJobCount = await countActiveBillableJobsForEmployerUser(user, selectedAccountId);
+    const context = await getEmployerAccountContext(user, selectedAccountId);
+    if (!context.canManageBilling) {
+      return NextResponse.json({ error: "Only Account Owners can manage billing." }, { status: 403 });
+    }
+
+    const billing = await getBillingRecordForEmployerUser(user, context.accountId);
+    const activeBillableJobCount = await countActiveBillableJobsForEmployerUser(user, context.accountId);
     const access = evaluateBillingAccess(billing);
 
     return NextResponse.json({

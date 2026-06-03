@@ -126,6 +126,15 @@ function displayValue(value?: string | null) {
   return value?.trim() || "—";
 }
 
+function employerAccountHeaders(token: string, contentType?: string) {
+  const selectedEmployerAccountId = typeof window === "undefined" ? null : window.localStorage.getItem("rn-selected-employer-account-id");
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(contentType ? { "Content-Type": contentType } : {}),
+    ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+  };
+}
+
 export default function EmployerProfilePage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -150,7 +159,7 @@ export default function EmployerProfilePage() {
     }
 
     const response = await fetch("/api/employer/profile", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: employerAccountHeaders(accessToken),
     });
     const payload = (await response.json().catch(() => null)) as { profile?: EmployerProfile; error?: string } | null;
 
@@ -205,10 +214,7 @@ export default function EmployerProfilePage() {
 
     const response = await fetch("/api/employer/profile", {
       method: "PUT",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
+      headers: employerAccountHeaders(accessToken, "application/json"),
       body: JSON.stringify(form),
     });
     const payload = (await response.json().catch(() => null)) as { profile?: EmployerProfile; error?: string } | null;
@@ -238,7 +244,7 @@ export default function EmployerProfilePage() {
 
     const response = await fetch("/api/employer/password-reset", {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: employerAccountHeaders(accessToken),
     });
     const payload = (await response.json().catch(() => null)) as { message?: string; error?: string } | null;
 

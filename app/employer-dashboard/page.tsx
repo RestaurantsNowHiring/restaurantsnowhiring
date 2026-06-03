@@ -21,8 +21,8 @@ import { canUserAccessJob } from "../../lib/employerJobAccess";
 type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string };
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
 type EmployerAccountMembership = { accountId: string; accountName: string; locationName: string | null; role: EmployerRole; status?: string; invitationPending?: boolean };
-type EmployerAccess = { role: EmployerRole; accountId: string | null; accountName: string | null; restaurantBrandName: string | null; locationName: string | null; memberships: EmployerAccountMembership[]; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
-type OwnershipMatch = "employer_user_id" | "employer_email";
+type EmployerAccess = { role: EmployerRole; accountId: string | null; accountName: string | null; restaurantBrandName: string | null; locationName: string | null; memberships: EmployerAccountMembership[]; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canViewCandidates: boolean; canUpdateCandidateStatuses: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
+type OwnershipMatch = "employer_account_id" | "employer_user_id" | "employer_email";
 
 type DashboardJob = {
   id: string;
@@ -281,17 +281,19 @@ function candidateStatusControlStyle(status: string): React.CSSProperties {
 }
 
 function getJobOwnershipMatch(job: Record<string, unknown>, owner: EmployerOwner): OwnershipMatch | null {
+  const employerAccountId = typeof job.employer_account_id === "string" ? job.employer_account_id.trim() : "";
   const employerUserId = typeof job.employer_user_id === "string" ? job.employer_user_id.trim() : "";
   const employerEmail = typeof job.employer_email === "string" ? job.employer_email.trim() : "";
 
+  if (owner.accountId && employerAccountId === owner.accountId) return "employer_account_id";
   if (employerUserId && (employerUserId === owner.userId || employerUserId === owner.ownerUserId)) return "employer_user_id";
   if (employerEmail && (employerEmail === owner.email || employerEmail === owner.ownerEmail)) return "employer_email";
 
   return null;
 }
 
-function hasMissingEmployerOwnership(job: Pick<DashboardJob, "employer_user_id" | "employer_email">) {
-  return !job.employer_user_id && !job.employer_email;
+function hasMissingEmployerOwnership(job: Pick<DashboardJob, "employer_account_id" | "employer_user_id" | "employer_email">) {
+  return !job.employer_account_id && !job.employer_user_id && !job.employer_email;
 }
 
 function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSProperties {
@@ -341,6 +343,8 @@ export default function EmployerDashboardPage() {
   });
   const [billingBusyAction, setBillingBusyAction] = useState<"checkout" | "portal" | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
+  const [switchingError, setSwitchingError] = useState<string | null>(null);
+  const [dashboardLoadingLabel, setDashboardLoadingLabel] = useState("Loading employer dashboard…");
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
@@ -513,9 +517,12 @@ export default function EmployerDashboardPage() {
       let access: EmployerAccess | null = null;
       if (accessToken) {
         const accessResponse = await fetch("/api/employer/me", { headers: employerAccountHeaders(accessToken) });
-        const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
+        const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess; error?: string } | null;
+        if (!accessResponse.ok) {
+          throw new Error(accessPayload?.error || "Could not load employer account access.");
+        }
         access = accessPayload?.employer ?? null;
-        if (mounted && access?.accountId && !selectedEmployerAccountId) {
+        if (mounted && access?.accountId && selectedEmployerAccountId !== access.accountId) {
           setSelectedEmployerAccountId(access.accountId);
           window.localStorage.setItem("rn-selected-employer-account-id", access.accountId);
         }
@@ -532,10 +539,13 @@ export default function EmployerDashboardPage() {
       setActionSuccess(null);
 
       let nextBillingSummary: BillingSummary | null = null;
-      try {
-        nextBillingSummary = await loadBillingSummary();
-      } catch (error) {
-        if (mounted) setBillingError(error instanceof Error ? error.message : "Could not load billing details.");
+      setBillingError(null);
+      if (access?.canManageBilling) {
+        try {
+          nextBillingSummary = await loadBillingSummary();
+        } catch (error) {
+          if (mounted) setBillingError(error instanceof Error ? error.message : "Could not load billing details.");
+        }
       }
 
       let nextCandidates: CandidateSubmission[] = [];
@@ -604,14 +614,29 @@ export default function EmployerDashboardPage() {
         setOwner(currentOwner);
         setBillingSummary(nextBillingSummary);
         setEmployerAccess(access);
+        setSwitchingError(null);
+        setDashboardLoadingLabel("Loading employer dashboard…");
         setAuthStatus("allowed");
       }
     }
 
-    loadDashboard();
+    loadDashboard().catch((error) => {
+      if (!mounted) return;
+      setJobs([]);
+      setCandidates([]);
+      setBillingSummary(null);
+      setAuthStatus("allowed");
+      setSwitchingError(error instanceof Error ? error.message : "Could not switch employer accounts.");
+      setActionError(error instanceof Error ? error.message : "Could not switch employer accounts.");
+    });
 
     const { data: listener } = supabase.auth.onAuthStateChange(() => {
-      loadDashboard();
+      loadDashboard().catch((error) => {
+        if (!mounted) return;
+        setSwitchingError(error instanceof Error ? error.message : "Could not load employer account access.");
+        setActionError(error instanceof Error ? error.message : "Could not load employer account access.");
+        setAuthStatus("allowed");
+      });
     });
 
     return () => {
@@ -702,7 +727,15 @@ export default function EmployerDashboardPage() {
 
     const { data, error: authError } = await supabase.auth.getUser();
     const authUser = data?.user;
-    const sessionOwner = authUser?.id && authUser.email?.trim() ? { userId: authUser.id, email: authUser.email.trim() } : null;
+    const sessionOwner = authUser?.id && authUser.email?.trim()
+      ? {
+          userId: authUser.id,
+          email: authUser.email.trim(),
+          accountId: owner?.accountId ?? null,
+          ownerUserId: owner?.ownerUserId ?? authUser.id,
+          ownerEmail: owner?.ownerEmail ?? authUser.email.trim(),
+        }
+      : null;
     const currentOwner = sessionOwner ?? owner;
 
     if (authError || !currentOwner) {
@@ -732,14 +765,23 @@ export default function EmployerDashboardPage() {
     const updatePayload = { active: nextActive, status: nextStatus };
     const updateAttempts: OwnershipMatch[] = [
       matchedOwnership,
-      ...(matchedOwnership === "employer_user_id" ? ["employer_email" as const] : ["employer_user_id" as const]),
+      ...(matchedOwnership === "employer_account_id"
+        ? ["employer_user_id" as const, "employer_email" as const]
+        : matchedOwnership === "employer_user_id"
+          ? ["employer_email" as const, "employer_account_id" as const]
+          : ["employer_user_id" as const, "employer_account_id" as const]),
     ];
     let updateError: SupabaseActionError | null = null;
     let updatedJob: Pick<DashboardJob, "active" | "status" | "employer_user_id" | "employer_email"> | null = null;
     let matchedBy: OwnershipMatch | null = null;
 
     for (const ownershipField of updateAttempts) {
-      const ownerValue = ownershipField === "employer_user_id" ? currentOwner.userId : currentOwner.email;
+      const ownerValue = ownershipField === "employer_account_id"
+        ? currentOwner.accountId
+        : ownershipField === "employer_user_id"
+          ? currentOwner.userId
+          : currentOwner.email;
+      if (!ownerValue) continue;
       const result = await supabase
         .from("jobs")
         .update(updatePayload)
@@ -830,7 +872,15 @@ export default function EmployerDashboardPage() {
 
     const { data, error: authError } = await supabase.auth.getUser();
     const authUser = data?.user;
-    const sessionOwner = authUser?.id && authUser.email?.trim() ? { userId: authUser.id, email: authUser.email.trim() } : null;
+    const sessionOwner = authUser?.id && authUser.email?.trim()
+      ? {
+          userId: authUser.id,
+          email: authUser.email.trim(),
+          accountId: owner?.accountId ?? null,
+          ownerUserId: owner?.ownerUserId ?? authUser.id,
+          ownerEmail: owner?.ownerEmail ?? authUser.email.trim(),
+        }
+      : null;
     const currentOwner = sessionOwner ?? owner;
 
     if (authError || !currentOwner) {
@@ -840,10 +890,11 @@ export default function EmployerDashboardPage() {
       return;
     }
 
-    const emailMatchesCurrentEmployer = job.employer_email === currentOwner.email;
-    const userIdMatchesCurrentEmployer = job.employer_user_id === currentOwner.userId;
+    const accountMatchesCurrentEmployer = Boolean(currentOwner.accountId && job.employer_account_id === currentOwner.accountId);
+    const emailMatchesCurrentEmployer = job.employer_email === currentOwner.email || job.employer_email === currentOwner.ownerEmail;
+    const userIdMatchesCurrentEmployer = job.employer_user_id === currentOwner.userId || job.employer_user_id === currentOwner.ownerUserId;
 
-    if (!emailMatchesCurrentEmployer && !userIdMatchesCurrentEmployer) {
+    if (!accountMatchesCurrentEmployer && !emailMatchesCurrentEmployer && !userIdMatchesCurrentEmployer) {
       setDeleteJob(null);
       setActionError(
         "This job is linked to a different employer account than your current session. Please refresh or sign in with the employer account that owns this listing."
@@ -852,7 +903,9 @@ export default function EmployerDashboardPage() {
       return;
     }
 
-    const emailOwnershipCheck = await supabase
+    const emailOwnershipCheck = accountMatchesCurrentEmployer
+      ? { data: null, error: null }
+      : await supabase
       .from("jobs")
       .select(DELETE_EMAIL_RETURN_FIELDS)
       .eq("id", job.id)
@@ -876,7 +929,15 @@ export default function EmployerDashboardPage() {
     let userIdFallbackError: SupabaseActionError | null = null;
     let usedUserIdFallback = false;
 
-    if (emailOwnershipCheck.data) {
+    if (accountMatchesCurrentEmployer && currentOwner.accountId) {
+      deleteResult = await supabase
+        .from("jobs")
+        .delete()
+        .eq("id", job.id)
+        .eq("employer_account_id", currentOwner.accountId)
+        .select("id")
+        .maybeSingle();
+    } else if (emailOwnershipCheck.data) {
       deleteResult = await supabase
         .from("jobs")
         .delete()
@@ -1083,15 +1144,24 @@ export default function EmployerDashboardPage() {
 
     setSelectedEmployerAccountId(nextAccountId);
     window.localStorage.setItem("rn-selected-employer-account-id", nextAccountId);
+    setDashboardLoadingLabel("Switching employer accounts…");
+    setSwitchingError(null);
+    setActionError(null);
+    setActionSuccess(null);
+    setBillingError(null);
+    setCandidatesError(null);
     setAuthStatus("loading");
     setJobs([]);
     setCandidates([]);
+    setBillingSummary(null);
   }
 
   const canManageJobs = employerAccess?.canManageJobs ?? true;
   const canManageBilling = employerAccess?.canManageBilling ?? true;
   const canManageProfile = employerAccess?.canManageProfile ?? true;
   const canManageTeam = employerAccess?.canManageTeam ?? true;
+  const canUpdateCandidateStatuses = employerAccess?.canUpdateCandidateStatuses ?? true;
+  const accessibleMemberships = (employerAccess?.memberships ?? []).filter((membership) => !membership.invitationPending);
 
   if (authStatus === "loading") {
     return (
@@ -1105,7 +1175,7 @@ export default function EmployerDashboardPage() {
         }}
       >
         <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 18px" }}>
-          Loading employer dashboard…
+          {dashboardLoadingLabel}
         </div>
       </main>
     );
@@ -1176,7 +1246,7 @@ export default function EmployerDashboardPage() {
                 <div>
                   Role: {formatEmployerRole(employerAccess?.role)}
                 </div>
-                {(employerAccess?.memberships?.length ?? 0) > 1 ? (
+                {accessibleMemberships.length > 1 ? (
                   <label style={{ display: "grid", gap: 6, maxWidth: 360, color: homeTheme.muted, fontSize: 13 }}>
                     Account selector
                     <select
@@ -1193,13 +1263,13 @@ export default function EmployerDashboardPage() {
                         backgroundColor: "rgba(255,255,255,0.76)",
                       }}
                     >
-                      {employerAccess?.memberships.map((membership) => (
+                      {accessibleMemberships.map((membership) => (
                         <option key={membership.accountId} value={membership.accountId} disabled={membership.invitationPending}>
                           {membership.locationName ?? membership.accountName} — {formatEmployerRole(membership.role)}{membership.invitationPending ? " (invitation pending)" : ""}
                         </option>
                       ))}
                     </select>
-                    Choose an account to scope dashboard jobs, candidates, billing, and permissions to that employer account.
+                    Switching accounts immediately reloads jobs, candidates, billing, and permissions for the selected employer account.
                   </label>
                 ) : null}
               </div>
@@ -1226,6 +1296,23 @@ export default function EmployerDashboardPage() {
             </div>
           </div>
         </section>
+
+        {switchingError ? (
+          <div
+            role="alert"
+            style={{
+              ...homeCardStyle,
+              marginBottom: 16,
+              border: "1px solid rgba(173,67,67,0.28)",
+              backgroundColor: "rgba(173,67,67,0.08)",
+              color: "#8a2f2f",
+              fontFamily: "var(--font-body)",
+              fontWeight: 800,
+            }}
+          >
+            {switchingError}
+          </div>
+        ) : null}
 
         <section className="rn-dashboard-metrics" style={{ marginBottom: 16 }}>
           {metrics.map((metric) => (
@@ -1478,7 +1565,7 @@ export default function EmployerDashboardPage() {
                         <select
                           value={candidate.status}
                           onChange={(event) => handleCandidateStatusChange(candidate.id, event.target.value)}
-                          disabled={candidateBusyId === candidate.id}
+                          disabled={!canUpdateCandidateStatuses || candidateBusyId === candidate.id}
                           aria-label={`Update ${candidate.candidate_name}'s status`}
                         >
                         {CANDIDATE_STATUS_OPTIONS.map((status) => (
@@ -1555,9 +1642,11 @@ export default function EmployerDashboardPage() {
                 <Link href="/contact">Contact page</Link> for additional information.
               </p>
             </div>
-            <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
-              Post New Job
-            </Link>
+            {canManageJobs ? (
+              <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
+                Post New Job
+              </Link>
+            ) : null}
           </div>
 
           {actionError ? (
@@ -1618,11 +1707,13 @@ export default function EmployerDashboardPage() {
                 No jobs yet
               </h3>
               <p style={{ marginTop: 0, color: homeTheme.muted, fontWeight: 600 }}>
-                You have not posted any jobs yet. Start your first listing to begin receiving applicants.
+                {canManageJobs ? "You have not posted any jobs yet. Start your first listing to begin receiving applicants." : "This employer account does not have any jobs yet."}
               </p>
-              <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
-                Create Your First Job
-              </Link>
+              {canManageJobs ? (
+                <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
+                  Create Your First Job
+                </Link>
+              ) : null}
             </div>
           ) : (
             <>

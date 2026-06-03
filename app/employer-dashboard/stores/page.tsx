@@ -85,6 +85,15 @@ function formatCandidateRoutingEmails(store: Store) {
   return emails.length > 0 ? emails.join(", ") : "—";
 }
 
+function employerAccountHeaders(token: string, contentType?: string) {
+  const selectedEmployerAccountId = typeof window === "undefined" ? null : window.localStorage.getItem("rn-selected-employer-account-id");
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(contentType ? { "Content-Type": contentType } : {}),
+    ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+  };
+}
+
 export default function StoreDirectoryPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -113,8 +122,8 @@ export default function StoreDirectoryPage() {
     }
 
     const [meResponse, storesResponse] = await Promise.all([
-      fetch("/api/employer/me", { headers: { Authorization: `Bearer ${token}` } }),
-      fetch("/api/employer/stores", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/employer/me", { headers: employerAccountHeaders(token) }),
+      fetch("/api/employer/stores", { headers: employerAccountHeaders(token) }),
     ]);
 
     const mePayload = (await meResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
@@ -195,7 +204,7 @@ export default function StoreDirectoryPage() {
     const isUpdate = Boolean(selectedStoreId && stores.some((store) => store.id === selectedStoreId));
     const response = await fetch("/api/employer/stores", {
       method: isUpdate ? "PATCH" : "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: employerAccountHeaders(token, "application/json"),
       body: JSON.stringify({ ...(isUpdate ? { id: selectedStoreId } : {}), ...form }),
     });
     const payload = (await response.json().catch(() => null)) as { store?: Store; error?: string } | null;

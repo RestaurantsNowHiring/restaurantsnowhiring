@@ -175,7 +175,7 @@ function EmployerJobEditForm() {
       const accessToken = sessionData.session?.access_token;
       let access: EmployerAccess | null = null;
       if (accessToken) {
-        const accessResponse = await fetch("/api/employer/me", { headers: { Authorization: `Bearer ${accessToken}` } });
+        const accessResponse = await fetch("/api/employer/me", { headers: employerAccountHeaders(accessToken) });
         const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
         access = accessPayload?.employer ?? null;
       }
@@ -587,6 +587,15 @@ function EmployerJobEditForm() {
       `}</style>
     </main>
   );
+}
+
+function employerAccountHeaders(token: string, contentType?: string) {
+  const selectedEmployerAccountId = typeof window === "undefined" ? null : window.localStorage.getItem("rn-selected-employer-account-id");
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(contentType ? { "Content-Type": contentType } : {}),
+    ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+  };
 }
 
 export default function EmployerJobEditPage() {

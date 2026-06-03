@@ -113,6 +113,15 @@ function formatCandidateRoutingEmails(store: EmployerStore | null) {
   return emails.length > 0 ? emails.join(", ") : "—";
 }
 
+function employerAccountHeaders(token: string, contentType?: string) {
+  const selectedEmployerAccountId = typeof window === "undefined" ? null : window.localStorage.getItem("rn-selected-employer-account-id");
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(contentType ? { "Content-Type": contentType } : {}),
+    ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+  };
+}
+
 export default function TeamAccessPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -148,9 +157,9 @@ export default function TeamAccessPage() {
     }
 
     const [meResponse, teamResponse, storesResponse] = await Promise.all([
-      fetch("/api/employer/me", { headers: { Authorization: `Bearer ${token}` } }),
-      fetch("/api/employer/team", { headers: { Authorization: `Bearer ${token}` } }),
-      fetch("/api/employer/stores", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/employer/me", { headers: employerAccountHeaders(token) }),
+      fetch("/api/employer/team", { headers: employerAccountHeaders(token) }),
+      fetch("/api/employer/stores", { headers: employerAccountHeaders(token) }),
     ]);
 
     const mePayload = (await meResponse.json().catch(() => null)) as { employer?: EmployerAccess; error?: string } | null;
@@ -189,7 +198,7 @@ export default function TeamAccessPage() {
 
     const response = await fetch("/api/employer/team", {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: employerAccountHeaders(token, "application/json"),
       body: JSON.stringify({ email, role, can_manage_notification_routing: canRouteNotifications }),
     });
     const payload = (await response.json().catch(() => null)) as { error?: string; inviteEmailWarning?: string | null } | null;
@@ -215,7 +224,7 @@ export default function TeamAccessPage() {
     setMessage(null);
     const response = await fetch(`/api/employer/team/${encodeURIComponent(member.id)}/invite`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: employerAccountHeaders(token),
     });
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
     setBusy(false);
@@ -241,7 +250,7 @@ export default function TeamAccessPage() {
 
     const response = await fetch(`/api/employer/team?id=${encodeURIComponent(member.id)}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${token}` },
+      headers: employerAccountHeaders(token),
     });
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
 
@@ -359,7 +368,7 @@ export default function TeamAccessPage() {
     const locationName = editForm.location_name.trim();
     const teamResponse = await fetch("/api/employer/team", {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: employerAccountHeaders(token, "application/json"),
       body: JSON.stringify({
         id: member.id,
         role: editForm.role,
@@ -407,7 +416,7 @@ export default function TeamAccessPage() {
       };
       const storeResponse = await fetch("/api/employer/stores", {
         method: store?.id ? "PATCH" : "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        headers: employerAccountHeaders(token, "application/json"),
         body: JSON.stringify(storePayload),
       });
       const storeResult = (await storeResponse.json().catch(() => null)) as { error?: string } | null;
@@ -415,7 +424,7 @@ export default function TeamAccessPage() {
         if (previousLocationName !== locationName) {
           await fetch("/api/employer/team", {
             method: "PATCH",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+            headers: employerAccountHeaders(token, "application/json"),
             body: JSON.stringify({
               id: member.id,
               role: member.role,

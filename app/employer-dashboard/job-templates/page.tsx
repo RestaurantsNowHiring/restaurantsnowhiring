@@ -90,6 +90,15 @@ function resizeTextarea(textarea: HTMLTextAreaElement | null) {
   textarea.style.height = `${textarea.scrollHeight}px`;
 }
 
+function employerAccountHeaders(token: string, contentType?: string) {
+  const selectedEmployerAccountId = typeof window === "undefined" ? null : window.localStorage.getItem("rn-selected-employer-account-id");
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(contentType ? { "Content-Type": contentType } : {}),
+    ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+  };
+}
+
 export default function JobTemplatesPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -148,8 +157,8 @@ export default function JobTemplatesPage() {
     }
 
     const [meResponse, templatesResponse] = await Promise.all([
-      fetch("/api/employer/me", { headers: { Authorization: `Bearer ${token}` } }),
-      fetch("/api/employer/job-templates?includeInactive=true", { headers: { Authorization: `Bearer ${token}` } }),
+      fetch("/api/employer/me", { headers: employerAccountHeaders(token) }),
+      fetch("/api/employer/job-templates?includeInactive=true", { headers: employerAccountHeaders(token) }),
     ]);
 
     const mePayload = (await meResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
@@ -241,7 +250,7 @@ export default function JobTemplatesPage() {
     const isUpdate = Boolean(selectedTemplateId && templates.some((template) => template.id === selectedTemplateId && template.employer_account_id));
     const response = await fetch("/api/employer/job-templates", {
       method: isUpdate ? "PATCH" : "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: employerAccountHeaders(token, "application/json"),
       body: JSON.stringify({ ...(isUpdate ? { id: selectedTemplateId } : {}), ...form }),
     });
     const payload = (await response.json().catch(() => null)) as { template?: JobTemplate; error?: string } | null;
@@ -269,7 +278,7 @@ export default function JobTemplatesPage() {
     setMessage(null);
     const response = await fetch("/api/employer/job-templates", {
       method: "PATCH",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      headers: employerAccountHeaders(token, "application/json"),
       body: JSON.stringify({ id: template.id, ...templateToForm(template), active }),
     });
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
