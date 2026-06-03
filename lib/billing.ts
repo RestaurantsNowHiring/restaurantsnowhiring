@@ -143,13 +143,13 @@ export async function getBillingRecord(userId: string) {
   return (data ?? null) as BillingRecord | null;
 }
 
-export async function getBillingRecordForEmployerUser(user: { id: string; email: string }) {
-  const context = await getEmployerAccountContext(user);
+export async function getBillingRecordForEmployerUser(user: { id: string; email: string }, selectedAccountId?: string | null) {
+  const context = await getEmployerAccountContext(user, selectedAccountId);
   return getBillingRecord(context.ownerUserId);
 }
 
-export async function countActiveBillableJobsForEmployerUser(user: { id: string; email: string }) {
-  const context = await getEmployerAccountContext(user);
+export async function countActiveBillableJobsForEmployerUser(user: { id: string; email: string }, selectedAccountId?: string | null) {
+  const context = await getEmployerAccountContext(user, selectedAccountId);
   return countActiveBillableJobs(context.ownerUserId, context.ownerEmail, context.accountId);
 }
 

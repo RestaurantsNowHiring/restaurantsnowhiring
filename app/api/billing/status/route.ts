@@ -5,14 +5,16 @@ import {
   getAuthUserFromRequest,
   getBillingRecordForEmployerUser,
 } from "../../../../lib/billing";
+import { getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 
 export async function GET(request: Request) {
   try {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const billing = await getBillingRecordForEmployerUser(user);
-    const activeBillableJobCount = await countActiveBillableJobsForEmployerUser(user);
+    const selectedAccountId = getSelectedEmployerAccountIdFromRequest(request);
+    const billing = await getBillingRecordForEmployerUser(user, selectedAccountId);
+    const activeBillableJobCount = await countActiveBillableJobsForEmployerUser(user, selectedAccountId);
     const access = evaluateBillingAccess(billing);
 
     return NextResponse.json({

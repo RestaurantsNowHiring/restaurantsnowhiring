@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
-import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
+import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 import { canUserAccessJob } from "../../../../lib/employerJobAccess";
 
 const ALLOWED_STATUSES = new Set(["new", "reviewed", "contacted", "archived"]);
@@ -30,7 +30,7 @@ export async function GET(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!context.canViewCandidates) return NextResponse.json({ error: "Not authorized to view candidates." }, { status: 403 });
 
     const supabaseAdmin = getSupabaseAdminClient();
@@ -79,7 +79,7 @@ export async function PATCH(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!context.canUpdateCandidateStatuses) return NextResponse.json({ error: "Not authorized to update candidates." }, { status: 403 });
 
     const payload = (await request.json().catch(() => null)) as { id?: string; status?: string } | null;

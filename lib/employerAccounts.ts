@@ -8,6 +8,8 @@ export type EmployerAccountMembership = {
   accountName: string;
   locationName: string | null;
   role: EmployerRole;
+  status: string;
+  invitationPending: boolean;
 };
 
 export type EmployerAccountContext = {
@@ -87,7 +89,27 @@ function normalizeRouting(value: unknown): CandidateNotificationRouting {
 }
 
 function accountDisplayName(account: Record<string, unknown> | null) {
-  return cleanString(account?.account_name, 180) ?? cleanString(account?.company_name, 180) ?? "Employer Account";
+  return cleanString(account?.account_name, 180) ?? cleanString(account?.restaurant_brand_name, 180) ?? cleanString(account?.company_name, 180) ?? "Employer Account";
+}
+
+function normalizeStatus(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "active";
+}
+
+function isActiveAccessStatus(status: string) {
+  return status === "active" || status === "accepted";
+}
+
+function isPendingAccessStatus(status: string) {
+  return status === "invited" || status === "pending";
+}
+
+export function getSelectedEmployerAccountIdFromRequest(request: Request) {
+  const headerValue = request.headers.get("x-employer-account-id")?.trim();
+  if (headerValue) return headerValue;
+
+  const queryValue = new URL(request.url).searchParams.get("employerAccountId")?.trim();
+  return queryValue || null;
 }
 
 export function getRolePermissions(role: EmployerRole) {
@@ -112,6 +134,7 @@ async function activateInvitedEmployerTeamMemberships(user: { id: string; email:
   }
 
   const accountIds = (invitedRows ?? [])
+    .filter((row) => ["invited", "pending", "accepted"].includes(normalizeStatus(row.status)))
     .map((row) => cleanString(row.account_id, 80))
     .filter((accountId): accountId is string => Boolean(accountId));
 
@@ -126,7 +149,8 @@ async function activateInvitedEmployerTeamMemberships(user: { id: string; email:
       updated_at: now,
     })
     .ilike("email", lowerEmail)
-    .in("account_id", accountIds);
+    .in("account_id", accountIds)
+    .in("status", ["invited", "pending", "accepted"]);
 
   if (activateError) throw new Error(activateError.message || "Could not activate invited employer team access.");
 
@@ -219,39 +243,75 @@ async function provisionNewEmployerAccount(user: { id: string; email: string }) 
   return accountId;
 }
 
-export async function getEmployerAccountContext(user: { id: string; email: string }): Promise<EmployerAccountContext> {
+export async function getEmployerAccountContext(user: { id: string; email: string }, selectedAccountId?: string | null): Promise<EmployerAccountContext> {
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
   const admin = supabaseAdmin;
 
   async function loadMemberships() {
-    const { data, error } = await admin
-      .from("employer_team_members")
-      .select("account_id,user_id,email,location_name,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email)")
-      .or(`user_id.eq.${user.id},email.ilike.${user.email.trim().toLowerCase()}`)
-      .eq("status", "active")
-      .order("created_at", { ascending: true });
+    const lowerEmail = user.email.trim().toLowerCase();
+    const membershipRowsByAccountId = new Map<string, Record<string, unknown>>();
 
-    if (error && error.code !== "42P01" && error.code !== "42703") {
-      throw new Error(error.message || "Could not load employer team access.");
-    }
-
-    if (error?.code === "42703") {
-      const fallback = await admin
+    async function addTeamMembershipRows(selectFields: string) {
+      const { data, error } = await admin
         .from("employer_team_members")
-        .select("account_id,user_id,email,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,company_name,default_candidate_notification_routing,support_email)")
-        .or(`user_id.eq.${user.id},email.ilike.${user.email.trim().toLowerCase()}`)
-        .eq("status", "active")
+        .select(selectFields)
+        .or(`user_id.eq.${user.id},email.ilike.${lowerEmail}`)
+        .in("status", ["active", "accepted", "invited", "pending"])
         .order("created_at", { ascending: true });
 
-      if (fallback.error && fallback.error.code !== "42P01") {
-        throw new Error(fallback.error.message || "Could not load employer team access.");
+      if (error && error.code !== "42P01" && error.code !== "42703") {
+        throw new Error(error.message || "Could not load employer team access.");
       }
 
-      return (fallback.data ?? []) as Array<Record<string, unknown>>;
+      if (error) return false;
+
+      (data ?? []).forEach((membership) => {
+        const row = membership as unknown as Record<string, unknown>;
+        const account = row.employer_accounts && typeof row.employer_accounts === "object"
+          ? (row.employer_accounts as Record<string, unknown>)
+          : null;
+        const accountId = cleanString(row.account_id, 80) ?? cleanString(account?.id, 80);
+        const status = normalizeStatus(row.status);
+        if (!accountId || !account || (!isActiveAccessStatus(status) && !isPendingAccessStatus(status))) return;
+        membershipRowsByAccountId.set(accountId, row);
+      });
+
+      return true;
     }
 
-    return (data ?? []) as Array<Record<string, unknown>>;
+    const loadedTeamRows = await addTeamMembershipRows("account_id,user_id,email,location_name,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email)");
+    if (!loadedTeamRows) {
+      await addTeamMembershipRows("account_id,user_id,email,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,company_name,default_candidate_notification_routing,support_email)");
+    }
+
+    const { data: ownedAccounts, error: ownedAccountsError } = await admin
+      .from("employer_accounts")
+      .select("id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email")
+      .eq("owner_user_id", user.id)
+      .order("created_at", { ascending: true });
+
+    if (ownedAccountsError && ownedAccountsError.code !== "42P01" && ownedAccountsError.code !== "42703") {
+      throw new Error(ownedAccountsError.message || "Could not load owned employer accounts.");
+    }
+
+    (ownedAccounts ?? []).forEach((accountRow) => {
+      const account = accountRow as Record<string, unknown>;
+      const accountId = cleanString(account.id, 80);
+      if (!accountId) return;
+      membershipRowsByAccountId.set(accountId, {
+        account_id: accountId,
+        user_id: user.id,
+        email: user.email,
+        location_name: null,
+        role: "account_owner",
+        status: "active",
+        can_manage_notification_routing: true,
+        employer_accounts: account,
+      });
+    });
+
+    return Array.from(membershipRowsByAccountId.values());
   }
 
   let memberships = await loadMemberships();
@@ -265,7 +325,17 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
     memberships = await loadMemberships();
   }
 
-  const memberRow = memberships[0] ?? null;
+  const normalizedSelectedAccountId = selectedAccountId?.trim() || null;
+  const selectedMembership = normalizedSelectedAccountId
+    ? memberships.find((membership) => {
+        const membershipAccount = membership.employer_accounts && typeof membership.employer_accounts === "object"
+          ? (membership.employer_accounts as Record<string, unknown>)
+          : null;
+        const membershipAccountId = cleanString(membership.account_id, 80) ?? cleanString(membershipAccount?.id, 80);
+        return membershipAccountId === normalizedSelectedAccountId && isActiveAccessStatus(normalizeStatus(membership.status));
+      })
+    : null;
+  const memberRow = selectedMembership ?? memberships.find((membership) => isActiveAccessStatus(normalizeStatus(membership.status))) ?? memberships[0] ?? null;
   const account = memberRow?.employer_accounts && typeof memberRow.employer_accounts === "object"
     ? (memberRow.employer_accounts as Record<string, unknown>)
     : null;
@@ -286,6 +356,8 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
         accountName: accountDisplayName(membershipAccount),
         locationName: cleanString(membership.location_name, 180),
         role: normalizeRole(membership.role),
+        status: normalizeStatus(membership.status),
+        invitationPending: isPendingAccessStatus(normalizeStatus(membership.status)),
       };
     })
     .filter((membership): membership is EmployerAccountMembership => Boolean(membership));

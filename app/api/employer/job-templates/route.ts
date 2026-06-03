@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
-import { assertEmployerPermission, getEmployerAccountContext } from "../../../../lib/employerAccounts";
+import { assertEmployerPermission, getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
 
 type TemplatePayload = {
@@ -57,7 +57,7 @@ export async function GET(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!context.accountId) return NextResponse.json({ error: "Employer account not found." }, { status: 400 });
     assertEmployerPermission(context, "canManageJobs");
 
@@ -120,7 +120,7 @@ export async function PATCH(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!context.accountId) return NextResponse.json({ error: "Employer account not found." }, { status: 400 });
     assertEmployerPermission(context, "canManageJobs");
 

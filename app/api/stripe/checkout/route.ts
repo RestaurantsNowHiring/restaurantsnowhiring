@@ -7,7 +7,7 @@ import {
   stripeRequest,
 } from "../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
-import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
+import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 
 type StripeCustomer = { id: string };
 type StripeCheckoutSession = { id: string; url: string | null };
@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!context.canManageBilling) return NextResponse.json({ error: "Only Account Owners can manage billing." }, { status: 403 });
 
     const billingUserId = context.ownerUserId;

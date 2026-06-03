@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../../../lib/supabaseAdmin";
-import { getEmployerAccountContext } from "../../../../../../lib/employerAccounts";
+import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../../../lib/employerAccounts";
 import { canUserAccessJob } from "../../../../../../lib/employerJobAccess";
 
 const RESUME_BUCKET = "candidate-resumes";
@@ -13,7 +13,7 @@ export async function GET(request: Request, context: RouteContext) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const accountContext = await getEmployerAccountContext(user);
+    const accountContext = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!accountContext.canViewCandidates) return NextResponse.json({ error: "Not authorized to view candidates." }, { status: 403 });
 
     const params = await Promise.resolve(context.params);
