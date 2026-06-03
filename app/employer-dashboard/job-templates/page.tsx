@@ -26,7 +26,6 @@ type JobTemplate = {
   job_description: string | null;
   benefits: string | null;
   active: boolean;
-  is_default: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -34,8 +33,6 @@ type JobTemplate = {
 type TemplateForm = Pick<JobTemplate, "template_name" | "job_title" | "role_category" | "employment_type" | "schedule" | "pay_defaults" | "job_description" | "benefits" | "active">;
 
 type TemplateStatusFilter = "all" | "active" | "inactive";
-
-type TemplateKindFilter = "all" | "default" | "custom";
 
 const EMPTY_TEMPLATE_FORM: TemplateForm = {
   template_name: "",
@@ -83,14 +80,6 @@ function templateToForm(template: JobTemplate): TemplateForm {
   };
 }
 
-function templateKind(template: JobTemplate) {
-  return template.employer_account_id ? "custom" : "default";
-}
-
-function templateBadge(template: JobTemplate) {
-  return templateKind(template) === "default" ? "Default" : "Custom";
-}
-
 function formatText(value: string | null) {
   return value?.trim() || "—";
 }
@@ -107,7 +96,6 @@ export default function JobTemplatesPage() {
   const [access, setAccess] = useState<EmployerAccess | null>(null);
   const [templates, setTemplates] = useState<JobTemplate[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [kindFilter, setKindFilter] = useState<TemplateKindFilter>("all");
   const [statusFilter, setStatusFilter] = useState<TemplateStatusFilter>("all");
   const [search, setSearch] = useState("");
   const [isEditing, setIsEditing] = useState(false);
@@ -194,23 +182,18 @@ export default function JobTemplatesPage() {
 
   const canManageTemplates = Boolean(access?.canManageJobs);
 
-  const defaultTemplates = useMemo(() => templates.filter((template) => templateKind(template) === "default"), [templates]);
-  const customTemplates = useMemo(() => templates.filter((template) => templateKind(template) === "custom"), [templates]);
-
   const filteredTemplates = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return templates.filter((template) => {
-      const matchesKind = kindFilter === "all" || templateKind(template) === kindFilter;
       const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? template.active : !template.active);
       const matchesSearch = !normalizedSearch || [template.template_name, template.job_title, template.role_category, template.employment_type, template.schedule, template.pay_defaults]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
-      return matchesKind && matchesStatus && matchesSearch;
+      return matchesStatus && matchesSearch;
     });
-  }, [kindFilter, search, statusFilter, templates]);
+  }, [search, statusFilter, templates]);
 
   const selectedTemplate = useMemo(() => templates.find((template) => template.id === selectedTemplateId) ?? null, [selectedTemplateId, templates]);
-  const selectedTemplateIsCustom = Boolean(selectedTemplate?.employer_account_id);
 
   function startNewTemplate() {
     setSelectedTemplateId(null);
@@ -220,10 +203,6 @@ export default function JobTemplatesPage() {
   }
 
   function startEditingTemplate(template: JobTemplate) {
-    if (!template.employer_account_id) {
-      setMessage("Default templates are read-only. Duplicate a default template to make an editable custom copy.");
-      return;
-    }
     setSelectedTemplateId(template.id);
     setForm(templateToForm(template));
     setIsEditing(true);
@@ -279,33 +258,6 @@ export default function JobTemplatesPage() {
     await loadTemplates();
   }
 
-  async function duplicateDefaultTemplate(template: JobTemplate) {
-    const token = await getAccessToken();
-    if (!token) {
-      setMessage("Please sign in again before duplicating templates.");
-      return;
-    }
-
-    setBusy(true);
-    setMessage(null);
-    const response = await fetch("/api/employer/job-templates", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ source_template_id: template.id, template_name: `${template.template_name} Copy` }),
-    });
-    const payload = (await response.json().catch(() => null)) as { template?: JobTemplate; error?: string } | null;
-    setBusy(false);
-
-    if (!response.ok) {
-      setMessage(payload?.error || "Could not duplicate default template.");
-      return;
-    }
-
-    setMessage("Default template duplicated as a custom template.");
-    setSelectedTemplateId(payload?.template?.id ?? null);
-    await loadTemplates();
-  }
-
   async function setCustomTemplateActive(template: JobTemplate, active: boolean) {
     const token = await getAccessToken();
     if (!token) {
@@ -349,7 +301,7 @@ export default function JobTemplatesPage() {
                 Template Management
               </h1>
               <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 700 }}>
-                Review read-only default templates and manage custom templates for your employer account. Active templates appear in Post a Job.
+Create and manage reusable templates for your employer account. Active templates appear in Post a Job.
               </p>
             </div>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -372,9 +324,9 @@ export default function JobTemplatesPage() {
 
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
           <div className="rn-template-summary-grid">
-            <div><strong>{defaultTemplates.length}</strong><span>Default templates</span></div>
-            <div><strong>{customTemplates.length}</strong><span>Custom templates</span></div>
-            <div><strong>{customTemplates.filter((template) => template.active).length}</strong><span>Active custom templates</span></div>
+            <div><strong>{templates.length}</strong><span>Total templates</span></div>
+            <div><strong>{templates.filter((template) => template.active).length}</strong><span>Active templates</span></div>
+            <div><strong>{templates.filter((template) => !template.active).length}</strong><span>Inactive templates</span></div>
           </div>
         </section>
 
@@ -383,14 +335,6 @@ export default function JobTemplatesPage() {
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
               Search templates
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, job title, role, schedule" style={{ ...homeInputStyle, marginTop: 6 }} />
-            </label>
-            <label style={{ fontWeight: 900, color: homeTheme.text }}>
-              Template type
-              <select value={kindFilter} onChange={(event) => setKindFilter(event.target.value as TemplateKindFilter)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
-                <option value="all">All templates</option>
-                <option value="default">Default templates</option>
-                <option value="custom">Custom templates</option>
-              </select>
             </label>
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
               Status
@@ -407,7 +351,18 @@ export default function JobTemplatesPage() {
           <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
             <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Template list</h2>
             <div style={{ display: "grid", gap: 10 }}>
-              {filteredTemplates.length === 0 ? <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No templates match these filters.</p> : null}
+              {templates.length === 0 ? (
+                <div style={{ display: "grid", gap: 12 }}>
+                  <p style={{ color: homeTheme.muted, fontWeight: 800, margin: 0 }}>No job templates yet.</p>
+                  {canManageTemplates ? (
+                    <button type="button" className="rn-btn-primary" style={homePrimaryButton} onClick={startNewTemplate}>
+                      Create Template
+                    </button>
+                  ) : null}
+                </div>
+              ) : filteredTemplates.length === 0 ? (
+                <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No templates match these filters.</p>
+              ) : null}
               {filteredTemplates.map((template) => (
                 <button
                   key={template.id}
@@ -424,7 +379,7 @@ export default function JobTemplatesPage() {
                     fontFamily: "var(--font-body)",
                   }}
                 >
-                  <span className="rn-template-badge" data-kind={templateKind(template)}>{templateBadge(template)}</span>
+                  <span className="rn-template-badge">Custom</span>
                   <strong style={{ display: "block", color: homeTheme.text, fontSize: 16, marginTop: 8 }}>{template.template_name}</strong>
                   <span style={{ display: "block", marginTop: 5, color: homeTheme.muted, fontWeight: 800 }}>{template.job_title}</span>
                   <span style={{ display: "inline-flex", marginTop: 10, color: template.active ? homeTheme.green : homeTheme.muted, fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>
@@ -462,16 +417,15 @@ export default function JobTemplatesPage() {
               <div>
                 <div className="rn-template-header-row">
                   <div>
-                    <span className="rn-template-badge" data-kind={templateKind(selectedTemplate)}>{templateBadge(selectedTemplate)}</span>
+                    <span className="rn-template-badge">Custom</span>
                     <p style={{ margin: "10px 0 0", color: selectedTemplate.active ? homeTheme.green : homeTheme.muted, fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>
                       {selectedTemplate.active ? "Active" : "Inactive"}
                     </p>
                     <h2 style={{ margin: "6px 0 0", fontFamily: "var(--font-heading)", color: homeTheme.text }}>{selectedTemplate.template_name}</h2>
                   </div>
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                    {!selectedTemplateIsCustom && canManageTemplates ? <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => duplicateDefaultTemplate(selectedTemplate)} disabled={busy}>Duplicate as Custom</button> : null}
-                    {selectedTemplateIsCustom && canManageTemplates ? <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => startEditingTemplate(selectedTemplate)}>Edit</button> : null}
-                    {selectedTemplateIsCustom && canManageTemplates ? (
+                    {canManageTemplates ? <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => startEditingTemplate(selectedTemplate)}>Edit</button> : null}
+                    {canManageTemplates ? (
                       <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setCustomTemplateActive(selectedTemplate, !selectedTemplate.active)} disabled={busy}>
                         {selectedTemplate.active ? "Deactivate" : "Reactivate"}
                       </button>
@@ -488,14 +442,9 @@ export default function JobTemplatesPage() {
                 </dl>
                 <div className="rn-template-long-field"><h3>Job description</h3><p>{formatText(selectedTemplate.job_description)}</p></div>
                 <div className="rn-template-long-field"><h3>Benefits</h3><p>{formatText(selectedTemplate.benefits)}</p></div>
-                {!selectedTemplateIsCustom ? (
-                  <p style={{ margin: "18px 0 0", color: homeTheme.muted, fontWeight: 800 }}>
-                    Default templates are visible to all employer accounts and cannot be edited directly.
-                  </p>
-                ) : null}
               </div>
             ) : (
-              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Select a template to view details, or create your first custom template.</p>
+              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>{templates.length === 0 ? "No job templates yet." : "Select a template to view details, or create a custom template."}</p>
             )}
           </section>
         </div>
@@ -583,9 +532,6 @@ export default function JobTemplatesPage() {
           font-weight: 900;
           text-transform: uppercase;
           letter-spacing: .3px;
-        }
-        .rn-template-badge[data-kind="custom"] {
-          background: #1f5f52;
         }
         @media (max-width: 900px) {
           .rn-template-filter-grid,

@@ -30,7 +30,6 @@ type EmployerStore = {
 };
 type JobTemplate = {
   id: string;
-  employer_account_id: string | null;
   template_name: string;
   job_title: string;
   role_category: string | null;
@@ -907,11 +906,15 @@ export default function PostJobPage() {
                   <option value="">No template selected</option>
                   {jobTemplates.map((template) => (
                     <option key={template.id} value={template.id}>
-                      {template.employer_account_id ? `Custom: ${template.template_name}` : `Default: ${template.template_name}`}
+                      {template.template_name}
                     </option>
                   ))}
                 </select>
-                <div style={helperStyle}>Selecting a template fills the job title, category, schedule, description, and benefits. All fields remain editable.</div>
+                <div style={helperStyle}>
+                  {jobTemplates.length > 0
+                    ? "Selecting a template fills the job title, category, schedule, description, and benefits. All fields remain editable."
+                    : "No templates available."}
+                </div>
               </div>
             </div>
           </section>
@@ -948,7 +951,7 @@ export default function PostJobPage() {
                   value={companyName}
                   onChange={(e) => setCompanyName(e.target.value)}
                   style={inputStyle}
-                  placeholder="MISSION BBQ"
+                  placeholder="Example Restaurant Group"
                 />
               </div>
 
