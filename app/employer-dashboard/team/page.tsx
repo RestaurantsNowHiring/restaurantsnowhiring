@@ -57,6 +57,7 @@ type TeamMember = {
   can_manage_notification_routing: boolean;
   created_at: string;
   updated_at: string;
+  employer_store_id?: string | null;
 };
 
 const ROLE_LABELS: Record<EmployerRole, string> = {
@@ -121,8 +122,8 @@ export default function TeamAccessPage() {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<EmployerRole>("viewer");
   const [canRouteNotifications, setCanRouteNotifications] = useState(false);
-  const [detailsMemberId, setDetailsMemberId] = useState<string | null>(null);
-  const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
+  const [detailsSelection, setDetailsSelection] = useState<{ member: TeamMember; store: EmployerStore | null } | null>(null);
+  const [editingSelection, setEditingSelection] = useState<{ member: TeamMember; store: EmployerStore | null } | null>(null);
   const [editForm, setEditForm] = useState<TeamEditForm | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [message, setMessage] = useState<string | null>(null);
@@ -240,20 +241,29 @@ export default function TeamAccessPage() {
       setMessage(payload?.error || "Could not remove team user.");
       return;
     }
-    setDetailsMemberId(null);
+    setDetailsSelection(null);
     closeEditModal();
     await loadTeam();
   }
 
-  const normalizeLocation = useCallback((value: string | null | undefined) => {
-    return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+  const normalizeEmail = useCallback((value: string | null | undefined) => {
+    return value?.trim().toLowerCase() ?? "";
   }, []);
 
+  const getStoreRoutingEmailKeys = useCallback((store: EmployerStore) => {
+    return new Set([store.store_email, store.ta_email, store.gm_op_email].map(normalizeEmail).filter(Boolean));
+  }, [normalizeEmail]);
+
   const findStoreForMember = useCallback((member: TeamMember) => {
-    const locationKey = normalizeLocation(member.location_name);
-    if (!locationKey) return null;
-    return stores.find((store) => normalizeLocation(store.location_name) === locationKey) ?? null;
-  }, [normalizeLocation, stores]);
+    const linkedStoreId = typeof member.employer_store_id === "string" ? member.employer_store_id.trim() : "";
+    if (linkedStoreId) return stores.find((store) => store.id === linkedStoreId) ?? null;
+
+    const memberEmail = normalizeEmail(member.email);
+    if (!memberEmail) return null;
+
+    const emailMatches = stores.filter((store) => getStoreRoutingEmailKeys(store).has(memberEmail));
+    return emailMatches.length === 1 ? emailMatches[0] : null;
+  }, [getStoreRoutingEmailKeys, normalizeEmail, stores]);
 
   const getMemberStateDisplay = useCallback((member: TeamMember) => {
     return findStoreForMember(member)?.state?.toUpperCase() || getMemberState(member) || "";
@@ -269,7 +279,7 @@ export default function TeamAccessPage() {
       location = `${location} - ${city}`;
     }
 
-    if (state && !new RegExp(`(?:,|\s)${state}$`, "i").test(location)) {
+    if (state && !new RegExp(`(?:,|\\s)${state}$`, "i").test(location)) {
       location = `${location}, ${state}`;
     }
 
@@ -293,14 +303,24 @@ export default function TeamAccessPage() {
     };
   }
 
+  function openDetailsModal(member: TeamMember) {
+    setDetailsSelection({ member: { ...member }, store: findStoreForMember(member) });
+    setMessage(null);
+  }
+
+  function closeDetailsModal() {
+    setDetailsSelection(null);
+  }
+
   function openEditModal(member: TeamMember) {
-    setEditingMemberId(member.id);
-    setEditForm(buildEditForm(member));
+    const store = findStoreForMember(member);
+    setEditingSelection({ member: { ...member }, store });
+    setEditForm(buildEditForm(member, store));
     setMessage(null);
   }
 
   function closeEditModal() {
-    setEditingMemberId(null);
+    setEditingSelection(null);
     setEditForm(null);
   }
 
@@ -310,8 +330,9 @@ export default function TeamAccessPage() {
 
   async function saveEditModal(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const member = members.find((candidate) => candidate.id === editingMemberId);
-    if (!member || !editForm) return;
+    const selection = editingSelection;
+    const member = selection?.member;
+    if (!selection || !member || !editForm) return;
 
     const token = await getAccessToken();
     if (!token) {
@@ -341,7 +362,7 @@ export default function TeamAccessPage() {
       return;
     }
 
-    const store = findStoreForMember(member);
+    const store = selection.store;
     const previousLocationName = member.location_name;
     const hasStoreDetails = Boolean(
       locationName ||
@@ -443,9 +464,9 @@ export default function TeamAccessPage() {
   const totalPages = Math.max(1, Math.ceil(filteredMembers.length / rowsPerPage));
   const safeCurrentPage = Math.min(currentPage, totalPages);
   const paginatedMembers = filteredMembers.slice((safeCurrentPage - 1) * rowsPerPage, safeCurrentPage * rowsPerPage);
-  const detailsMember = detailsMemberId ? members.find((member) => member.id === detailsMemberId) ?? null : null;
-  const detailsStore = detailsMember ? findStoreForMember(detailsMember) : null;
-  const editingMember = editingMemberId ? members.find((member) => member.id === editingMemberId) ?? null : null;
+  const detailsMember = detailsSelection?.member ?? null;
+  const detailsStore = detailsSelection?.store ?? null;
+  const editingMember = editingSelection?.member ?? null;
 
   if (authStatus === "loading") {
     return <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading team access…</main>;
@@ -610,7 +631,7 @@ export default function TeamAccessPage() {
                       <span className={member.can_manage_notification_routing ? "rn-team-routing-pill rn-team-routing-pill--enabled" : "rn-team-routing-pill"}>{member.can_manage_notification_routing ? "Routing enabled" : "Routing disabled"}</span>
                     </div>
                     <div className="rn-team-access-card__actions">
-                      <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setDetailsMemberId(member.id)} disabled={busy}>Details</button>
+                      <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => openDetailsModal(member)} disabled={busy}>Details</button>
                       <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => openEditModal(member)} disabled={busy}>Edit</button>
                     </div>
                   </article>
@@ -631,14 +652,14 @@ export default function TeamAccessPage() {
         )}
 
         {detailsMember ? (
-          <div className="rn-team-modal-backdrop" role="presentation" onClick={() => setDetailsMemberId(null)}>
-            <section className="rn-team-modal" role="dialog" aria-modal="true" aria-labelledby="team-details-title" onClick={(event) => event.stopPropagation()}>
+          <div className="rn-team-modal-backdrop" role="presentation" onClick={closeDetailsModal}>
+            <section key={detailsMember.id} className="rn-team-modal" role="dialog" aria-modal="true" aria-labelledby="team-details-title" onClick={(event) => event.stopPropagation()}>
               <div className="rn-team-modal__header">
                 <div>
                   <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>Team access details</p>
                   <h2 id="team-details-title" style={{ margin: "6px 0 0", fontFamily: "var(--font-heading)", color: homeTheme.text }}>{getTeamMemberDisplayName(detailsMember)}</h2>
                 </div>
-                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setDetailsMemberId(null)}>Close</button>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeDetailsModal}>Close</button>
               </div>
               <div className="rn-team-detail-grid">
                 {[
@@ -672,7 +693,7 @@ export default function TeamAccessPage() {
 
         {editingMember && editForm ? (
           <div className="rn-team-modal-backdrop" role="presentation" onClick={closeEditModal}>
-            <section className="rn-team-modal rn-team-modal--wide" role="dialog" aria-modal="true" aria-labelledby="team-edit-title" onClick={(event) => event.stopPropagation()}>
+            <section key={editingMember.id} className="rn-team-modal rn-team-modal--wide" role="dialog" aria-modal="true" aria-labelledby="team-edit-title" onClick={(event) => event.stopPropagation()}>
               <div className="rn-team-modal__header">
                 <div>
                   <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>Edit team access</p>
