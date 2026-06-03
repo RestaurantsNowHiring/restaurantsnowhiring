@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../../styles/homepageDesignSystem";
@@ -95,6 +95,12 @@ function formatText(value: string | null) {
   return value?.trim() || "—";
 }
 
+function resizeTextarea(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) return;
+  textarea.style.height = "auto";
+  textarea.style.height = `${textarea.scrollHeight}px`;
+}
+
 export default function JobTemplatesPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -108,6 +114,38 @@ export default function JobTemplatesPage() {
   const [form, setForm] = useState<TemplateForm>(EMPTY_TEMPLATE_FORM);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const descriptionTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const benefitsTextareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const formLabelStyle = useMemo(() => ({
+    display: "block",
+    color: homeTheme.text,
+    fontFamily: "var(--font-body)",
+    fontSize: 13,
+    fontWeight: 900,
+  }), []);
+
+  const descriptionTextareaStyle = useMemo(() => ({
+    ...homeInputStyle,
+    height: "auto",
+    lineHeight: 1.5,
+    marginTop: 6,
+    minHeight: 220,
+    padding: "14px 16px",
+    overflow: "hidden",
+    resize: "vertical" as const,
+  }), []);
+
+  const benefitsTextareaStyle = useMemo(() => ({
+    ...homeInputStyle,
+    height: "auto",
+    lineHeight: 1.5,
+    marginTop: 6,
+    minHeight: 120,
+    padding: "14px 16px",
+    overflow: "hidden",
+    resize: "vertical" as const,
+  }), []);
 
   const getAccessToken = useCallback(async () => {
     const { data } = await supabase.auth.getSession();
@@ -147,6 +185,12 @@ export default function JobTemplatesPage() {
   useEffect(() => {
     void Promise.resolve().then(loadTemplates);
   }, [loadTemplates]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    resizeTextarea(descriptionTextareaRef.current);
+    resizeTextarea(benefitsTextareaRef.current);
+  }, [form.benefits, form.job_description, isEditing]);
 
   const canManageTemplates = Boolean(access?.canManageJobs);
 
@@ -193,6 +237,16 @@ export default function JobTemplatesPage() {
 
   function updateForm<K extends keyof TemplateForm>(key: K, value: TemplateForm[K]) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateDescription(event: ChangeEvent<HTMLTextAreaElement>) {
+    updateForm("job_description", event.target.value);
+    resizeTextarea(event.currentTarget);
+  }
+
+  function updateBenefits(event: ChangeEvent<HTMLTextAreaElement>) {
+    updateForm("benefits", event.target.value);
+    resizeTextarea(event.currentTarget);
   }
 
   async function saveTemplate(event: FormEvent<HTMLFormElement>) {
@@ -386,15 +440,15 @@ export default function JobTemplatesPage() {
               <form onSubmit={saveTemplate} style={{ display: "grid", gap: 12 }}>
                 <h2 style={{ margin: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>{selectedTemplate ? "Edit custom template" : "Create custom template"}</h2>
                 <div className="rn-template-form-grid">
-                  <label style={{ fontWeight: 900 }}>Template name<input required value={form.template_name} onChange={(event) => updateForm("template_name", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Job title<input required value={form.job_title} onChange={(event) => updateForm("job_title", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Role category<select value={form.role_category ?? ""} onChange={(event) => updateForm("role_category", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
-                  <label style={{ fontWeight: 900 }}>Employment type<select value={form.employment_type ?? ""} onChange={(event) => updateForm("employment_type", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{EMPLOYMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
-                  <label style={{ fontWeight: 900 }}>Schedule<input value={form.schedule ?? ""} onChange={(event) => updateForm("schedule", event.target.value)} placeholder="Flexible schedule, weekends" style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Pay defaults<input value={form.pay_defaults ?? ""} onChange={(event) => updateForm("pay_defaults", event.target.value)} placeholder="$14 - $18/hour" style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={formLabelStyle}>Template name<input required value={form.template_name} onChange={(event) => updateForm("template_name", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={formLabelStyle}>Job title<input required value={form.job_title} onChange={(event) => updateForm("job_title", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={formLabelStyle}>Role category<select value={form.role_category ?? ""} onChange={(event) => updateForm("role_category", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
+                  <label style={formLabelStyle}>Employment type<select value={form.employment_type ?? ""} onChange={(event) => updateForm("employment_type", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{EMPLOYMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
+                  <label style={formLabelStyle}>Schedule<input value={form.schedule ?? ""} onChange={(event) => updateForm("schedule", event.target.value)} placeholder="Flexible schedule, weekends" style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={formLabelStyle}>Pay defaults<input value={form.pay_defaults ?? ""} onChange={(event) => updateForm("pay_defaults", event.target.value)} placeholder="$14 - $18/hour" style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                 </div>
-                <label style={{ fontWeight: 900 }}>Job description<textarea value={form.job_description ?? ""} onChange={(event) => updateForm("job_description", event.target.value)} rows={8} style={{ ...homeInputStyle, marginTop: 6, resize: "vertical" }} /></label>
-                <label style={{ fontWeight: 900 }}>Benefits<textarea value={form.benefits ?? ""} onChange={(event) => updateForm("benefits", event.target.value)} rows={4} placeholder="401(k), Flexible schedule, Free meals" style={{ ...homeInputStyle, marginTop: 6, resize: "vertical" }} /></label>
+                <label style={formLabelStyle}>Job description<textarea ref={descriptionTextareaRef} value={form.job_description ?? ""} onChange={updateDescription} rows={8} style={descriptionTextareaStyle} /></label>
+                <label style={formLabelStyle}>Benefits<textarea ref={benefitsTextareaRef} value={form.benefits ?? ""} onChange={updateBenefits} rows={4} placeholder="401(k), Flexible schedule, Free meals" style={benefitsTextareaStyle} /></label>
                 <label style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 900, color: homeTheme.text }}>
                   <input type="checkbox" checked={form.active} onChange={(event) => updateForm("active", event.target.checked)} />
                   Active template
