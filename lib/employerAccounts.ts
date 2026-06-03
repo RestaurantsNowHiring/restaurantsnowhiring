@@ -116,45 +116,65 @@ export function getRolePermissions(role: EmployerRole) {
   return ROLE_PERMISSIONS[role];
 }
 
-async function activateInvitedEmployerTeamMemberships(user: { id: string; email: string }) {
+export async function acceptPendingTeamInvitesForAuthUser(user: { id: string; email: string }) {
   const supabaseAdmin = getSupabaseAdminClient();
   if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
+  const admin = supabaseAdmin;
 
   const lowerEmail = user.email.trim().toLowerCase();
+  if (!lowerEmail) return false;
+
   const now = new Date().toISOString();
 
-  const { data: invitedRows, error: invitedRowsError } = await supabaseAdmin
+  const { data: invitedRows, error: invitedRowsError } = await admin
     .from("employer_team_members")
-    .select("account_id,email,status,user_id")
-    .ilike("email", lowerEmail);
+    .select("id,email,status")
+    .in("status", ["invited", "pending"]);
 
   if (invitedRowsError) {
     if (invitedRowsError.code === "42P01" || invitedRowsError.code === "42703") return false;
     throw new Error(invitedRowsError.message || "Could not check invited employer team access.");
   }
 
-  const accountIds = (invitedRows ?? [])
-    .filter((row) => ["invited", "pending", "accepted"].includes(normalizeStatus(row.status)))
-    .map((row) => cleanString(row.account_id, 80))
-    .filter((accountId): accountId is string => Boolean(accountId));
+  const inviteIds = (invitedRows ?? [])
+    .filter((row) => cleanString(row.email, 254)?.toLowerCase() === lowerEmail)
+    .map((row) => cleanString(row.id, 80))
+    .filter((id): id is string => Boolean(id));
 
-  if (accountIds.length === 0) return false;
+  if (inviteIds.length === 0) return false;
 
-  const { error: activateError } = await supabaseAdmin
-    .from("employer_team_members")
-    .update({
+  async function runUpdate(payload: Record<string, string>) {
+    return admin
+      .from("employer_team_members")
+      .update(payload)
+      .in("id", inviteIds)
+      .in("status", ["invited", "pending"]);
+  }
+
+  let { error: activateError } = await runUpdate({
+    user_id: user.id,
+    auth_user_id: user.id,
+    status: "active",
+    invite_accepted_at: now,
+    updated_at: now,
+  });
+
+  if (activateError?.code === "PGRST204" || activateError?.code === "42703" || (activateError?.message ?? "").toLowerCase().includes("auth_user_id")) {
+    ({ error: activateError } = await runUpdate({
       user_id: user.id,
       status: "active",
       invite_accepted_at: now,
       updated_at: now,
-    })
-    .ilike("email", lowerEmail)
-    .in("account_id", accountIds)
-    .in("status", ["invited", "pending", "accepted"]);
+    }));
+  }
 
   if (activateError) throw new Error(activateError.message || "Could not activate invited employer team access.");
 
   return true;
+}
+
+async function activateInvitedEmployerTeamMemberships(user: { id: string; email: string }) {
+  return acceptPendingTeamInvitesForAuthUser(user);
 }
 
 async function provisionNewEmployerAccount(user: { id: string; email: string }) {
@@ -198,13 +218,14 @@ async function provisionNewEmployerAccount(user: { id: string; email: string }) 
       {
         account_id: accountId,
         user_id: user.id,
+        auth_user_id: user.id,
         email: user.email.toLowerCase(),
         role: "account_owner",
         status: "active",
         can_manage_notification_routing: true,
         updated_at: now,
       },
-      { onConflict: "account_id,email" },
+      { onConflict: "account_id,lower(btrim(email))" },
     );
 
   if (memberError) throw new Error(memberError.message || "Could not create employer account owner access.");
@@ -314,11 +335,8 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
     return Array.from(membershipRowsByAccountId.values());
   }
 
+  await activateInvitedEmployerTeamMemberships(user);
   let memberships = await loadMemberships();
-  const wasInvitedTeamMember = await activateInvitedEmployerTeamMemberships(user);
-  if (wasInvitedTeamMember) {
-    memberships = await loadMemberships();
-  }
 
   if (memberships.length === 0) {
     await provisionNewEmployerAccount(user);

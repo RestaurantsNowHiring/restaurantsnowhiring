@@ -85,7 +85,7 @@ export async function GET(request: Request) {
       .from("employer_team_members")
       .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .eq("account_id", context.accountId)
-      .in("status", ["active", "invited"])
+      .in("status", ["active", "invited", "pending"])
       .order("created_at", { ascending: true });
 
     if (error) throw new Error(error.message || "Could not load team users.");
@@ -115,29 +115,40 @@ export async function POST(request: Request) {
 
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
+    const admin = supabaseAdmin;
 
-    const { data: users } = await supabaseAdmin.auth.admin.listUsers();
+    const { data: users } = await admin.auth.admin.listUsers();
     const matchedUser = users.users.find((candidate) => candidate.email?.toLowerCase() === email);
 
-    const { data, error } = await supabaseAdmin
-      .from("employer_team_members")
-      .upsert(
-        {
-          account_id: context.accountId,
-          email,
-          user_id: matchedUser?.id ?? null,
-          role,
-          status: matchedUser ? "active" : "invited",
-          invite_token: randomUUID(),
-          invite_accepted_at: matchedUser ? new Date().toISOString() : null,
-          can_manage_notification_routing: Boolean(payload?.can_manage_notification_routing),
-          invited_by_user_id: user.id,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: "account_id,email" },
-      )
-      .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
-      .single();
+    const now = new Date().toISOString();
+    const upsertPayload = {
+      account_id: context.accountId,
+      email,
+      user_id: matchedUser?.id ?? null,
+      auth_user_id: matchedUser?.id ?? null,
+      role,
+      status: matchedUser ? "active" : "invited",
+      invite_token: randomUUID(),
+      invite_accepted_at: matchedUser ? now : null,
+      can_manage_notification_routing: Boolean(payload?.can_manage_notification_routing),
+      invited_by_user_id: user.id,
+      updated_at: now,
+    };
+
+    async function upsertTeamMember(payloadToSave: Record<string, unknown>) {
+      return admin
+        .from("employer_team_members")
+        .upsert(payloadToSave, { onConflict: "account_id,lower(btrim(email))" })
+        .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+        .single();
+    }
+
+    let { data, error } = await upsertTeamMember(upsertPayload);
+    if (error?.code === "PGRST204" || error?.code === "42703" || (error?.message ?? "").toLowerCase().includes("auth_user_id")) {
+      const fallbackPayload = { ...upsertPayload } as Record<string, unknown>;
+      delete fallbackPayload.auth_user_id;
+      ({ data, error } = await upsertTeamMember(fallbackPayload));
+    }
 
     if (error) throw new Error(error.message || "Could not save team user.");
 
