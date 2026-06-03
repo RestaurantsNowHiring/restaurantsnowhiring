@@ -227,22 +227,35 @@ export default function TeamAccessPage() {
   }
 
   async function removeMember(member: TeamMember) {
+    const confirmed = window.confirm(`Remove team access for ${member.email}? They will no longer be able to access this employer account.`);
+    if (!confirmed) return;
+
     const token = await getAccessToken();
-    if (!token) return;
+    if (!token) {
+      setMessage("Please sign in again before removing team access.");
+      return;
+    }
+
     setBusy(true);
     setMessage(null);
+
     const response = await fetch(`/api/employer/team?id=${encodeURIComponent(member.id)}`, {
       method: "DELETE",
       headers: { Authorization: `Bearer ${token}` },
     });
     const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-    setBusy(false);
+
     if (!response.ok) {
-      setMessage(payload?.error || "Could not remove team user.");
+      setBusy(false);
+      setMessage(payload?.error || "Could not remove team user. Please try again.");
       return;
     }
+
+    setMembers((current) => current.filter((teamMember) => teamMember.id !== member.id));
     setDetailsSelection(null);
     closeEditModal();
+    setBusy(false);
+    setMessage(`Team access removed for ${member.email}.`);
     await loadTeam();
   }
 
@@ -425,7 +438,7 @@ export default function TeamAccessPage() {
   }
 
   const canManage = Boolean(access?.canManageTeam);
-  const isSuccessMessage = Boolean(message && !message.startsWith("Warning:") && (message.includes("saved") || message.includes("sent") || message.includes("resent")));
+  const isSuccessMessage = Boolean(message && !message.startsWith("Warning:") && (message.includes("saved") || message.includes("sent") || message.includes("resent") || message.includes("removed")));
 
   const uniqueStates = useMemo(() => Array.from(new Set(members.map(getMemberStateDisplay).filter(Boolean))).sort(), [getMemberStateDisplay, members]);
   const uniqueLocations = useMemo(() => Array.from(new Set(members.map((member) => member.location_name?.trim()).filter((location): location is string => Boolean(location)))).sort(), [members]);
