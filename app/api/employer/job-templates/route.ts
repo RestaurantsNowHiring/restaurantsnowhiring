@@ -5,7 +5,6 @@ import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
 
 type TemplatePayload = {
   id?: string;
-  source_template_id?: string;
   template_name?: string;
   job_title?: string;
   role_category?: string | null;
@@ -68,16 +67,13 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("employer_job_templates")
       .select(TEMPLATE_SELECT_FIELDS)
-      .order("is_default", { ascending: false })
       .order("template_name", { ascending: true });
 
     if (!includeInactive) query = query.eq("active", true);
 
-    if (context.accountId) {
-      query = query.or(`employer_account_id.is.null,employer_account_id.eq.${context.accountId}`);
-    } else {
-      query = query.is("employer_account_id", null);
-    }
+    if (!context.accountId) return NextResponse.json({ templates: [] });
+
+    query = query.eq("employer_account_id", context.accountId);
 
     const { data, error } = await query;
     if (error) throw new Error(error.message || "Could not load job templates.");
@@ -101,42 +97,6 @@ export async function POST(request: Request) {
     const payload = (await request.json().catch(() => null)) as TemplatePayload | null;
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
-
-    if (payload?.source_template_id) {
-      const sourceTemplateId = cleanText(payload.source_template_id, 80);
-      if (!sourceTemplateId) return NextResponse.json({ error: "Source template id is required." }, { status: 400 });
-
-      const { data: sourceTemplate, error: sourceError } = await supabaseAdmin
-        .from("employer_job_templates")
-        .select(TEMPLATE_SELECT_FIELDS)
-        .eq("id", sourceTemplateId)
-        .is("employer_account_id", null)
-        .single();
-
-      if (sourceError || !sourceTemplate) return NextResponse.json({ error: "Default template not found." }, { status: 404 });
-
-      const { data, error } = await supabaseAdmin
-        .from("employer_job_templates")
-        .insert({
-          employer_account_id: context.accountId,
-          template_name: cleanText(payload.template_name, 180) ?? `${sourceTemplate.template_name} Copy`,
-          job_title: sourceTemplate.job_title,
-          role_category: sourceTemplate.role_category,
-          employment_type: sourceTemplate.employment_type,
-          schedule: sourceTemplate.schedule,
-          pay_defaults: sourceTemplate.pay_defaults,
-          job_description: sourceTemplate.job_description,
-          benefits: sourceTemplate.benefits,
-          active: true,
-          is_default: false,
-          updated_at: new Date().toISOString(),
-        })
-        .select(TEMPLATE_SELECT_FIELDS)
-        .single();
-
-      if (error) throw new Error(error.message || "Could not duplicate template.");
-      return NextResponse.json({ template: data });
-    }
 
     const built = buildTemplateRow(payload ?? {}, context.accountId);
     if ("error" in built) return NextResponse.json({ error: built.error }, { status: 400 });

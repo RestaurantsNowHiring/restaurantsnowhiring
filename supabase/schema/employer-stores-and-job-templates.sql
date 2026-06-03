@@ -115,11 +115,12 @@ to authenticated
 using (public.can_manage_employer_account(employer_account_id));
 
 drop policy if exists "Employer members can view account and default templates" on public.employer_job_templates;
-create policy "Employer members can view account and default templates"
+drop policy if exists "Employer members can view account templates" on public.employer_job_templates;
+create policy "Employer members can view account templates"
 on public.employer_job_templates
 for select
 to authenticated
-using (employer_account_id is null or public.is_employer_account_member(employer_account_id));
+using (employer_account_id is not null and public.is_employer_account_member(employer_account_id));
 
 drop policy if exists "Account owners can add templates" on public.employer_job_templates;
 create policy "Account owners can add templates"
@@ -143,49 +144,6 @@ for delete
 to authenticated
 using (employer_account_id is not null and public.can_manage_employer_account(employer_account_id));
 
-insert into public.employer_job_templates (
-  employer_account_id,
-  template_name,
-  job_title,
-  role_category,
-  employment_type,
-  schedule,
-  pay_defaults,
-  job_description,
-  benefits,
-  active,
-  is_default
-)
-select
-  null,
-  'Great Service Representative / Cashier',
-  'Cashier – Great Service Representative',
-  'Cashier',
-  'Part time',
-  'Flexible schedule',
-  null,
-  'MISSION BBQ is a Team of Great People, preparing Great Food and providing Great Service. We are a casual, family friendly BBQ Restaurant and Proudly Serve Those Who SERVE.
-
-We are looking for Great People to join our team. We want You! If you have a strong character, sincerely care and are:
-- Friendly and Outgoing
-- Hardworking and Dedicated
-- Customer First – Customer Focused
-
-We are currently hiring Cashiers. They are the first Customer contact point, our Great Service Representative, “The Director of First Impressions”.
-
-Cashier – Great Service Representative responsibilities include:
-- Warmly Greet Our Customers when they enter the restaurant and when they approach the register to order.
-- Genuinely Engage with Our Customers throughout the ordering process.
-- Sincerely Thank Our Customers for dining with us.
-
-Ready to be part of Our Team? One Team. One MISSION? Start the Application Process now.',
-  '401(k), Flexible schedule, Employee discount, Free meals, Paid training, Career growth, Other',
-  true,
-  true
-where not exists (
-  select 1
-  from public.employer_job_templates existing
-  where existing.employer_account_id is null
-    and existing.is_default = true
-    and existing.template_name = 'Great Service Representative / Cashier'
-);
+delete from public.employer_job_templates
+where employer_account_id is null
+  and template_name = 'Great Service Representative / Cashier';
