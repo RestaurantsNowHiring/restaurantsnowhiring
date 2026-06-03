@@ -1,7 +1,57 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
-import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
+import { assertEmployerPermission, getEmployerAccountContext } from "../../../../lib/employerAccounts";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
+
+type TemplatePayload = {
+  id?: string;
+  source_template_id?: string;
+  template_name?: string;
+  job_title?: string;
+  role_category?: string | null;
+  employment_type?: string | null;
+  schedule?: string | null;
+  pay_defaults?: string | null;
+  job_description?: string | null;
+  benefits?: string | null;
+  active?: boolean;
+};
+
+const TEMPLATE_SELECT_FIELDS = "id,employer_account_id,template_name,job_title,role_category,employment_type,schedule,pay_defaults,job_description,benefits,active,is_default,created_at,updated_at";
+
+function cleanText(value: unknown, maxLength: number) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed ? trimmed.slice(0, maxLength) : null;
+}
+
+function buildTemplateRow(payload: TemplatePayload, employerAccountId: string) {
+  const templateName = cleanText(payload.template_name, 180);
+  const jobTitle = cleanText(payload.job_title, 180);
+  if (!templateName) return { error: "Template name is required." as const };
+  if (!jobTitle) return { error: "Job title is required." as const };
+
+  return {
+    row: {
+      employer_account_id: employerAccountId,
+      template_name: templateName,
+      job_title: jobTitle,
+      role_category: cleanText(payload.role_category, 120),
+      employment_type: cleanText(payload.employment_type, 120),
+      schedule: cleanText(payload.schedule, 500),
+      pay_defaults: cleanText(payload.pay_defaults, 180),
+      job_description: cleanText(payload.job_description, 8000),
+      benefits: cleanText(payload.benefits, 1200),
+      active: payload.active !== false,
+      is_default: false,
+      updated_at: new Date().toISOString(),
+    },
+  };
+}
+
+function permissionStatus(error: unknown) {
+  return error instanceof Error && error.name === "EmployerPermissionError" ? 403 : 500;
+}
 
 export async function GET(request: Request) {
   try {
@@ -12,12 +62,16 @@ export async function GET(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
+    const { searchParams } = new URL(request.url);
+    const includeInactive = searchParams.get("includeInactive") === "true";
+
     let query = supabaseAdmin
       .from("employer_job_templates")
-      .select("id,employer_account_id,template_name,job_title,role_category,employment_type,schedule,pay_defaults,job_description,benefits,active,is_default,created_at,updated_at")
-      .eq("active", true)
+      .select(TEMPLATE_SELECT_FIELDS)
       .order("is_default", { ascending: false })
       .order("template_name", { ascending: true });
+
+    if (!includeInactive) query = query.eq("active", true);
 
     if (context.accountId) {
       query = query.or(`employer_account_id.is.null,employer_account_id.eq.${context.accountId}`);
@@ -32,5 +86,106 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error("Employer job template load failed", { error });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not load job templates." }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const user = await getAuthUserFromRequest(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+    const context = await getEmployerAccountContext(user);
+    if (!context.accountId) return NextResponse.json({ error: "Employer account not found." }, { status: 400 });
+    assertEmployerPermission(context, "canManageJobs");
+
+    const payload = (await request.json().catch(() => null)) as TemplatePayload | null;
+    const supabaseAdmin = getSupabaseAdminClient();
+    if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
+
+    if (payload?.source_template_id) {
+      const sourceTemplateId = cleanText(payload.source_template_id, 80);
+      if (!sourceTemplateId) return NextResponse.json({ error: "Source template id is required." }, { status: 400 });
+
+      const { data: sourceTemplate, error: sourceError } = await supabaseAdmin
+        .from("employer_job_templates")
+        .select(TEMPLATE_SELECT_FIELDS)
+        .eq("id", sourceTemplateId)
+        .is("employer_account_id", null)
+        .single();
+
+      if (sourceError || !sourceTemplate) return NextResponse.json({ error: "Default template not found." }, { status: 404 });
+
+      const { data, error } = await supabaseAdmin
+        .from("employer_job_templates")
+        .insert({
+          employer_account_id: context.accountId,
+          template_name: cleanText(payload.template_name, 180) ?? `${sourceTemplate.template_name} Copy`,
+          job_title: sourceTemplate.job_title,
+          role_category: sourceTemplate.role_category,
+          employment_type: sourceTemplate.employment_type,
+          schedule: sourceTemplate.schedule,
+          pay_defaults: sourceTemplate.pay_defaults,
+          job_description: sourceTemplate.job_description,
+          benefits: sourceTemplate.benefits,
+          active: true,
+          is_default: false,
+          updated_at: new Date().toISOString(),
+        })
+        .select(TEMPLATE_SELECT_FIELDS)
+        .single();
+
+      if (error) throw new Error(error.message || "Could not duplicate template.");
+      return NextResponse.json({ template: data });
+    }
+
+    const built = buildTemplateRow(payload ?? {}, context.accountId);
+    if ("error" in built) return NextResponse.json({ error: built.error }, { status: 400 });
+
+    const { data, error } = await supabaseAdmin
+      .from("employer_job_templates")
+      .insert(built.row)
+      .select(TEMPLATE_SELECT_FIELDS)
+      .single();
+
+    if (error) throw new Error(error.message || "Could not save job template.");
+    return NextResponse.json({ template: data });
+  } catch (error) {
+    console.error("Employer job template create failed", { error });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not save job template." }, { status: permissionStatus(error) });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await getAuthUserFromRequest(request);
+    if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+
+    const context = await getEmployerAccountContext(user);
+    if (!context.accountId) return NextResponse.json({ error: "Employer account not found." }, { status: 400 });
+    assertEmployerPermission(context, "canManageJobs");
+
+    const payload = (await request.json().catch(() => null)) as TemplatePayload | null;
+    const templateId = cleanText(payload?.id, 80);
+    if (!templateId) return NextResponse.json({ error: "Template id is required." }, { status: 400 });
+
+    const built = buildTemplateRow(payload ?? {}, context.accountId);
+    if ("error" in built) return NextResponse.json({ error: built.error }, { status: 400 });
+
+    const supabaseAdmin = getSupabaseAdminClient();
+    if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
+
+    const { data, error } = await supabaseAdmin
+      .from("employer_job_templates")
+      .update(built.row)
+      .eq("id", templateId)
+      .eq("employer_account_id", context.accountId)
+      .select(TEMPLATE_SELECT_FIELDS)
+      .single();
+
+    if (error) throw new Error(error.message || "Could not update job template.");
+    return NextResponse.json({ template: data });
+  } catch (error) {
+    console.error("Employer job template update failed", { error });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update job template." }, { status: permissionStatus(error) });
   }
 }

@@ -1168,6 +1168,9 @@ export default function EmployerDashboardPage() {
               <Link href="/employer-dashboard/stores" style={homeSecondaryButton} className="rn-btn-secondary">
                 Store Directory
               </Link>
+              <Link href="/employer-dashboard/job-templates" style={homeSecondaryButton} className="rn-btn-secondary">
+                Job Templates
+              </Link>
               {canManageTeam ? (
                 <Link href="/employer-dashboard/team" style={homeSecondaryButton} className="rn-btn-secondary">
                   Team Access
