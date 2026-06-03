@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
-import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
+import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 
 type EmployerProfileRow = {
   user_id: string;
@@ -146,7 +146,7 @@ export async function GET(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     const profileUserId = context.ownerUserId;
     const profileEmail = context.ownerEmail;
 
@@ -169,7 +169,7 @@ export async function PUT(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!context.canManageProfile) {
       return NextResponse.json({ error: "Only Account Owners can edit the company profile. Contact your account admin to make changes." }, { status: 403 });
     }

@@ -20,7 +20,7 @@ import { canUserAccessJob } from "../../lib/employerJobAccess";
 
 type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string };
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
-type EmployerAccountMembership = { accountId: string; accountName: string; locationName: string | null; role: EmployerRole };
+type EmployerAccountMembership = { accountId: string; accountName: string; locationName: string | null; role: EmployerRole; status?: string; invitationPending?: boolean };
 type EmployerAccess = { role: EmployerRole; accountId: string | null; accountName: string | null; restaurantBrandName: string | null; locationName: string | null; memberships: EmployerAccountMembership[]; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
 type OwnershipMatch = "employer_user_id" | "employer_email";
 
@@ -335,6 +335,10 @@ export default function EmployerDashboardPage() {
   const [owner, setOwner] = useState<EmployerOwner | null>(null);
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
   const [employerAccess, setEmployerAccess] = useState<EmployerAccess | null>(null);
+  const [selectedEmployerAccountId, setSelectedEmployerAccountId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    return window.localStorage.getItem("rn-selected-employer-account-id");
+  });
   const [billingBusyAction, setBillingBusyAction] = useState<"checkout" | "portal" | null>(null);
   const [billingError, setBillingError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -380,28 +384,26 @@ export default function EmployerDashboardPage() {
       let selectedVariant: JobsQueryVariant | null = null;
 
       for (const variant of JOB_QUERY_VARIANTS) {
-        const queries = [
-          supabase
-            .from("jobs")
-            .select(variant.fields)
-            .eq("employer_user_id", currentOwner.ownerUserId ?? currentOwner.userId)
-            .order("created_at", { ascending: false }),
-          supabase
-            .from("jobs")
-            .select(variant.fields)
-            .eq("employer_email", currentOwner.ownerEmail ?? currentOwner.email)
-            .order("created_at", { ascending: false }),
-        ];
-
-        if (currentOwner.accountId) {
-          queries.unshift(
-            supabase
-              .from("jobs")
-              .select(variant.fields)
-              .eq("employer_account_id", currentOwner.accountId)
-              .order("created_at", { ascending: false }),
-          );
-        }
+        const queries = currentOwner.accountId
+          ? [
+              supabase
+                .from("jobs")
+                .select(variant.fields)
+                .eq("employer_account_id", currentOwner.accountId)
+                .order("created_at", { ascending: false }),
+            ]
+          : [
+              supabase
+                .from("jobs")
+                .select(variant.fields)
+                .eq("employer_user_id", currentOwner.ownerUserId ?? currentOwner.userId)
+                .order("created_at", { ascending: false }),
+              supabase
+                .from("jobs")
+                .select(variant.fields)
+                .eq("employer_email", currentOwner.ownerEmail ?? currentOwner.email)
+                .order("created_at", { ascending: false }),
+            ];
 
         const results = await Promise.all(queries);
         const variantError = results.find((result) => result.error)?.error ?? null;
@@ -440,13 +442,20 @@ export default function EmployerDashboardPage() {
       return { liveJobs, selectedVariant, error };
     }
 
+    function employerAccountHeaders(accessToken: string) {
+      return {
+        Authorization: `Bearer ${accessToken}`,
+        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+      };
+    }
+
     async function loadBillingSummary() {
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
       if (!accessToken) return null;
 
       const response = await fetch("/api/billing/status", {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: employerAccountHeaders(accessToken),
       });
 
       if (!response.ok) {
@@ -463,7 +472,7 @@ export default function EmployerDashboardPage() {
       if (!accessToken) return [] as CandidateSubmission[];
 
       const response = await fetch("/api/employer/candidate-submissions", {
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: employerAccountHeaders(accessToken),
       });
 
       if (!response.ok) {
@@ -503,9 +512,13 @@ export default function EmployerDashboardPage() {
       const accessToken = sessionData.session?.access_token;
       let access: EmployerAccess | null = null;
       if (accessToken) {
-        const accessResponse = await fetch("/api/employer/me", { headers: { Authorization: `Bearer ${accessToken}` } });
+        const accessResponse = await fetch("/api/employer/me", { headers: employerAccountHeaders(accessToken) });
         const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
         access = accessPayload?.employer ?? null;
+        if (mounted && access?.accountId && !selectedEmployerAccountId) {
+          setSelectedEmployerAccountId(access.accountId);
+          window.localStorage.setItem("rn-selected-employer-account-id", access.accountId);
+        }
       }
 
       const currentOwner = {
@@ -605,7 +618,7 @@ export default function EmployerDashboardPage() {
       mounted = false;
       listener.subscription.unsubscribe();
     };
-  }, [router]);
+  }, [router, selectedEmployerAccountId]);
 
   async function refreshBillingSummary() {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -613,7 +626,10 @@ export default function EmployerDashboardPage() {
     if (!accessToken) return;
 
     const response = await fetch("/api/billing/status", {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+      },
     });
 
     if (response.ok) {
@@ -628,7 +644,10 @@ export default function EmployerDashboardPage() {
 
     await fetch("/api/billing/sync", {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+      },
     }).catch(() => null);
   }
 
@@ -650,7 +669,10 @@ export default function EmployerDashboardPage() {
     const endpoint = action === "checkout" ? "/api/stripe/checkout" : "/api/stripe/portal";
     const response = await fetch(endpoint, {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+      },
     });
     const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
 
@@ -950,6 +972,7 @@ export default function EmployerDashboardPage() {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Content-Type": "application/json",
+        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
       },
       body: JSON.stringify({ id: candidateId, status: nextStatus }),
     });
@@ -977,7 +1000,10 @@ export default function EmployerDashboardPage() {
     setCandidatesError(null);
 
     const response = await fetch(`/api/employer/candidate-submissions/${encodeURIComponent(candidateId)}/resume`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+      },
     });
     const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
 
@@ -1047,6 +1073,20 @@ export default function EmployerDashboardPage() {
       { label: "Total Views", value: totalViews },
     ];
   }, [jobs, candidates]);
+
+  function handleEmployerAccountChange(nextAccountId: string) {
+    const nextMembership = employerAccess?.memberships.find((membership) => membership.accountId === nextAccountId);
+    if (nextMembership?.invitationPending) {
+      setActionError("That employer account invitation is still pending. Accept the invitation from your email before switching.");
+      return;
+    }
+
+    setSelectedEmployerAccountId(nextAccountId);
+    window.localStorage.setItem("rn-selected-employer-account-id", nextAccountId);
+    setAuthStatus("loading");
+    setJobs([]);
+    setCandidates([]);
+  }
 
   const canManageJobs = employerAccess?.canManageJobs ?? true;
   const canManageBilling = employerAccess?.canManageBilling ?? true;
@@ -1141,7 +1181,7 @@ export default function EmployerDashboardPage() {
                     Account selector
                     <select
                       value={employerAccess?.accountId ?? ""}
-                      disabled
+                      onChange={(event) => handleEmployerAccountChange(event.target.value)}
                       style={{
                         height: 42,
                         borderRadius: 12,
@@ -1154,12 +1194,12 @@ export default function EmployerDashboardPage() {
                       }}
                     >
                       {employerAccess?.memberships.map((membership) => (
-                        <option key={membership.accountId} value={membership.accountId}>
-                          {membership.locationName ?? membership.accountName} — {formatEmployerRole(membership.role)}
+                        <option key={membership.accountId} value={membership.accountId} disabled={membership.invitationPending}>
+                          {membership.locationName ?? membership.accountName} — {formatEmployerRole(membership.role)}{membership.invitationPending ? " (invitation pending)" : ""}
                         </option>
                       ))}
                     </select>
-                    Switching is coming next; access is already modeled per employer account.
+                    Choose an account to scope dashboard jobs, candidates, billing, and permissions to that employer account.
                   </label>
                 ) : null}
               </div>

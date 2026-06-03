@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../../../lib/billing";
-import { EmployerRole, getEmployerAccountContext } from "../../../../../../lib/employerAccounts";
+import { EmployerRole, getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../../../lib/employerAccounts";
 import { getSupabaseAdminClient } from "../../../../../../lib/supabaseAdmin";
 import { sendTeamInviteEmail } from "../../../../../../lib/teamInviteEmail";
 
@@ -25,7 +25,7 @@ export async function POST(request: Request, context: RouteContext) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const accountContext = await getEmployerAccountContext(user);
+    const accountContext = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!accountContext.canManageTeam || !accountContext.accountId) {
       return NextResponse.json({ error: "Only Account Owners can manage team access." }, { status: 403 });
     }

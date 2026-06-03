@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest, getBillingRecord, getSiteUrl, stripeRequest } from "../../../../lib/billing";
-import { getEmployerAccountContext } from "../../../../lib/employerAccounts";
+import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 
 type StripePortalSession = { id: string; url: string };
 
@@ -9,7 +9,7 @@ export async function POST(request: Request) {
     const user = await getAuthUserFromRequest(request);
     if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const context = await getEmployerAccountContext(user);
+    const context = await getEmployerAccountContext(user, getSelectedEmployerAccountIdFromRequest(request));
     if (!context.canManageBilling) return NextResponse.json({ error: "Only Account Owners can manage billing." }, { status: 403 });
 
     const billing = await getBillingRecord(context.ownerUserId);
