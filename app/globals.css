@@ -1130,88 +1130,130 @@ iframe {
   font-weight: 900;
 }
 
-.rn-team-table-wrap {
-  overflow-x: auto;
-  border: 1px solid rgba(0,0,0,.08);
-  border-radius: 16px;
-  background: #fff;
+.rn-team-card-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 
-.rn-team-table {
-  width: 100%;
-  min-width: 1120px;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-family: var(--font-body);
+.rn-team-empty-card,
+.rn-team-access-card {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 18px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.04);
 }
 
-.rn-team-table th,
-.rn-team-table td {
-  padding: 14px;
-  border-bottom: 1px solid rgba(0,0,0,.08);
-  text-align: left;
-  vertical-align: top;
-  color: rgba(0,0,0,.78);
-  font-weight: 800;
-  overflow-wrap: normal;
+.rn-team-empty-card {
+  color: rgba(0, 0, 0, 0.68);
+  font-weight: 900;
+  padding: 18px;
+}
+
+.rn-team-access-card {
+  align-items: center;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.35fr) minmax(330px, 1fr) auto;
+  padding: 18px;
+}
+
+.rn-team-access-card__identity {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rn-team-access-card__location,
+.rn-team-access-card__email {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.rn-team-table th {
-  color: rgba(0,0,0,.62);
-  font-size: 12px;
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: .3px;
-  background: #f6f5f3;
+.rn-team-access-card__location {
+  color: rgba(0, 0, 0, 0.82);
+  font-size: 17px;
+  font-weight: 950;
+  line-height: 1.2;
 }
 
-.rn-team-table tr:last-child td {
-  border-bottom: 0;
+.rn-team-access-card__email {
+  color: rgba(0, 0, 0, 0.56);
+  font-size: 13px;
+  font-weight: 850;
 }
 
-.rn-team-table th:nth-child(1),
-.rn-team-table td:nth-child(1) {
-  width: 28%;
-}
-
-.rn-team-table th:nth-child(2),
-.rn-team-table td:nth-child(2) {
-  width: 22%;
-}
-
-.rn-team-table th:nth-child(3),
-.rn-team-table td:nth-child(3),
-.rn-team-table th:nth-child(4),
-.rn-team-table td:nth-child(4),
-.rn-team-table th:nth-child(5),
-.rn-team-table td:nth-child(5) {
-  width: 12%;
-}
-
-.rn-team-table th:nth-child(6),
-.rn-team-table td:nth-child(6) {
-  width: 16%;
-}
-
-.rn-team-table-actions {
+.rn-team-access-card__badges {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  min-width: 360px;
+  min-width: 0;
 }
 
-.rn-team-table-actions .rn-btn-primary,
-.rn-team-table-actions .rn-btn-secondary,
-.rn-team-table-actions .rn-team-member-select {
-  min-height: 42px;
-  padding: 8px 12px;
-  font-size: 13px;
+.rn-team-access-card__badges > span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.rn-team-table-checkbox {
+.rn-team-access-card__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.rn-team-access-card__actions .rn-btn-primary,
+.rn-team-access-card__actions .rn-btn-secondary {
   min-height: 42px;
-  padding: 0 8px;
+  padding: 8px 14px;
+  white-space: nowrap;
+}
+
+
+@media (max-width: 1100px) {
+  .rn-team-access-card {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .rn-team-access-card__badges {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}
+
+@media (max-width: 767px) {
+  .rn-team-access-card {
+    align-items: stretch;
+    gap: 14px;
+    grid-template-columns: 1fr;
+    padding: 16px;
+  }
+
+  .rn-team-access-card__badges {
+    grid-column: auto;
+    order: initial;
+  }
+
+  .rn-team-access-card__actions {
+    flex-direction: column;
+  }
+}
+
+.rn-team-modal__actions--secondary {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  margin-top: 12px;
+  padding-top: 14px;
+}
+
+.rn-team-modal__actions--secondary .rn-team-remove-button {
+  border-color: rgba(138, 47, 47, 0.28) !important;
+  color: #8a2f2f !important;
 }
 
 @media (max-width: 900px) {
@@ -1382,18 +1424,4 @@ iframe {
   .rn-team-edit-grid {
     grid-template-columns: 1fr;
   }
-}
-
-.rn-team-table {
-  min-width: 1120px;
-}
-
-.rn-team-table td {
-  vertical-align: middle;
-}
-
-.rn-team-table-actions {
-  flex-wrap: nowrap;
-  min-width: 0;
-  white-space: nowrap;
 }

@@ -240,6 +240,8 @@ export default function TeamAccessPage() {
       setMessage(payload?.error || "Could not remove team user.");
       return;
     }
+    setDetailsMemberId(null);
+    closeEditModal();
     await loadTeam();
   }
 
@@ -541,7 +543,7 @@ export default function TeamAccessPage() {
             </section>
 
             <section className="rn-team-panel" style={{ ...homeCardStyle, marginBottom: 16 }}>
-              <div className="rn-team-table-header">
+              <div className="rn-team-list-header">
                 <div>
                   <h2 style={{ marginTop: 0, marginBottom: 6, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Current team users</h2>
                   <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Search and filter team access without changing existing actions.</p>
@@ -592,43 +594,27 @@ export default function TeamAccessPage() {
                 </label>
               </div>
 
-              <div className="rn-team-table-wrap">
-                <table className="rn-team-table">
-                  <thead>
-                    <tr>
-                      <th>Location</th>
-                      <th>Email</th>
-                      <th>Role</th>
-                      <th>Account status</th>
-                      <th>Candidate routing</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredMembers.length === 0 ? (
-                      <tr><td colSpan={6}>No team users match these filters.</td></tr>
-                    ) : null}
-                    {paginatedMembers.map((member) => (
-                      <tr key={member.id}>
-                        <td><strong className="rn-team-cell-strong" title={getMemberLocationDisplay(member)}>{getMemberLocationDisplay(member)}</strong></td>
-                        <td><span className="rn-team-email" title={member.email}>{member.email}</span></td>
-                        <td><span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span></td>
-                        <td><span className={member.user_id ? "rn-team-status-pill rn-team-status-pill--active" : "rn-team-status-pill rn-team-status-pill--pending"}>{getAccountStatus(member)}</span></td>
-                        <td><span className={member.can_manage_notification_routing ? "rn-team-routing-pill rn-team-routing-pill--enabled" : "rn-team-routing-pill"}>{member.can_manage_notification_routing ? "Enabled" : "Disabled"}</span></td>
-                        <td>
-                          <div className="rn-team-table-actions">
-                            <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setDetailsMemberId(member.id)} disabled={busy}>Details</button>
-                            <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => openEditModal(member)} disabled={busy}>Edit</button>
-                            {!member.user_id ? (
-                              <button type="button" className="rn-btn-secondary rn-team-resend-button" style={homeSecondaryButton} onClick={() => resendInvite(member)} disabled={busy}>Resend invite</button>
-                            ) : null}
-                            <button type="button" className="rn-btn-secondary rn-team-remove-button" style={homeSecondaryButton} onClick={() => removeMember(member)} disabled={busy || member.role === "account_owner"}>Remove</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="rn-team-card-list" aria-live="polite">
+                {filteredMembers.length === 0 ? (
+                  <div className="rn-team-empty-card">No team users match these filters.</div>
+                ) : null}
+                {paginatedMembers.map((member) => (
+                  <article className="rn-team-access-card" key={member.id}>
+                    <div className="rn-team-access-card__identity">
+                      <strong className="rn-team-access-card__location" title={getMemberLocationDisplay(member)}>{getMemberLocationDisplay(member)}</strong>
+                      <span className="rn-team-access-card__email" title={member.email}>{member.email}</span>
+                    </div>
+                    <div className="rn-team-access-card__badges" aria-label={`${ROLE_LABELS[member.role]}, ${getAccountStatus(member)}, candidate routing ${member.can_manage_notification_routing ? "enabled" : "disabled"}`}>
+                      <span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span>
+                      <span className={member.user_id ? "rn-team-status-pill rn-team-status-pill--active" : "rn-team-status-pill rn-team-status-pill--pending"}>{getAccountStatus(member)}</span>
+                      <span className={member.can_manage_notification_routing ? "rn-team-routing-pill rn-team-routing-pill--enabled" : "rn-team-routing-pill"}>{member.can_manage_notification_routing ? "Routing enabled" : "Routing disabled"}</span>
+                    </div>
+                    <div className="rn-team-access-card__actions">
+                      <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setDetailsMemberId(member.id)} disabled={busy}>Details</button>
+                      <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => openEditModal(member)} disabled={busy}>Edit</button>
+                    </div>
+                  </article>
+                ))}
               </div>
 
               {filteredMembers.length > rowsPerPage ? (
@@ -675,6 +661,11 @@ export default function TeamAccessPage() {
                   </div>
                 ))}
               </div>
+              {!detailsMember.user_id ? (
+                <div className="rn-team-modal__actions rn-team-modal__actions--secondary">
+                  <button type="button" className="rn-btn-secondary rn-team-resend-button" style={homeSecondaryButton} onClick={() => resendInvite(detailsMember)} disabled={busy}>Resend invite</button>
+                </div>
+              ) : null}
             </section>
           </div>
         ) : null}
@@ -705,6 +696,9 @@ export default function TeamAccessPage() {
                 <div className="rn-team-modal__actions">
                   <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeEditModal} disabled={busy}>Cancel</button>
                   <button type="submit" className="rn-btn-primary" style={homePrimaryButton} disabled={busy}>{busy ? "Saving..." : "Save changes"}</button>
+                </div>
+                <div className="rn-team-modal__actions rn-team-modal__actions--secondary">
+                  <button type="button" className="rn-btn-secondary rn-team-remove-button" style={homeSecondaryButton} onClick={() => removeMember(editingMember)} disabled={busy || editingMember.role === "account_owner"}>Remove team access</button>
                 </div>
               </form>
             </section>
