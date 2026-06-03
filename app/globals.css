@@ -1139,8 +1139,9 @@ iframe {
 
 .rn-team-table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 1120px;
   border-collapse: collapse;
+  table-layout: fixed;
   font-family: var(--font-body);
 }
 
@@ -1152,6 +1153,8 @@ iframe {
   vertical-align: top;
   color: rgba(0,0,0,.78);
   font-weight: 800;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .rn-team-table th {
@@ -1165,6 +1168,30 @@ iframe {
 
 .rn-team-table tr:last-child td {
   border-bottom: 0;
+}
+
+.rn-team-table th:nth-child(1),
+.rn-team-table td:nth-child(1) {
+  width: 28%;
+}
+
+.rn-team-table th:nth-child(2),
+.rn-team-table td:nth-child(2) {
+  width: 22%;
+}
+
+.rn-team-table th:nth-child(3),
+.rn-team-table td:nth-child(3),
+.rn-team-table th:nth-child(4),
+.rn-team-table td:nth-child(4),
+.rn-team-table th:nth-child(5),
+.rn-team-table td:nth-child(5) {
+  width: 12%;
+}
+
+.rn-team-table th:nth-child(6),
+.rn-team-table td:nth-child(6) {
+  width: 16%;
 }
 
 .rn-team-table-actions {
@@ -1358,7 +1385,7 @@ iframe {
 }
 
 .rn-team-table {
-  min-width: 980px;
+  min-width: 1120px;
 }
 
 .rn-team-table td {

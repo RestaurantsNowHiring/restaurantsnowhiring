@@ -101,6 +101,17 @@ function getMemberState(member: TeamMember) {
   return match?.[1] ?? "";
 }
 
+function getCandidateRoutingEmails(store: EmployerStore | null) {
+  return [store?.store_email, store?.ta_email, store?.gm_op_email]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+}
+
+function formatCandidateRoutingEmails(store: EmployerStore | null) {
+  const emails = getCandidateRoutingEmails(store);
+  return emails.length > 0 ? emails.join(", ") : "—";
+}
+
 export default function TeamAccessPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -245,6 +256,23 @@ export default function TeamAccessPage() {
   const getMemberStateDisplay = useCallback((member: TeamMember) => {
     return findStoreForMember(member)?.state?.toUpperCase() || getMemberState(member) || "";
   }, [findStoreForMember]);
+
+  const getMemberLocationDisplay = useCallback((member: TeamMember) => {
+    const store = findStoreForMember(member);
+    const state = getMemberStateDisplay(member);
+    const city = store?.city?.trim() ?? "";
+    let location = (store?.location_name ?? getTeamMemberDisplayName(member)).trim();
+
+    if (city && !location.toLowerCase().includes(city.toLowerCase())) {
+      location = `${location} - ${city}`;
+    }
+
+    if (state && !new RegExp(`(?:,|\s)${state}$`, "i").test(location)) {
+      location = `${location}, ${state}`;
+    }
+
+    return location;
+  }, [findStoreForMember, getMemberStateDisplay]);
 
   function buildEditForm(member: TeamMember, store = findStoreForMember(member)): TeamEditForm {
     return {
@@ -569,7 +597,6 @@ export default function TeamAccessPage() {
                   <thead>
                     <tr>
                       <th>Location</th>
-                      <th>State</th>
                       <th>Email</th>
                       <th>Role</th>
                       <th>Account status</th>
@@ -579,12 +606,11 @@ export default function TeamAccessPage() {
                   </thead>
                   <tbody>
                     {filteredMembers.length === 0 ? (
-                      <tr><td colSpan={7}>No team users match these filters.</td></tr>
+                      <tr><td colSpan={6}>No team users match these filters.</td></tr>
                     ) : null}
                     {paginatedMembers.map((member) => (
                       <tr key={member.id}>
-                        <td><strong className="rn-team-cell-strong">{getTeamMemberDisplayName(member)}</strong></td>
-                        <td>{getMemberStateDisplay(member) || "—"}</td>
+                        <td><strong className="rn-team-cell-strong" title={getMemberLocationDisplay(member)}>{getMemberLocationDisplay(member)}</strong></td>
                         <td><span className="rn-team-email" title={member.email}>{member.email}</span></td>
                         <td><span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span></td>
                         <td><span className={member.user_id ? "rn-team-status-pill rn-team-status-pill--active" : "rn-team-status-pill rn-team-status-pill--pending"}>{getAccountStatus(member)}</span></td>
@@ -631,20 +657,17 @@ export default function TeamAccessPage() {
               <div className="rn-team-detail-grid">
                 {[
                   ["Location name", detailsStore?.location_name ?? detailsMember.location_name ?? "—"],
-                  ["State", (detailsStore?.state ?? getMemberState(detailsMember)) || "—"],
-                  ["Email", detailsMember.email],
-                  ["Role", ROLE_LABELS[detailsMember.role]],
-                  ["Account status", getAccountStatus(detailsMember)],
-                  ["Joined date", getJoinedDisplay(detailsMember)],
-                  ["Candidate routing", detailsMember.can_manage_notification_routing ? "Enabled" : "Disabled"],
                   ["Address", detailsStore?.address ?? "—"],
                   ["City", detailsStore?.city ?? "—"],
-                  ["Store email", detailsStore?.store_email ?? "—"],
-                  ["TA email", detailsStore?.ta_email ?? "—"],
-                  ["GM/OP email", detailsStore?.gm_op_email ?? "—"],
+                  ["State", (detailsStore?.state ?? getMemberState(detailsMember)) || "—"],
+                  ["Candidate routing emails", formatCandidateRoutingEmails(detailsStore)],
                   ["Minimum wage", detailsStore?.minimum_wage ?? "—"],
                   ["Pay range", detailsStore?.pay_range ?? "—"],
                   ["Default application URL", detailsStore?.default_application_url ?? "—"],
+                  ["Role", ROLE_LABELS[detailsMember.role]],
+                  ["Account status", getAccountStatus(detailsMember)],
+                  ["Candidate routing", detailsMember.can_manage_notification_routing ? "Enabled" : "Disabled"],
+                  ["Joined date", getJoinedDisplay(detailsMember)],
                 ].map(([label, value]) => (
                   <div key={label} className="rn-team-detail-item">
                     <span>{label}</span>
@@ -671,9 +694,9 @@ export default function TeamAccessPage() {
                 <label>State<input className="rn-team-input" style={homeInputStyle} value={editForm.state} onChange={(event) => updateEditField("state", event.target.value.toUpperCase().slice(0, 2))} maxLength={2} placeholder="MD" /></label>
                 <label>Address<input className="rn-team-input" style={homeInputStyle} value={editForm.address} onChange={(event) => updateEditField("address", event.target.value)} /></label>
                 <label>City<input className="rn-team-input" style={homeInputStyle} value={editForm.city} onChange={(event) => updateEditField("city", event.target.value)} /></label>
-                <label>Store email<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.store_email} onChange={(event) => updateEditField("store_email", event.target.value)} /></label>
-                <label>TA email<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.ta_email} onChange={(event) => updateEditField("ta_email", event.target.value)} /></label>
-                <label>GM/OP email<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.gm_op_email} onChange={(event) => updateEditField("gm_op_email", event.target.value)} /></label>
+                <label>Candidate routing email 1<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.store_email} onChange={(event) => updateEditField("store_email", event.target.value)} placeholder="routing1@example.com" /></label>
+                <label>Candidate routing email 2<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.ta_email} onChange={(event) => updateEditField("ta_email", event.target.value)} placeholder="routing2@example.com" /></label>
+                <label>Candidate routing email 3<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.gm_op_email} onChange={(event) => updateEditField("gm_op_email", event.target.value)} placeholder="routing3@example.com" /></label>
                 <label>Minimum wage<input className="rn-team-input" style={homeInputStyle} value={editForm.minimum_wage} onChange={(event) => updateEditField("minimum_wage", event.target.value)} /></label>
                 <label>Pay range<input className="rn-team-input" style={homeInputStyle} value={editForm.pay_range} onChange={(event) => updateEditField("pay_range", event.target.value)} /></label>
                 <label>Default application URL<input className="rn-team-input" style={homeInputStyle} value={editForm.default_application_url} onChange={(event) => updateEditField("default_application_url", event.target.value)} placeholder="https://" /></label>
