@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import JobsFilterPanel from "../components/JobsFilterPanel";
-import { homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
+import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
 import { isMissingStatusColumnError, isNonExpiredPublicJob, isPubliclyVisibleJob } from "../../lib/jobStatus";
 import { buildUniqueJobSlugMap } from "../../lib/jobSlugs";
 import {
@@ -220,6 +220,13 @@ function StateLandingPageContent({
   jobs: Array<RoleJob & { slug: string }>;
 }) {
   const cities = getStateCities(jobs);
+  const companyCount = new Set(
+    jobs
+      .map((job) => job.restaurant_name?.trim().toLowerCase())
+      .filter((company): company is string => Boolean(company)),
+  ).size;
+  const jobsPreview = jobs.slice(0, 6);
+  const stateJobsHref = `/jobs?state=${encodeURIComponent(state.code)}`;
 
   return (
     <main
@@ -270,12 +277,13 @@ function StateLandingPageContent({
               fontWeight: 650,
             }}
           >
-            Find restaurant jobs across {state.name}, including cashier, server, line cook,
-            dishwasher, prep cook, shift leader, and restaurant manager positions.
+            Explore current restaurant hiring across {state.name}, with fresh openings from local restaurants,
+            hospitality groups, and quick-service teams. Use this page to scan statewide demand, jump into busy
+            hiring cities, or browse the latest roles near you.
           </p>
           <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
-            <Link href="/jobs" className="hero-button rn-btn-primary" style={homePrimaryButton}>
-              Browse Jobs
+            <Link href={stateJobsHref} className="hero-button rn-btn-primary" style={homePrimaryButton}>
+              Browse {state.name} Jobs
             </Link>
             <Link href="/post-job" className="hero-button rn-btn-secondary" style={homeSecondaryButton}>
               Post a Job
@@ -284,19 +292,168 @@ function StateLandingPageContent({
         </div>
       </section>
 
-      <section style={{ width: "100%", padding: "12px 0 0" }}>
+      <section style={{ width: "100%", padding: "8px 0 10px" }}>
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "0 auto",
+            padding: "0 18px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))",
+            gap: 14,
+          }}
+        >
+          {[
+            { value: jobs.length, label: "Active Jobs" },
+            { value: cities.length, label: "Cities Hiring" },
+            { value: companyCount, label: "Restaurant Companies" },
+          ].map((stat) => (
+            <div key={stat.label} style={{ ...homeCardStyle, padding: "18px 20px", boxShadow: "0 12px 28px rgba(0,0,0,.09)" }}>
+              <p
+                style={{
+                  margin: 0,
+                  color: homeTheme.green,
+                  fontFamily: "var(--font-heading)",
+                  fontSize: 34,
+                  lineHeight: 1,
+                }}
+              >
+                {stat.value}
+              </p>
+              <p
+                style={{
+                  margin: "8px 0 0",
+                  color: "rgba(0,0,0,.66)",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 13,
+                  fontWeight: 900,
+                  letterSpacing: ".05em",
+                  textTransform: "uppercase",
+                }}
+              >
+                {stat.label}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section style={{ width: "100%", padding: "18px 0 0" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
-          <h2
-            style={{
-              margin: "0 0 14px",
-              color: homeTheme.green,
-              fontFamily: "var(--font-heading)",
-              fontSize: 38,
-            }}
-          >
-            Current openings in {state.name}
-          </h2>
-          <JobsFilterPanel jobs={jobs} initialLocationText={state.code} />
+          <div style={{ ...homeCardStyle, padding: 24 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                justifyContent: "space-between",
+                gap: 16,
+                flexWrap: "wrap",
+                marginBottom: 16,
+              }}
+            >
+              <div>
+                <h2
+                  style={{
+                    margin: 0,
+                    color: homeTheme.green,
+                    fontFamily: "var(--font-heading)",
+                    fontSize: 38,
+                    lineHeight: 1.1,
+                  }}
+                >
+                  Current openings in {state.name}
+                </h2>
+                <p
+                  style={{
+                    margin: "8px 0 0",
+                    color: "rgba(0,0,0,.66)",
+                    fontFamily: "var(--font-body)",
+                    fontSize: 15,
+                    fontWeight: 700,
+                    lineHeight: 1.55,
+                  }}
+                >
+                  Browse recent restaurant job openings across {state.name}.
+                </p>
+              </div>
+              <Link href={stateJobsHref} className="hero-button rn-btn-secondary" style={homeSecondaryButton}>
+                View all {state.name} jobs
+              </Link>
+            </div>
+
+            <div style={{ display: "grid", gap: 12 }}>
+              {jobsPreview.map((job) => {
+                const details = [job.employment_type, job.pay_range].filter(Boolean).join(" • ");
+
+                return (
+                  <article
+                    key={job.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "minmax(0, 1fr) auto",
+                      gap: 14,
+                      alignItems: "center",
+                      backgroundColor: "#fff",
+                      border: "1px solid rgba(0,0,0,.10)",
+                      borderRadius: 16,
+                      padding: 16,
+                      boxShadow: "0 10px 24px rgba(0,0,0,.06)",
+                    }}
+                  >
+                    <div style={{ minWidth: 0 }}>
+                      <h3
+                        style={{
+                          margin: 0,
+                          color: "rgba(0,0,0,.84)",
+                          fontFamily: "var(--font-heading)",
+                          fontSize: 24,
+                          lineHeight: 1.12,
+                        }}
+                      >
+                        {job.title}
+                      </h3>
+                      <p
+                        style={{
+                          margin: "6px 0 0",
+                          color: homeTheme.green,
+                          fontFamily: "var(--font-body)",
+                          fontSize: 15,
+                          fontWeight: 900,
+                        }}
+                      >
+                        {job.restaurant_name}
+                      </p>
+                      <p
+                        style={{
+                          margin: "6px 0 0",
+                          color: "rgba(0,0,0,.64)",
+                          fontFamily: "var(--font-body)",
+                          fontSize: 14,
+                          fontWeight: 750,
+                        }}
+                      >
+                        {job.city}, {job.state}
+                        {details ? ` • ${details}` : ""}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/jobs/${job.slug}`}
+                      className="hero-button rn-btn-primary"
+                      style={{ ...homePrimaryButton, padding: "10px 14px", borderRadius: 12 }}
+                    >
+                      View Job
+                    </Link>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: 18 }}>
+              <Link href={stateJobsHref} className="hero-button rn-btn-primary" style={homePrimaryButton}>
+                View all {state.name} jobs
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -311,36 +468,35 @@ function StateLandingPageContent({
             gap: 18,
           }}
         >
-          <div
-            style={{
-              backgroundColor: "#f6f5f3",
-              border: "1px solid rgba(0,0,0,.10)",
-              borderRadius: 18,
-              padding: 22,
-              boxShadow: "0 18px 40px rgba(0,0,0,.10)",
-            }}
-          >
+          <div style={homeCardStyle}>
             <h2 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 34 }}>
               Browse by role
             </h2>
-            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 16 }}>
               {roleLinks.map((role) => (
-                <Link key={role.href} href={role.href} style={{ color: homeTheme.green, fontWeight: 900 }}>
+                <Link
+                  key={role.href}
+                  href={role.href}
+                  style={{
+                    border: "1px solid rgba(53,128,110,.20)",
+                    borderRadius: 14,
+                    backgroundColor: "rgba(255,255,255,.82)",
+                    color: homeTheme.green,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    fontWeight: 900,
+                    padding: "12px 13px",
+                    textDecoration: "none",
+                    boxShadow: "0 8px 18px rgba(0,0,0,.05)",
+                  }}
+                >
                   {role.label}
                 </Link>
               ))}
             </div>
           </div>
 
-          <div
-            style={{
-              backgroundColor: "#f6f5f3",
-              border: "1px solid rgba(0,0,0,.10)",
-              borderRadius: 18,
-              padding: 22,
-              boxShadow: "0 18px 40px rgba(0,0,0,.10)",
-            }}
-          >
+          <div style={homeCardStyle}>
             <h2 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 34 }}>
               Browse by city
             </h2>
@@ -371,15 +527,7 @@ function StateLandingPageContent({
 
       <section style={{ width: "100%", padding: "26px 0 0" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
-          <div
-            style={{
-              backgroundColor: "#fef5ea",
-              border: "1px solid rgba(0,0,0,.10)",
-              borderRadius: 18,
-              padding: 24,
-              boxShadow: "0 18px 40px rgba(0,0,0,.10)",
-            }}
-          >
+          <div style={{ ...homeCardStyle, backgroundColor: "#fef5ea", padding: 24 }}>
             <h2 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 34 }}>
               About restaurant jobs in {state.name}
             </h2>
@@ -391,19 +539,26 @@ function StateLandingPageContent({
             <div
               style={{
                 marginTop: 18,
-                padding: 20,
+                padding: 22,
                 borderRadius: 18,
-                backgroundColor: "rgba(53,128,110,.10)",
-                border: "1px solid rgba(53,128,110,.20)",
+                backgroundColor: "rgba(53,128,110,.11)",
+                border: "1px solid rgba(53,128,110,.22)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 18,
+                flexWrap: "wrap",
               }}
             >
-              <h3 style={{ margin: 0, color: homeTheme.green, fontSize: 24 }}>
-                Hiring restaurant workers in {state.name}?
-              </h3>
-              <p style={{ color: "rgba(0,0,0,.72)", fontWeight: 700, lineHeight: 1.6 }}>
-                Post your restaurant job and reach local candidates looking for restaurant work in {state.name}.
-                Pricing is $9 per active approved public job ad every 30 days after the free trial.
-              </p>
+              <div style={{ maxWidth: 760 }}>
+                <h3 style={{ margin: 0, color: homeTheme.green, fontSize: 24 }}>
+                  Hiring restaurant workers in {state.name}?
+                </h3>
+                <p style={{ margin: "8px 0 0", color: "rgba(0,0,0,.72)", fontWeight: 700, lineHeight: 1.6 }}>
+                  Post your restaurant job and reach local candidates looking for restaurant work in {state.name}.
+                  Pricing is $9 per active approved public job ad every 30 days after the free trial.
+                </p>
+              </div>
               <Link href="/post-job" className="hero-button rn-btn-primary" style={homePrimaryButton}>
                 Post a Job
               </Link>
