@@ -32,6 +32,34 @@ export function isPubliclyVisibleJob(status: string | null | undefined, active: 
   return active;
 }
 
+
+const PUBLIC_JOB_LISTING_DAYS = 30;
+
+export function addDaysIso(value: string | null | undefined, days: number) {
+  const baseDate = value ? new Date(value) : null;
+  if (!baseDate || Number.isNaN(baseDate.getTime())) return undefined;
+
+  baseDate.setUTCDate(baseDate.getUTCDate() + days);
+  return baseDate.toISOString();
+}
+
+export function isNonExpiredPublicJob(job: {
+  active: boolean;
+  status?: string | null;
+  created_at?: string | null;
+  approved_at?: string | null;
+}) {
+  if (job.status !== "active" || job.active !== true) return false;
+
+  const validThrough = addDaysIso(
+    job.approved_at ?? job.created_at,
+    PUBLIC_JOB_LISTING_DAYS,
+  );
+
+  if (!validThrough) return false;
+  return Date.now() <= new Date(validThrough).getTime();
+}
+
 export function dashboardStatusForJob(status: string | null | undefined, active: boolean): DashboardStatus {
   const normalized = normalizePersistedStatus(status);
 
