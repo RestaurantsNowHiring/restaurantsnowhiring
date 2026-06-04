@@ -52,6 +52,14 @@ function formatStoreOptionDetail(store: EmployerStore) {
   return [store.address, store.store_email, store.ta_email, store.gm_op_email].filter(Boolean).join(" • ");
 }
 
+function formatTemplateOptionLabel(template: JobTemplate) {
+  return template.template_name;
+}
+
+function formatTemplateOptionDetail(template: JobTemplate) {
+  return [template.job_title, template.role_category || template.employment_type].filter(Boolean).join(" • ");
+}
+
 export default function PostJobPage() {
   const router = useRouter();
 
@@ -69,9 +77,13 @@ export default function PostJobPage() {
   const [isStoreComboboxOpen, setIsStoreComboboxOpen] = useState(false);
   const [highlightedStoreIndex, setHighlightedStoreIndex] = useState(0);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateSearchQuery, setTemplateSearchQuery] = useState("No template selected");
+  const [isTemplateComboboxOpen, setIsTemplateComboboxOpen] = useState(false);
+  const [highlightedTemplateIndex, setHighlightedTemplateIndex] = useState(0);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const successDialogRef = useRef<HTMLDivElement>(null);
   const storeComboboxRef = useRef<HTMLDivElement>(null);
+  const templateComboboxRef = useRef<HTMLDivElement>(null);
   const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
 
   // Step 1
@@ -178,22 +190,54 @@ export default function PostJobPage() {
     });
   }, [storeSearchQuery, storeSearchText, stores]);
 
+  const selectedTemplate = useMemo(
+    () => jobTemplates.find((template) => template.id === selectedTemplateId) ?? null,
+    [jobTemplates, selectedTemplateId]
+  );
+
+  const templateSearchText = templateSearchQuery.trim().toLowerCase();
+  const filteredTemplates = useMemo(() => {
+    if (!templateSearchText || templateSearchQuery === "No template selected") return jobTemplates;
+
+    return jobTemplates.filter((template) => {
+      const searchableFields = [
+        template.template_name,
+        template.job_title,
+        template.role_category,
+        template.schedule,
+        template.employment_type,
+      ];
+
+      return searchableFields.some((field) => field?.toLowerCase().includes(templateSearchText));
+    });
+  }, [jobTemplates, templateSearchQuery, templateSearchText]);
+
   const closeStoreCombobox = useCallback(() => {
     setIsStoreComboboxOpen(false);
     setHighlightedStoreIndex(0);
     setStoreSearchQuery(selectedStore ? formatStoreOptionLabel(selectedStore) : "No store selected");
   }, [selectedStore]);
 
+  const closeTemplateCombobox = useCallback(() => {
+    setIsTemplateComboboxOpen(false);
+    setHighlightedTemplateIndex(0);
+    setTemplateSearchQuery(selectedTemplate ? formatTemplateOptionLabel(selectedTemplate) : "No template selected");
+  }, [selectedTemplate]);
+
   useEffect(() => {
     function handleDocumentMouseDown(event: MouseEvent) {
       if (storeComboboxRef.current && !storeComboboxRef.current.contains(event.target as Node)) {
         closeStoreCombobox();
       }
+
+      if (templateComboboxRef.current && !templateComboboxRef.current.contains(event.target as Node)) {
+        closeTemplateCombobox();
+      }
     }
 
     document.addEventListener("mousedown", handleDocumentMouseDown);
     return () => document.removeEventListener("mousedown", handleDocumentMouseDown);
-  }, [closeStoreCombobox]);
+  }, [closeStoreCombobox, closeTemplateCombobox]);
 
   async function loadStoreAndTemplateOptions(accessToken: string) {
     const [storesResponse, templatesResponse] = await Promise.all([
@@ -324,6 +368,18 @@ export default function PostJobPage() {
     setIsStoreComboboxOpen(false);
   }
 
+  function selectNoTemplate() {
+    applyTemplateSelection("");
+    setTemplateSearchQuery("No template selected");
+    setIsTemplateComboboxOpen(false);
+  }
+
+  function selectTemplate(template: JobTemplate) {
+    applyTemplateSelection(template.id);
+    setTemplateSearchQuery(formatTemplateOptionLabel(template));
+    setIsTemplateComboboxOpen(false);
+  }
+
   function handleStoreComboboxKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
@@ -354,6 +410,39 @@ export default function PostJobPage() {
 
       const highlightedStore = filteredStores[highlightedStoreIndex - 1];
       if (highlightedStore) selectStore(highlightedStore);
+    }
+  }
+
+  function handleTemplateComboboxKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeTemplateCombobox();
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsTemplateComboboxOpen(true);
+      setHighlightedTemplateIndex((current) => Math.min(current + 1, filteredTemplates.length));
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsTemplateComboboxOpen(true);
+      setHighlightedTemplateIndex((current) => Math.max(current - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter" && isTemplateComboboxOpen) {
+      event.preventDefault();
+      if (highlightedTemplateIndex === 0) {
+        selectNoTemplate();
+        return;
+      }
+
+      const highlightedTemplate = filteredTemplates[highlightedTemplateIndex - 1];
+      if (highlightedTemplate) selectTemplate(highlightedTemplate);
     }
   }
 
@@ -589,7 +678,11 @@ export default function PostJobPage() {
     setDescription("");
     setBenefits([]);
     setSelectedStoreId("");
+    setStoreSearchQuery("No store selected");
+    setIsStoreComboboxOpen(false);
     setSelectedTemplateId("");
+    setTemplateSearchQuery("No template selected");
+    setIsTemplateComboboxOpen(false);
   }
 
   async function handleFinalSubmit() {
@@ -1128,14 +1221,102 @@ export default function PostJobPage() {
               </div>
               <div>
                 <label htmlFor="template-selector" style={labelStyle}>Select Job Template</label>
-                <select id="template-selector" value={selectedTemplateId} onChange={(event) => applyTemplateSelection(event.target.value)} style={inputStyle}>
-                  <option value="">No template selected</option>
-                  {jobTemplates.map((template) => (
-                    <option key={template.id} value={template.id}>
-                      {template.template_name}
-                    </option>
-                  ))}
-                </select>
+                <div ref={templateComboboxRef} style={{ position: "relative" }}>
+                  <input
+                    id="template-selector"
+                    type="text"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={isTemplateComboboxOpen}
+                    aria-controls="template-selector-results"
+                    aria-activedescendant={isTemplateComboboxOpen ? `template-selector-option-${highlightedTemplateIndex}` : undefined}
+                    value={templateSearchQuery}
+                    onFocus={() => {
+                      setIsTemplateComboboxOpen(true);
+                      if (!selectedTemplateId && templateSearchQuery === "No template selected") setTemplateSearchQuery("");
+                    }}
+                    onChange={(event) => {
+                      setTemplateSearchQuery(event.target.value);
+                      setHighlightedTemplateIndex(0);
+                      setIsTemplateComboboxOpen(true);
+                    }}
+                    onKeyDown={handleTemplateComboboxKeyDown}
+                    placeholder="No template selected"
+                    autoComplete="off"
+                    style={inputStyle}
+                  />
+                  {isTemplateComboboxOpen && (
+                    <div
+                      id="template-selector-results"
+                      role="listbox"
+                      style={{
+                        position: "absolute",
+                        zIndex: 20,
+                        top: "calc(100% + 8px)",
+                        left: 0,
+                        right: 0,
+                        maxHeight: 280,
+                        overflowY: "auto",
+                        borderRadius: 14,
+                        border: `1px solid ${BORDER}`,
+                        backgroundColor: CARD,
+                        boxShadow: "0 14px 28px rgba(0,0,0,.12)",
+                        padding: 6,
+                      }}
+                    >
+                      <button
+                        id="template-selector-option-0"
+                        type="button"
+                        role="option"
+                        aria-selected={!selectedTemplateId}
+                        onMouseEnter={() => setHighlightedTemplateIndex(0)}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={selectNoTemplate}
+                        style={storeComboboxOptionStyle(highlightedTemplateIndex === 0, !selectedTemplateId)}
+                      >
+                        No template selected
+                      </button>
+                      {filteredTemplates.length === 0 ? (
+                        <div
+                          style={{
+                            padding: "12px 14px",
+                            color: MUTED,
+                            fontSize: 14,
+                            fontWeight: 800,
+                            fontFamily: "var(--font-body)",
+                          }}
+                        >
+                          No templates found.
+                        </div>
+                      ) : (
+                        filteredTemplates.map((template, index) => {
+                          const optionIndex = index + 1;
+                          const details = formatTemplateOptionDetail(template);
+                          return (
+                            <button
+                              key={template.id}
+                              id={`template-selector-option-${optionIndex}`}
+                              type="button"
+                              role="option"
+                              aria-selected={selectedTemplateId === template.id}
+                              onMouseEnter={() => setHighlightedTemplateIndex(optionIndex)}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => selectTemplate(template)}
+                              style={storeComboboxOptionStyle(highlightedTemplateIndex === optionIndex, selectedTemplateId === template.id)}
+                            >
+                              <span style={{ display: "block" }}>{formatTemplateOptionLabel(template)}</span>
+                              {details ? (
+                                <span style={{ display: "block", marginTop: 4, color: MUTED, fontSize: 12, fontWeight: 700 }}>
+                                  {details}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div style={helperStyle}>
                   {jobTemplates.length > 0
                     ? "Selecting a template fills the job title, category, schedule, description, and benefits. All fields remain editable."
