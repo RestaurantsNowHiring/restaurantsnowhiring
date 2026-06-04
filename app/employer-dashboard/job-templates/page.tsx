@@ -529,16 +529,21 @@ Create and manage reusable templates for your employer account. Active templates
                   </div>
                 </div>
 
-                <fieldset className="rn-template-form-section">
+                <fieldset className="rn-template-form-section rn-template-pill-section">
                   <legend style={formLabelStyle}>Schedule</legend>
-                  <div className="rn-template-option-grid">
+                  <div className="rn-template-option-pills">
                     {SCHEDULE_OPTIONS.map((option) => {
                       const isChecked = selectedSchedule.includes(option);
                       return (
-                        <label key={option} className={`rn-template-check-option ${isChecked ? "rn-template-check-option-selected" : ""}`}>
-                          <input type="checkbox" checked={isChecked} onChange={() => toggleSelectedValue(option, selectedSchedule, setSelectedSchedule)} />
-                          <span>{option}</span>
-                        </label>
+                        <button
+                          key={option}
+                          type="button"
+                          className={`rn-template-pill-toggle ${isChecked ? "rn-template-pill-toggle-selected" : ""}`}
+                          aria-pressed={isChecked}
+                          onClick={() => toggleSelectedValue(option, selectedSchedule, setSelectedSchedule)}
+                        >
+                          {option}
+                        </button>
                       );
                     })}
                   </div>
@@ -567,16 +572,21 @@ Create and manage reusable templates for your employer account. Active templates
                   />
                 </div>
 
-                <fieldset className="rn-template-form-section">
+                <fieldset className="rn-template-form-section rn-template-pill-section">
                   <legend style={formLabelStyle}>Benefits</legend>
-                  <div className="rn-template-option-grid">
+                  <div className="rn-template-option-pills">
                     {BENEFIT_OPTIONS.map((option) => {
                       const isChecked = selectedBenefits.includes(option);
                       return (
-                        <label key={option} className={`rn-template-check-option ${isChecked ? "rn-template-check-option-selected" : ""}`}>
-                          <input type="checkbox" checked={isChecked} onChange={() => toggleSelectedValue(option, selectedBenefits, setSelectedBenefits)} />
-                          <span>{option}</span>
-                        </label>
+                        <button
+                          key={option}
+                          type="button"
+                          className={`rn-template-pill-toggle ${isChecked ? "rn-template-pill-toggle-selected" : ""}`}
+                          aria-pressed={isChecked}
+                          onClick={() => toggleSelectedValue(option, selectedBenefits, setSelectedBenefits)}
+                        >
+                          {option}
+                        </button>
                       );
                     })}
                   </div>
@@ -618,7 +628,7 @@ Create and manage reusable templates for your employer account. Active templates
                   <div><dt>Pay defaults</dt><dd>{formatPayDefaults(selectedTemplate.pay_defaults)}</dd></div>
                   <div><dt>Post a Job availability</dt><dd>{selectedTemplate.active ? "Available" : "Hidden until reactivated"}</dd></div>
                 </dl>
-                <div className="rn-template-long-field"><h3>Job description</h3><div dangerouslySetInnerHTML={{ __html: sanitizeRichText(selectedTemplate.job_description) || plainTextToRichText(formatText(selectedTemplate.job_description)) }} /></div>
+                <div className="rn-template-long-field rn-template-description-preview"><h3>Job description</h3><div className="rn-template-description-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(selectedTemplate.job_description) || plainTextToRichText(formatText(selectedTemplate.job_description)) }} /></div>
                 <div className="rn-template-long-field"><h3>Benefits</h3><p>{formatListValues(selectedTemplate.benefits)}</p></div>
               </div>
             ) : (
@@ -700,15 +710,39 @@ Create and manage reusable templates for your employer account. Active templates
           line-height: 1.55;
           white-space: pre-wrap;
         }
+        .rn-template-description-preview,
+        .rn-template-description-preview :global(*) {
+          color: ${homeTheme.text};
+        }
+        .rn-template-description-content {
+          color: ${homeTheme.text};
+          font-weight: 750;
+          line-height: 1.55;
+        }
+        .rn-template-description-content :global(p) {
+          color: ${homeTheme.text};
+          margin: 0 0 8px;
+        }
+        .rn-template-description-content :global(p:last-child) {
+          margin-bottom: 0;
+        }
         .rn-template-long-field :global(ul),
         .rn-template-long-field :global(ol) {
           color: ${homeTheme.text};
           font-weight: 750;
           line-height: 1.55;
-          margin: 8px 0 0 22px;
-          padding: 0;
+          margin: 8px 0 0 0;
+          padding-left: 24px;
+        }
+        .rn-template-long-field :global(ul) {
+          list-style: disc outside;
+        }
+        .rn-template-long-field :global(ol) {
+          list-style: decimal outside;
         }
         .rn-template-long-field :global(li) {
+          color: ${homeTheme.text};
+          display: list-item;
           margin: 4px 0;
         }
         .rn-template-badge {
@@ -725,7 +759,7 @@ Create and manage reusable templates for your employer account. Active templates
 
         .rn-template-editor-card {
           display: grid;
-          gap: 14px;
+          gap: 10px;
         }
         .rn-template-form-grid-three {
           grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -735,44 +769,46 @@ Create and manage reusable templates for your employer account. Active templates
         }
         .rn-template-form-section {
           border: 1px solid rgba(0,0,0,.08);
-          border-radius: 16px;
-          background: rgba(255,255,255,.74);
+          border-radius: 14px;
+          background: rgba(255,255,255,.72);
           margin: 0;
-          padding: 14px;
+          padding: 10px 12px 12px;
         }
-        .rn-template-option-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-          gap: 8px;
-          margin-top: 8px;
+        .rn-template-pill-section {
+          padding-bottom: 10px;
         }
-        .rn-template-check-option {
+        .rn-template-option-pills {
           display: flex;
+          flex-wrap: wrap;
+          gap: 7px;
+          margin-top: 7px;
+        }
+        .rn-template-pill-toggle {
           align-items: center;
-          gap: 8px;
-          border: 1px solid ${homeTheme.border};
-          border-radius: 10px;
-          background: #fff;
-          color: ${homeTheme.text};
+          background: rgba(255,255,255,.72);
+          border: 1px solid rgba(0,0,0,.10);
+          border-radius: 999px;
+          color: rgba(0,0,0,.75);
           cursor: pointer;
+          display: inline-flex;
+          font-family: var(--font-body);
           font-size: 13px;
-          font-weight: 850;
-          line-height: 1.25;
+          font-weight: 900;
+          justify-content: center;
+          line-height: 1.15;
           min-height: 34px;
-          padding: 7px 9px;
-          transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
+          padding: 0 12px;
+          transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, color .15s ease, transform .15s ease;
+          user-select: none;
         }
-        .rn-template-check-option input {
-          accent-color: ${homeTheme.green};
-          flex: 0 0 auto;
-          height: 14px;
-          margin: 0;
-          width: 14px;
+        .rn-template-pill-toggle:hover {
+          border-color: rgba(53,128,110,.28);
+          transform: translateY(-1px);
         }
-        .rn-template-check-option-selected {
-          background: rgba(53,128,110,.11);
-          border-color: rgba(53,128,110,.45);
-          box-shadow: inset 0 0 0 1px rgba(53,128,110,.08);
+        .rn-template-pill-toggle-selected {
+          background: rgba(53,128,110,.14);
+          border-color: rgba(53,128,110,.34);
+          box-shadow: inset 0 0 0 1px rgba(53,128,110,.06);
           color: ${homeTheme.green};
         }
         .rn-template-active-toggle {
@@ -788,8 +824,8 @@ Create and manage reusable templates for your employer account. Active templates
         .rn-rich-text-toolbar {
           display: flex;
           flex-wrap: wrap;
-          gap: 8px;
-          margin-top: 8px;
+          gap: 6px;
+          margin-top: 7px;
         }
         .rn-rich-text-toolbar button {
           border: 1px solid ${homeTheme.border};
@@ -798,7 +834,7 @@ Create and manage reusable templates for your employer account. Active templates
           color: ${homeTheme.text};
           cursor: pointer;
           font-weight: 900;
-          padding: 8px 10px;
+          padding: 7px 9px;
         }
         .rn-rich-text-editor {
           border: 1px solid ${homeTheme.border};
@@ -808,10 +844,10 @@ Create and manage reusable templates for your employer account. Active templates
           font-family: var(--font-body);
           font-weight: 750;
           line-height: 1.55;
-          margin-top: 8px;
-          min-height: 170px;
+          margin-top: 7px;
+          min-height: 138px;
           outline: none;
-          padding: 14px 16px;
+          padding: 12px 14px;
         }
         .rn-rich-text-editor:focus {
           border-color: rgba(53,128,110,.55);
@@ -819,10 +855,19 @@ Create and manage reusable templates for your employer account. Active templates
         }
         .rn-rich-text-editor :global(ul),
         .rn-rich-text-editor :global(ol) {
-          margin: 8px 0 8px 22px;
-          padding: 0;
+          color: ${homeTheme.text};
+          margin: 8px 0 8px 0;
+          padding-left: 24px;
+        }
+        .rn-rich-text-editor :global(ul) {
+          list-style: disc outside;
+        }
+        .rn-rich-text-editor :global(ol) {
+          list-style: decimal outside;
         }
         .rn-rich-text-editor :global(li) {
+          color: ${homeTheme.text};
+          display: list-item;
           margin: 4px 0;
         }
         .rn-rich-text-editor :global(h3) {
