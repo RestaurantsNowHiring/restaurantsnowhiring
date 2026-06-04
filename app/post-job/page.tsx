@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../lib/candidateNotificationEmails";
+import { BENEFIT_OPTIONS, SCHEDULE_OPTIONS } from "../../lib/jobFormOptions";
+import { normalizeRichTextForEditing, sanitizeRichText } from "../../lib/richText";
 import { supabase } from "../../lib/supabase";
 import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 import {
@@ -70,6 +72,7 @@ export default function PostJobPage() {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const successDialogRef = useRef<HTMLDivElement>(null);
   const storeComboboxRef = useRef<HTMLDivElement>(null);
+  const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
 
   // Step 1
   const [companyName, setCompanyName] = useState("");
@@ -133,40 +136,7 @@ export default function PostJobPage() {
   ];
 
   const EMPLOYMENT_OPTIONS = ["Full time", "Part time", "Seasonal", "Temporary"];
-  const SCHEDULE_OPTIONS = [
-    "Day shift",
-    "Night shift",
-    "Morning shift",
-    "Evening shift",
-    "Overnight shift",
-    "Weekends required",
-    "Weekdays only (M-F)",
-    "Flexible schedule",
-    "Rotating schedule",
-    "On-call",
-    "Overtime",
-    "No weekends",
-    "Choose your own hours",
-    "Other",
-  ];
 
-  const BENEFIT_OPTIONS = [
-    "Health insurance",
-    "Dental insurance",
-    "Vision insurance",
-    "401(k)",
-    "Paid time off",
-    "Flexible schedule",
-    "Employee discount",
-    "Free meals",
-    "Tuition assistance",
-    "Paid training",
-    "Referral bonus",
-    "Bonus pay",
-    "Overtime available",
-    "Career growth",
-    "Other",
-  ];
 
   const STATES = [
     "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
@@ -387,6 +357,23 @@ export default function PostJobPage() {
     }
   }
 
+  useEffect(() => {
+    if (!descriptionEditorRef.current) return;
+    if (descriptionEditorRef.current.innerHTML !== description) {
+      descriptionEditorRef.current.innerHTML = description;
+    }
+  }, [description]);
+
+  function runDescriptionCommand(command: string, value?: string) {
+    descriptionEditorRef.current?.focus();
+    document.execCommand(command, false, value);
+    setDescription(sanitizeRichText(descriptionEditorRef.current?.innerHTML ?? ""));
+  }
+
+  function updateDescriptionFromEditor() {
+    setDescription(sanitizeRichText(descriptionEditorRef.current?.innerHTML ?? ""));
+  }
+
   function applyStoreSelection(storeId: string) {
     setSelectedStoreId(storeId);
     const store = stores.find((option) => option.id === storeId);
@@ -422,6 +409,59 @@ export default function PostJobPage() {
       .filter(Boolean);
   }
 
+  function applyPayDefaults(value: string | null) {
+    const raw = value?.trim();
+    if (!raw) return;
+
+    try {
+      const parsed = JSON.parse(raw) as { type?: PayMode; min?: string; max?: string; rate?: string };
+      if (parsed.type === "range") {
+        setPayMode("range");
+        setPayMin(parsed.min ?? "");
+        setPayMax(parsed.max ?? "");
+        setPayRate("");
+        return;
+      }
+      if (parsed.type === "minimum") {
+        setPayMode("minimum");
+        setPayMin("");
+        setPayMax("");
+        setPayRate(parsed.min ?? "");
+        return;
+      }
+      if (parsed.type === "maximum") {
+        setPayMode("maximum");
+        setPayMin("");
+        setPayMax("");
+        setPayRate(parsed.max ?? "");
+        return;
+      }
+      if (parsed.type === "rate") {
+        setPayMode("rate");
+        setPayMin("");
+        setPayMax("");
+        setPayRate(parsed.rate ?? "");
+        return;
+      }
+    } catch {
+      // Backward compatibility for templates that stored pay as plain text.
+    }
+
+    const [min, max] = raw.split(/\s*[–-]\s*/);
+    if (max) {
+      setPayMode("range");
+      setPayMin(min?.trim() ?? raw);
+      setPayMax(max.trim());
+      setPayRate("");
+      return;
+    }
+
+    setPayMode("rate");
+    setPayMin("");
+    setPayMax("");
+    setPayRate(raw);
+  }
+
   function applyTemplateSelection(templateId: string) {
     setSelectedTemplateId(templateId);
     const template = jobTemplates.find((option) => option.id === templateId);
@@ -431,13 +471,8 @@ export default function PostJobPage() {
     setRoleCategories(template.role_category ? [template.role_category] : []);
     if (template.employment_type) setEmploymentType(template.employment_type);
     setScheduleTags(splitTemplateValues(template.schedule));
-    if (template.pay_defaults) {
-      setPayMode("range");
-      const [min, max] = template.pay_defaults.split(/\s*[–-]\s*/);
-      setPayMin(min?.trim() ?? template.pay_defaults);
-      setPayMax(max?.trim() ?? "");
-    }
-    setDescription(template.job_description ?? "");
+    applyPayDefaults(template.pay_defaults);
+    setDescription(normalizeRichTextForEditing(template.job_description));
     setBenefits(splitTemplateValues(template.benefits));
   }
 
@@ -604,7 +639,7 @@ export default function PostJobPage() {
     const roleCategoryForDb = roleCategories[0] || "Other";
 
     const combinedDescription = [
-      description.trim(),
+      sanitizeRichText(description).trim(),
       scheduleTags.length ? `Schedule: ${scheduleTags.join(", ")}` : "",
       benefits.length ? `Benefits: ${benefits.join(", ")}` : "",
       restaurantType ? `Restaurant type: ${restaurantType}` : "",
@@ -754,22 +789,6 @@ export default function PostJobPage() {
     padding: "10px 12px",
     textAlign: "left",
   });
-
-  const textareaStyle: React.CSSProperties = {
-    width: "100%",
-    minHeight: 130,
-    borderRadius: 14,
-    border: `1px solid ${BORDER}`,
-    backgroundColor: CARD,
-    padding: "14px 16px",
-    outline: "none",
-    color: TEXT,
-    fontSize: 15,
-    fontWeight: 700,
-    fontFamily: "var(--font-body)",
-    boxShadow: "0 8px 18px rgba(0,0,0,.05)",
-    resize: "vertical" as const,
-  };
 
   const pillStyle = (selected: boolean): React.CSSProperties => ({
     display: "inline-flex",
@@ -1489,15 +1508,28 @@ export default function PostJobPage() {
 
               <div style={{ marginTop: 16 }}>
                 <label htmlFor="job-description" style={labelStyle}>Job description *</label>
-                <textarea
+                <div className="rn-rich-text-toolbar" aria-label="Job description formatting">
+                  <button type="button" onClick={() => runDescriptionCommand("bold")}><strong>B</strong></button>
+                  <button type="button" onClick={() => runDescriptionCommand("italic")}><em>I</em></button>
+                  <button type="button" onClick={() => runDescriptionCommand("insertUnorderedList")}>• List</button>
+                  <button type="button" onClick={() => runDescriptionCommand("insertOrderedList")}>1. List</button>
+                  <button type="button" onClick={() => runDescriptionCommand("formatBlock", "h3")}>Heading</button>
+                  <button type="button" onClick={() => runDescriptionCommand("undo")}>Undo</button>
+                  <button type="button" onClick={() => runDescriptionCommand("redo")}>Redo</button>
+                </div>
+                <div
                   id="job-description"
-                  required
+                  ref={descriptionEditorRef}
+                  className="rn-rich-text-editor"
+                  contentEditable
+                  role="textbox"
+                  aria-multiline="true"
+                  aria-required="true"
                   aria-invalid={!!message && step === 3 && !description.trim()}
                   aria-describedby={message ? "post-job-form-error" : undefined}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  style={textareaStyle}
-                  placeholder="Responsibilities, schedule, experience required, etc."
+                  onInput={updateDescriptionFromEditor}
+                  onBlur={updateDescriptionFromEditor}
+                  suppressContentEditableWarning
                 />
               </div>
 
@@ -1724,7 +1756,7 @@ export default function PostJobPage() {
                           fontFamily: "var(--font-body)",
                         }}
                       >
-                        {description || "Description preview"}
+                        <span dangerouslySetInnerHTML={{ __html: sanitizeRichText(description) || "Description preview" }} />
                       </div>
                     </div>
                   </div>
@@ -1989,6 +2021,43 @@ export default function PostJobPage() {
               display: grid;
               grid-template-columns: 1.1fr .9fr;
               gap: 18px;
+            }
+
+
+            .rn-rich-text-toolbar {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 8px;
+              margin-top: 8px;
+            }
+
+            .rn-rich-text-toolbar button {
+              border: 1px solid ${BORDER};
+              border-radius: 10px;
+              background: #fff;
+              color: ${TEXT};
+              cursor: pointer;
+              font-weight: 900;
+              padding: 8px 10px;
+            }
+
+            .rn-rich-text-editor {
+              border: 1px solid ${BORDER};
+              border-radius: 16px;
+              background: #fff;
+              color: ${TEXT};
+              font-family: var(--font-body);
+              font-weight: 700;
+              line-height: 1.55;
+              margin-top: 8px;
+              min-height: 180px;
+              outline: none;
+              padding: 14px 16px;
+            }
+
+            .rn-rich-text-editor:focus {
+              border-color: rgba(53,128,110,.55);
+              box-shadow: 0 0 0 3px rgba(53,128,110,.12);
             }
 
             @media (max-width: 980px) {

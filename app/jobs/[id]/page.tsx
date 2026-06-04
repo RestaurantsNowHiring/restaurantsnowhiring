@@ -10,6 +10,7 @@ import {
   isMissingViewsColumnError,
   isPubliclyVisibleJob,
 } from "../../../lib/jobStatus";
+import { isRichTextHtml, sanitizeRichText } from "../../../lib/richText";
 import { absoluteUrl, noIndexRobots, truncateMetaDescription } from "../../../lib/seo";
 import {
   buildJobSlugBase,
@@ -688,17 +689,29 @@ export default async function JobDetailsPage({
 
               {/* Description */}
               <SectionCard title="Description">
-                <div
-                  style={{
-                    color: INK,
-                    lineHeight: 1.8,
-                    whiteSpace: "pre-wrap",
-                    fontWeight: 650,
-                    fontSize: 16,
-                  }}
-                >
-                  {visibleJob.description || "No description provided."}
-                </div>
+                {visibleJob.description && isRichTextHtml(visibleJob.description) ? (
+                  <div
+                    style={{
+                      color: INK,
+                      lineHeight: 1.8,
+                      fontWeight: 650,
+                      fontSize: 16,
+                    }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(visibleJob.description) }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      color: INK,
+                      lineHeight: 1.8,
+                      whiteSpace: "pre-wrap",
+                      fontWeight: 650,
+                      fontSize: 16,
+                    }}
+                  >
+                    {visibleJob.description || "No description provided."}
+                  </div>
+                )}
               </SectionCard>
 
               <CandidateSubmissionForm jobId={visibleJob.id} />
