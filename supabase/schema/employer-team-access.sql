@@ -12,6 +12,10 @@ begin
   if not exists (select 1 from pg_type where typname = 'candidate_notification_routing') then
     create type public.candidate_notification_routing as enum ('account_owner', 'job_poster', 'company_support', 'custom_job_email');
   end if;
+
+  if not exists (select 1 from pg_type where typname = 'employer_access_scope') then
+    create type public.employer_access_scope as enum ('single_location', 'multi_location', 'full_account_access');
+  end if;
 end $$;
 
 create table if not exists public.employer_accounts (
@@ -40,6 +44,7 @@ create table if not exists public.employer_team_members (
   user_id uuid references auth.users(id) on delete cascade,
   email text not null,
   location_name text,
+  user_type public.employer_access_scope not null default 'multi_location',
   role public.employer_user_role not null default 'viewer',
   status text not null default 'active',
   can_manage_notification_routing boolean not null default false,
@@ -71,6 +76,7 @@ alter table public.employer_accounts
 
 alter table public.employer_team_members
   add column if not exists location_name text,
+  add column if not exists user_type public.employer_access_scope not null default 'multi_location',
   add column if not exists auth_user_id uuid references auth.users(id) on delete cascade,
   add column if not exists invite_token uuid not null default gen_random_uuid(),
   add column if not exists invite_accepted_at timestamptz;
@@ -83,6 +89,14 @@ update public.employer_team_members
 set auth_user_id = user_id
 where auth_user_id is null
   and user_id is not null;
+
+update public.employer_team_members
+set user_type = case
+  when role = 'account_owner' then 'full_account_access'::public.employer_access_scope
+  else 'multi_location'::public.employer_access_scope
+end
+where user_type is null
+   or (role = 'account_owner' and user_type <> 'full_account_access'::public.employer_access_scope);
 
 create unique index if not exists employer_team_members_invite_token_unique
 on public.employer_team_members (invite_token);
