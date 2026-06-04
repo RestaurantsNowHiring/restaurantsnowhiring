@@ -10,6 +10,10 @@ type HiringManagerRow = {
   status: string;
 };
 
+function isMissionBbqLocationName(locationName: string | null) {
+  return locationName?.toUpperCase().includes("MISSION BBQ") ?? false;
+}
+
 export async function GET(request: Request) {
   try {
     const user = await getAuthUserFromRequest(request);
@@ -31,7 +35,9 @@ export async function GET(request: Request) {
 
     if (error) throw new Error(error.message || "Could not load hiring managers.");
 
-    return NextResponse.json({ managers: (data ?? []) as HiringManagerRow[] });
+    const managers = ((data ?? []) as HiringManagerRow[]).filter((manager) => !isMissionBbqLocationName(manager.location_name));
+
+    return NextResponse.json({ managers });
   } catch (error) {
     console.error("Employer hiring manager load failed", { error });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not load hiring managers." }, { status: 500 });

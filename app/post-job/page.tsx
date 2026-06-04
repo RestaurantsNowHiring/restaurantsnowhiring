@@ -38,6 +38,8 @@ type HiringManager = {
   location_name: string | null;
   status: string;
 };
+const EMPTY_LOCATION_SELECTION_LABEL = "No location or hiring manager selected";
+
 type JobTemplate = {
   id: string;
   template_name: string;
@@ -80,9 +82,13 @@ function formatHiringManagerOptionDetail(manager: HiringManager) {
   return manager.location_name?.trim() ? manager.email : "";
 }
 
+function isMissionBbqHiringManagerPlaceholder(manager: HiringManager) {
+  return manager.location_name?.toUpperCase().includes("MISSION BBQ") ?? false;
+}
+
 function buildPostJobHiringManagerOptions(managers: HiringManager[]) {
   return managers
-    .filter((manager) => manager.status === "active" && manager.email?.trim())
+    .filter((manager) => manager.status === "active" && manager.email?.trim() && !isMissionBbqHiringManagerPlaceholder(manager))
     .sort((left, right) =>
       formatHiringManagerOptionLabel(left).localeCompare(formatHiringManagerOptionLabel(right), undefined, { sensitivity: "base" }),
     );
@@ -112,7 +118,7 @@ export default function PostJobPage() {
   const [selectedStoreId, setSelectedStoreId] = useState("");
   const [selectedHiringManagerId, setSelectedHiringManagerId] = useState("");
   const [selectionType, setSelectionType] = useState<SelectionType>(null);
-  const [storeSearchQuery, setStoreSearchQuery] = useState("No store selected");
+  const [storeSearchQuery, setStoreSearchQuery] = useState(EMPTY_LOCATION_SELECTION_LABEL);
   const [isStoreComboboxOpen, setIsStoreComboboxOpen] = useState(false);
   const [highlightedStoreIndex, setHighlightedStoreIndex] = useState(0);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
@@ -216,11 +222,11 @@ export default function PostJobPage() {
     ? formatStoreOptionLabel(selectedStore)
     : selectionType === "manager" && selectedHiringManager
       ? formatHiringManagerOptionLabel(selectedHiringManager)
-      : "No store selected";
+      : EMPTY_LOCATION_SELECTION_LABEL;
 
   const storeSearchText = storeSearchQuery.trim().toLowerCase();
   const filteredStores = useMemo(() => {
-    if (!storeSearchText || storeSearchQuery === "No store selected") return stores;
+    if (!storeSearchText || storeSearchQuery === EMPTY_LOCATION_SELECTION_LABEL) return stores;
 
     return stores.filter((store) => {
       const searchableFields = [
@@ -241,7 +247,7 @@ export default function PostJobPage() {
   }, [storeSearchQuery, storeSearchText, stores]);
 
   const filteredHiringManagers = useMemo(() => {
-    if (!storeSearchText || storeSearchQuery === "No store selected") return hiringManagers;
+    if (!storeSearchText || storeSearchQuery === EMPTY_LOCATION_SELECTION_LABEL) return hiringManagers;
 
     return hiringManagers.filter((manager) => {
       const searchableFields = [manager.location_name, manager.email];
@@ -427,7 +433,7 @@ export default function PostJobPage() {
     applyStoreSelection("");
     setSelectedHiringManagerId("");
     setSelectionType(null);
-    setStoreSearchQuery("No store selected");
+    setStoreSearchQuery(EMPTY_LOCATION_SELECTION_LABEL);
     setIsStoreComboboxOpen(false);
   }
 
@@ -773,7 +779,7 @@ export default function PostJobPage() {
     setSelectedStoreId("");
     setSelectedHiringManagerId("");
     setSelectionType(null);
-    setStoreSearchQuery("No store selected");
+    setStoreSearchQuery(EMPTY_LOCATION_SELECTION_LABEL);
     setIsStoreComboboxOpen(false);
     setSelectedTemplateId("");
     setTemplateSearchQuery("No template selected");
@@ -1228,7 +1234,7 @@ export default function PostJobPage() {
                     value={storeSearchQuery}
                     onFocus={() => {
                       setIsStoreComboboxOpen(true);
-                      if (!selectedStoreId && storeSearchQuery === "No store selected") setStoreSearchQuery("");
+                      if (!selectedStoreId && storeSearchQuery === EMPTY_LOCATION_SELECTION_LABEL) setStoreSearchQuery("");
                     }}
                     onChange={(event) => {
                       setStoreSearchQuery(event.target.value);
@@ -1236,7 +1242,7 @@ export default function PostJobPage() {
                       setIsStoreComboboxOpen(true);
                     }}
                     onKeyDown={handleStoreComboboxKeyDown}
-                    placeholder="No store selected"
+                    placeholder={EMPTY_LOCATION_SELECTION_LABEL}
                     autoComplete="off"
                     style={inputStyle}
                   />
@@ -1269,7 +1275,7 @@ export default function PostJobPage() {
                         onClick={selectNoStore}
                         style={storeComboboxOptionStyle(highlightedStoreIndex === 0, !selectedStoreId)}
                       >
-                        No store selected
+                        No location or hiring manager selected
                       </button>
                       {shortcutOptionCount === 0 ? (
                         <div
