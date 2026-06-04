@@ -38,7 +38,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("candidate_submissions")
-      .select("id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails)")
+      .select("id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails)")
       .order("created_at", { ascending: false })
       .limit(500);
 
@@ -60,8 +60,8 @@ export async function GET(request: Request) {
         (context.accountId && job?.employer_account_id === context.accountId)
       );
 
-      // Team Members/Viewers are access-scope filtered by assigned store, with candidate interest email as a legacy fallback.
-      return belongsToEmployerAccount && canUserAccessJob({ email: user.email, accessScope: context.accessScope, assignedStoreIds: context.assignedStoreIds }, context.role, job);
+      // Team Members/Viewers are location/email-scoped by the job's candidate interest email field.
+      return belongsToEmployerAccount && canUserAccessJob(user, context.role, job);
     });
 
     return NextResponse.json({ candidates: visibleRows.map((row) => serializeSubmission(row as Record<string, unknown>)) });
@@ -113,7 +113,7 @@ export async function PATCH(request: Request) {
       String(job?.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
       (context.accountId && job?.employer_account_id === context.accountId);
 
-    if (!row || !ownsSubmission || !canUserAccessJob({ email: user.email, accessScope: context.accessScope, assignedStoreIds: context.assignedStoreIds }, context.role, job)) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!row || !ownsSubmission || !canUserAccessJob(user, context.role, job)) return NextResponse.json({ error: "Not found." }, { status: 404 });
 
     const { data, error } = await supabaseAdmin
       .from("candidate_submissions")
