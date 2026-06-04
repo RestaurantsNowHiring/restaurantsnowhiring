@@ -1,9 +1,13 @@
 import type { MetadataRoute } from "next";
 import { supabase } from "../lib/supabase";
-import { isMissingStatusColumnError } from "../lib/jobStatus";
+import { isMissingStatusColumnError, isNonExpiredPublicJob } from "../lib/jobStatus";
 import { absoluteUrl } from "../lib/seo";
 import { buildUniqueJobSlugMap, getJobPath } from "../lib/jobSlugs";
 import { restaurantRolePages } from "../lib/restaurantRolePages";
+import {
+  getStateLandingPageByCode,
+  MIN_JOBS_FOR_STATE_PAGE,
+} from "../lib/stateLandingPages";
 
 type SitemapJob = {
   id: string;
@@ -15,28 +19,6 @@ type SitemapJob = {
   created_at?: string | null;
   approved_at?: string | null;
 };
-
-const JOB_LISTING_DAYS = 30;
-
-function addDaysIso(value: string | null | undefined, days: number) {
-  const baseDate = value ? new Date(value) : null;
-  if (!baseDate || Number.isNaN(baseDate.getTime())) return undefined;
-
-  baseDate.setUTCDate(baseDate.getUTCDate() + days);
-  return baseDate.toISOString();
-}
-
-function isActivePublicSitemapJob(job: SitemapJob) {
-  if (job.status !== "active" || job.active !== true) return false;
-
-  const validThrough = addDaysIso(
-    job.approved_at ?? job.created_at,
-    JOB_LISTING_DAYS,
-  );
-  if (!validThrough) return false;
-
-  return Date.now() <= new Date(validThrough).getTime();
-}
 
 const staticRoutes = [
   "/",
@@ -80,7 +62,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     : initialResult;
 
   const visibleJobs = ((result.data ?? []) as SitemapJob[]).filter((job) =>
-    isActivePublicSitemapJob(job),
+    isNonExpiredPublicJob(job),
   );
   const slugById = buildUniqueJobSlugMap(visibleJobs);
 
@@ -91,5 +73,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  return [...staticEntries, ...roleEntries, ...jobEntries];
+  const stateCounts = new Map<string, number>();
+  for (const job of visibleJobs) {
+    const code = job.state?.trim().toUpperCase();
+    if (!code || !getStateLandingPageByCode(code)) continue;
+
+    stateCounts.set(code, (stateCounts.get(code) ?? 0) + 1);
+  }
+
+  const stateEntries: MetadataRoute.Sitemap = Array.from(stateCounts.entries())
+    .filter(([, count]) => count >= MIN_JOBS_FOR_STATE_PAGE)
+    .map(([code]) => getStateLandingPageByCode(code))
+    .filter((state): state is NonNullable<ReturnType<typeof getStateLandingPageByCode>> =>
+      Boolean(state),
+    )
+    .map((state) => ({
+      url: absoluteUrl(`/${state.slug}`),
+      lastModified: new Date(),
+      changeFrequency: "daily" as const,
+      priority: 0.85,
+    }));
+
+  return [...staticEntries, ...roleEntries, ...stateEntries, ...jobEntries];
 }
