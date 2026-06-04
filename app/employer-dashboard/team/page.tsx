@@ -594,7 +594,7 @@ export default function TeamAccessPage() {
               <div className="rn-team-list-header">
                 <div>
                   <h2 style={{ marginTop: 0, marginBottom: 6, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Current team users</h2>
-                  <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Search and filter team access without changing existing actions.</p>
+                  <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Search team members and edit details or change access level.</p>
                 </div>
               </div>
 
