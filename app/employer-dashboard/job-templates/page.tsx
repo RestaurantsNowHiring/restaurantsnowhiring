@@ -28,6 +28,7 @@ type JobTemplate = {
   job_description: string | null;
   benefits: string | null;
   active: boolean;
+  is_default?: boolean | null;
   created_at: string;
   updated_at: string;
 };
@@ -174,6 +175,10 @@ function templateToForm(template: JobTemplate): TemplateForm {
 
 function formatText(value: string | null) {
   return value?.trim() || "—";
+}
+
+function getTemplateBadgeLabel(template: JobTemplate) {
+  return template.is_default || !template.employer_account_id ? "Default" : "Custom";
 }
 
 
@@ -445,29 +450,35 @@ Create and manage reusable templates for your employer account. Active templates
           </div>
         </section>
 
-        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
-          <div className="rn-template-filter-grid">
-            <label style={{ fontWeight: 900, color: homeTheme.text }}>
-              Search templates
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, job title, role, schedule" style={{ ...homeInputStyle, marginTop: 6 }} />
-            </label>
-            <label style={{ fontWeight: 900, color: homeTheme.text }}>
-              Status
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TemplateStatusFilter)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
-                <option value="all">All statuses</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </label>
-          </div>
-        </section>
-
         <div className="rn-template-directory-grid">
-          <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
-            <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Template list</h2>
-            <div style={{ display: "grid", gap: 10 }}>
+          <section className="rn-template-list-panel" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+            <div className="rn-template-list-header">
+              <div>
+                <h2 style={{ margin: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Template list</h2>
+                <p style={{ margin: "4px 0 0", color: homeTheme.muted, fontWeight: 800, fontSize: 13 }}>
+                  {filteredTemplates.length} of {templates.length} shown
+                </p>
+              </div>
+            </div>
+
+            <div className="rn-template-filter-grid rn-template-list-filters">
+              <label style={{ fontWeight: 900, color: homeTheme.text }}>
+                Search templates
+                <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Name, job title, role, schedule" style={{ ...homeInputStyle, marginTop: 6 }} />
+              </label>
+              <label style={{ fontWeight: 900, color: homeTheme.text }}>
+                Status
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as TemplateStatusFilter)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                  <option value="all">All statuses</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </label>
+            </div>
+
+            <div className="rn-template-scroll-list" aria-label="Templates">
               {templates.length === 0 ? (
-                <div style={{ display: "grid", gap: 12 }}>
+                <div className="rn-template-empty-state">
                   <p style={{ color: homeTheme.muted, fontWeight: 800, margin: 0 }}>No job templates yet.</p>
                   {canManageTemplates ? (
                     <button type="button" className="rn-btn-primary" style={homePrimaryButton} onClick={startNewTemplate}>
@@ -476,36 +487,33 @@ Create and manage reusable templates for your employer account. Active templates
                   ) : null}
                 </div>
               ) : filteredTemplates.length === 0 ? (
-                <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No templates match these filters.</p>
+                <p style={{ color: homeTheme.muted, fontWeight: 800, margin: 0 }}>No templates match these filters.</p>
               ) : null}
-              {filteredTemplates.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => { setSelectedTemplateId(template.id); setIsEditing(false); }}
-                  className="rn-template-list-item"
-                  style={{
-                    textAlign: "left",
-                    border: `1px solid ${selectedTemplateId === template.id ? "rgba(53,128,110,.45)" : homeTheme.border}`,
-                    borderRadius: 16,
-                    background: selectedTemplateId === template.id ? "#dfe7e3" : "#fff",
-                    padding: 16,
-                    cursor: "pointer",
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  <span className="rn-template-badge">Custom</span>
-                  <strong style={{ display: "block", color: homeTheme.text, fontSize: 16, marginTop: 8 }}>{template.template_name}</strong>
-                  <span style={{ display: "block", marginTop: 5, color: homeTheme.muted, fontWeight: 800 }}>{template.job_title}</span>
-                  <span style={{ display: "inline-flex", marginTop: 10, color: template.active ? homeTheme.green : homeTheme.muted, fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>
-                    {template.active ? "Active" : "Inactive"}
-                  </span>
-                </button>
-              ))}
+              {filteredTemplates.map((template) => {
+                const isSelected = selectedTemplateId === template.id;
+                return (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => { setSelectedTemplateId(template.id); setIsEditing(false); }}
+                    className={`rn-template-list-item ${isSelected ? "rn-template-list-item-selected" : ""}`}
+                    aria-current={isSelected ? "true" : undefined}
+                  >
+                    <span className="rn-template-list-item-main">
+                      <strong>{template.template_name}</strong>
+                      <span>{template.job_title}</span>
+                    </span>
+                    <span className="rn-template-list-meta">
+                      <span className="rn-template-status-pill" data-active={template.active ? "true" : "false"}>{template.active ? "Active" : "Inactive"}</span>
+                      <span className="rn-template-badge rn-template-badge-compact">{getTemplateBadgeLabel(template)}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </section>
 
-          <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+          <section className="rn-template-preview-panel" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
             {isEditing ? (
               <form onSubmit={saveTemplate} className="rn-template-editor-card">
                 <div>
@@ -605,7 +613,7 @@ Create and manage reusable templates for your employer account. Active templates
               <div>
                 <div className="rn-template-header-row">
                   <div>
-                    <span className="rn-template-badge">Custom</span>
+                    <span className="rn-template-badge">{getTemplateBadgeLabel(selectedTemplate)}</span>
                     <p style={{ margin: "10px 0 0", color: selectedTemplate.active ? homeTheme.green : homeTheme.muted, fontWeight: 900, fontSize: 12, textTransform: "uppercase" }}>
                       {selectedTemplate.active ? "Active" : "Inactive"}
                     </p>
@@ -654,6 +662,10 @@ Create and manage reusable templates for your employer account. Active templates
           grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 14px;
         }
+        .rn-template-list-filters {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 10px;
+        }
         .rn-template-summary-grid div,
         .rn-template-detail-grid div,
         .rn-template-long-field {
@@ -676,9 +688,106 @@ Create and manage reusable templates for your employer account. Active templates
         }
         .rn-template-directory-grid {
           display: grid;
-          grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.35fr);
+          grid-template-columns: minmax(300px, 0.82fr) minmax(0, 1.38fr);
           gap: 16px;
           align-items: start;
+        }
+        .rn-template-list-panel {
+          display: grid;
+          gap: 14px;
+          max-height: min(720px, calc(100vh - 132px));
+          min-height: 420px;
+          overflow: hidden;
+        }
+        .rn-template-list-header {
+          align-items: flex-start;
+          display: flex;
+          justify-content: space-between;
+          gap: 12px;
+        }
+        .rn-template-scroll-list {
+          display: grid;
+          gap: 8px;
+          max-height: min(460px, calc(100vh - 340px));
+          min-height: 220px;
+          overflow-y: auto;
+          padding: 2px 4px 2px 2px;
+          scrollbar-gutter: stable;
+        }
+        .rn-template-empty-state {
+          display: grid;
+          gap: 12px;
+        }
+        .rn-template-list-item {
+          align-items: center;
+          background: #fff;
+          border: 1px solid ${homeTheme.border};
+          border-radius: 14px;
+          cursor: pointer;
+          display: grid;
+          font-family: var(--font-body);
+          gap: 8px;
+          grid-template-columns: minmax(0, 1fr) auto;
+          padding: 11px 12px;
+          text-align: left;
+          transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease;
+          width: 100%;
+        }
+        .rn-template-list-item:hover {
+          border-color: rgba(53,128,110,.32);
+          box-shadow: 0 8px 18px rgba(0,0,0,.06);
+          transform: translateY(-1px);
+        }
+        .rn-template-list-item-selected {
+          background: #e7eee9;
+          border-color: rgba(53,128,110,.48);
+          box-shadow: inset 4px 0 0 ${homeTheme.green}, 0 8px 18px rgba(53,128,110,.10);
+        }
+        .rn-template-list-item-main {
+          display: grid;
+          gap: 3px;
+          min-width: 0;
+        }
+        .rn-template-list-item-main strong {
+          color: ${homeTheme.text};
+          font-size: 14px;
+          line-height: 1.25;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .rn-template-list-item-main span {
+          color: ${homeTheme.muted};
+          font-size: 13px;
+          font-weight: 800;
+          line-height: 1.25;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .rn-template-list-meta {
+          align-items: flex-end;
+          display: grid;
+          gap: 5px;
+          justify-items: end;
+        }
+        .rn-template-status-pill {
+          border-radius: 999px;
+          color: ${homeTheme.green};
+          background: rgba(53,128,110,.10);
+          font-size: 11px;
+          font-weight: 900;
+          line-height: 1;
+          padding: 5px 8px;
+          text-transform: uppercase;
+        }
+        .rn-template-status-pill[data-active="false"] {
+          background: rgba(0,0,0,.06);
+          color: ${homeTheme.muted};
+        }
+        .rn-template-preview-panel {
+          position: sticky;
+          top: 92px;
         }
         .rn-template-detail-grid {
           margin: 18px 0 0;
@@ -755,6 +864,10 @@ Create and manage reusable templates for your employer account. Active templates
           font-weight: 900;
           text-transform: uppercase;
           letter-spacing: .3px;
+        }
+        .rn-template-badge-compact {
+          font-size: 10px;
+          padding: 4px 7px;
         }
 
         .rn-template-editor-card {
@@ -881,6 +994,27 @@ Create and manage reusable templates for your employer account. Active templates
           .rn-template-summary-grid,
           .rn-template-directory-grid {
             grid-template-columns: 1fr;
+          }
+          .rn-template-list-panel {
+            max-height: none;
+            min-height: 0;
+          }
+          .rn-template-scroll-list {
+            max-height: min(420px, 56vh);
+          }
+          .rn-template-preview-panel {
+            position: static;
+          }
+        }
+        @media (max-width: 560px) {
+          .rn-template-list-item {
+            align-items: start;
+            grid-template-columns: 1fr;
+          }
+          .rn-template-list-meta {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: flex-start;
           }
         }
       `}</style>
