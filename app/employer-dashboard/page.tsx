@@ -19,11 +19,10 @@ import {
 } from "../../lib/jobStatus";
 import { canUserAccessJob } from "../../lib/employerJobAccess";
 
-type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string; accessScope?: EmployerAccessScope | null; assignedStoreIds?: string[] };
-type EmployerAccessScope = "single_location" | "multi_location" | "full_account_access";
+type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string };
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
-type EmployerAccountMembership = { accountId: string; accountName: string; locationName: string | null; accessScope: EmployerAccessScope; assignedStoreIds: string[]; role: EmployerRole; status?: string; invitationPending?: boolean };
-type EmployerAccess = { role: EmployerRole; accountId: string | null; accountName: string | null; restaurantBrandName: string | null; locationName: string | null; accessScope: EmployerAccessScope; assignedStoreIds: string[]; memberships: EmployerAccountMembership[]; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canViewCandidates: boolean; canUpdateCandidateStatuses: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
+type EmployerAccountMembership = { accountId: string; accountName: string; locationName: string | null; role: EmployerRole; status?: string; invitationPending?: boolean };
+type EmployerAccess = { role: EmployerRole; accountId: string | null; accountName: string | null; restaurantBrandName: string | null; locationName: string | null; memberships: EmployerAccountMembership[]; ownerUserId: string; ownerEmail: string; canManageProfile: boolean; canManageBilling: boolean; canManageJobs: boolean; canViewCandidates: boolean; canUpdateCandidateStatuses: boolean; canManageTeam: boolean; canManageNotificationRouting: boolean; };
 type OwnershipMatch = "employer_account_id" | "employer_user_id" | "employer_email";
 
 type DashboardJob = {
@@ -38,7 +37,6 @@ type DashboardJob = {
   employer_email: string | null;
   ownership_match: OwnershipMatch | null;
   employer_account_id?: string | null;
-  employer_store_id?: string | null;
   candidate_notification_email?: string | null;
   candidate_notification_emails?: string[] | string | null;
   created_at: string;
@@ -213,12 +211,12 @@ function isMissingEmployerUserIdColumnError(error: SupabaseActionError | null | 
 
 const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   {
-    fields: "id,title,restaurant_name,city,state,active,status,created_at,views,employer_user_id,employer_email,employer_account_id,candidate_notification_email,employer_store_id,candidate_notification_emails",
+    fields: "id,title,restaurant_name,city,state,active,status,created_at,views,employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails",
     includesStatus: true,
     includesViews: true,
   },
   {
-    fields: "id,title,restaurant_name,city,state,active,status,created_at,employer_user_id,employer_email,employer_account_id,candidate_notification_email,employer_store_id,candidate_notification_emails",
+    fields: "id,title,restaurant_name,city,state,active,status,created_at,employer_user_id,employer_email,employer_account_id,candidate_notification_email,candidate_notification_emails",
     includesStatus: true,
     includesViews: false,
   },
@@ -588,8 +586,6 @@ export default function EmployerDashboardPage() {
         accountId: access?.accountId ?? null,
         ownerUserId: access?.ownerUserId ?? userId,
         ownerEmail: access?.ownerEmail ?? email,
-        accessScope: access?.accessScope ?? null,
-        assignedStoreIds: access?.assignedStoreIds ?? [],
       };
       setActionError(null);
       setActionSuccess(null);
@@ -627,7 +623,7 @@ export default function EmployerDashboardPage() {
         return;
       }
 
-      const visibleJobRows = jobsResult.liveJobs.filter((job) => canUserAccessJob({ email, accessScope: access?.accessScope, assignedStoreIds: access?.assignedStoreIds }, access?.role ?? "account_owner", job));
+      const visibleJobRows = jobsResult.liveJobs.filter((job) => canUserAccessJob({ email }, access?.role ?? "account_owner", job));
 
       const hydratedJobs: DashboardJob[] = visibleJobRows.map((job) => {
         const status = jobsResult.selectedVariant?.includesStatus ? (typeof job.status === "string" ? job.status : null) : null;
@@ -647,7 +643,6 @@ export default function EmployerDashboardPage() {
           employer_user_id: employerUserId,
           employer_email: employerEmail,
           employer_account_id: employerAccountId,
-          employer_store_id: typeof job.employer_store_id === "string" ? job.employer_store_id : null,
           candidate_notification_email: typeof job.candidate_notification_email === "string" ? job.candidate_notification_email : null,
           candidate_notification_emails: Array.isArray(job.candidate_notification_emails)
             ? (job.candidate_notification_emails as string[])
