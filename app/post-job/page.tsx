@@ -17,6 +17,7 @@ import {
 type Step = 1 | 2 | 3 | 4;
 type PayMode = "range" | "minimum" | "maximum" | "rate";
 type EmployerAccess = { accountId: string | null; canManageJobs: boolean; canManageNotificationRouting: boolean; defaultCandidateNotificationRouting: string; supportEmail: string | null; };
+type SelectionType = "store" | "manager" | null;
 type EmployerStore = {
   id: string;
   location_name: string;
@@ -30,6 +31,12 @@ type EmployerStore = {
   pay_range: string | null;
   default_application_url: string | null;
   active: boolean;
+};
+type HiringManager = {
+  id: string;
+  email: string;
+  location_name: string | null;
+  status: string;
 };
 type JobTemplate = {
   id: string;
@@ -45,92 +52,12 @@ type JobTemplate = {
 };
 
 
-function normalizeStoreDedupeValue(value: string | null | undefined) {
-  return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
-}
-
-function hasRealLocationShortcutFields(store: EmployerStore) {
-  if (!store.location_name?.trim()) return false;
-
-  // Routing emails can belong to valid store shortcuts, but team-access person rows
-  // can also carry routing emails. Require at least one non-email location/default
-  // field so person-only team rows do not appear in the Post a Job store selector.
-  return Boolean(
-    store.address?.trim() ||
-      store.city?.trim() ||
-      store.state?.trim() ||
-      store.default_application_url?.trim() ||
-      store.minimum_wage?.trim() ||
-      store.pay_range?.trim(),
-  );
-}
-
-function getStoreDedupeKey(store: EmployerStore) {
-  const parts = [store.location_name, store.city, store.state, store.address].map(normalizeStoreDedupeValue);
-  const locationKey = parts.join("|");
-  return locationKey.replace(/\|/g, "") ? locationKey : store.id;
-}
-
-function getStoreCompletenessScore(store: EmployerStore) {
-  return [
-    store.address,
-    store.city,
-    store.state,
-    store.default_application_url,
-    store.minimum_wage,
-    store.pay_range,
-    store.store_email,
-    store.ta_email,
-    store.gm_op_email,
-  ].reduce((score, value) => score + (value?.trim() ? 1 : 0), 0);
-}
-
-function preferStoreField(current: string | null, incoming: string | null) {
-  return current?.trim() ? current : incoming?.trim() ? incoming : current ?? incoming ?? null;
-}
-
-function mergeStoreOptions(current: EmployerStore, incoming: EmployerStore) {
-  const primary = getStoreCompletenessScore(incoming) > getStoreCompletenessScore(current) ? incoming : current;
-  const secondary = primary === incoming ? current : incoming;
-  const routingEmails = [
-    primary.store_email,
-    primary.ta_email,
-    primary.gm_op_email,
-    secondary.store_email,
-    secondary.ta_email,
-    secondary.gm_op_email,
-  ]
-    .map((value) => value?.trim().toLowerCase())
-    .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
-
-  return {
-    ...primary,
-    location_name: preferStoreField(primary.location_name, secondary.location_name) ?? primary.location_name,
-    address: preferStoreField(primary.address, secondary.address),
-    city: preferStoreField(primary.city, secondary.city),
-    state: preferStoreField(primary.state, secondary.state),
-    default_application_url: preferStoreField(primary.default_application_url, secondary.default_application_url),
-    minimum_wage: preferStoreField(primary.minimum_wage, secondary.minimum_wage),
-    pay_range: preferStoreField(primary.pay_range, secondary.pay_range),
-    store_email: routingEmails[0] ?? null,
-    ta_email: routingEmails[1] ?? null,
-    gm_op_email: routingEmails[2] ?? null,
-    active: current.active || incoming.active,
-  };
-}
-
 function buildPostJobStoreOptions(stores: EmployerStore[]) {
-  const dedupedStores = new Map<string, EmployerStore>();
-
-  stores.filter((store) => store.active && hasRealLocationShortcutFields(store)).forEach((store) => {
-    const key = getStoreDedupeKey(store);
-    const existing = dedupedStores.get(key);
-    dedupedStores.set(key, existing ? mergeStoreOptions(existing, store) : store);
-  });
-
-  return Array.from(dedupedStores.values()).sort((left, right) =>
-    formatStoreOptionLabel(left).localeCompare(formatStoreOptionLabel(right), undefined, { sensitivity: "base" }),
-  );
+  return stores
+    .filter((store) => store.active)
+    .sort((left, right) =>
+      formatStoreOptionLabel(left).localeCompare(formatStoreOptionLabel(right), undefined, { sensitivity: "base" }),
+    );
 }
 
 function formatStoreOptionLabel(store: EmployerStore) {
@@ -139,6 +66,22 @@ function formatStoreOptionLabel(store: EmployerStore) {
 
 function formatStoreOptionDetail(store: EmployerStore) {
   return [store.address, store.store_email, store.ta_email, store.gm_op_email].filter(Boolean).join(" • ");
+}
+
+function formatHiringManagerOptionLabel(manager: HiringManager) {
+  return manager.location_name?.trim() || manager.email;
+}
+
+function formatHiringManagerOptionDetail(manager: HiringManager) {
+  return manager.location_name?.trim() ? manager.email : "";
+}
+
+function buildPostJobHiringManagerOptions(managers: HiringManager[]) {
+  return managers
+    .filter((manager) => manager.status === "active" && manager.email?.trim())
+    .sort((left, right) =>
+      formatHiringManagerOptionLabel(left).localeCompare(formatHiringManagerOptionLabel(right), undefined, { sensitivity: "base" }),
+    );
 }
 
 function formatTemplateOptionLabel(template: JobTemplate) {
@@ -160,8 +103,11 @@ export default function PostJobPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [stores, setStores] = useState<EmployerStore[]>([]);
+  const [hiringManagers, setHiringManagers] = useState<HiringManager[]>([]);
   const [jobTemplates, setJobTemplates] = useState<JobTemplate[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [selectedHiringManagerId, setSelectedHiringManagerId] = useState("");
+  const [selectionType, setSelectionType] = useState<SelectionType>(null);
   const [storeSearchQuery, setStoreSearchQuery] = useState("No store selected");
   const [isStoreComboboxOpen, setIsStoreComboboxOpen] = useState(false);
   const [highlightedStoreIndex, setHighlightedStoreIndex] = useState(0);
@@ -257,6 +203,17 @@ export default function PostJobPage() {
     [selectedStoreId, stores]
   );
 
+  const selectedHiringManager = useMemo(
+    () => hiringManagers.find((manager) => manager.id === selectedHiringManagerId) ?? null,
+    [hiringManagers, selectedHiringManagerId]
+  );
+
+  const selectedShortcutLabel = selectionType === "store" && selectedStore
+    ? formatStoreOptionLabel(selectedStore)
+    : selectionType === "manager" && selectedHiringManager
+      ? formatHiringManagerOptionLabel(selectedHiringManager)
+      : "No store selected";
+
   const storeSearchText = storeSearchQuery.trim().toLowerCase();
   const filteredStores = useMemo(() => {
     if (!storeSearchText || storeSearchQuery === "No store selected") return stores;
@@ -278,6 +235,17 @@ export default function PostJobPage() {
       return searchableFields.some((field) => field?.toLowerCase().includes(storeSearchText));
     });
   }, [storeSearchQuery, storeSearchText, stores]);
+
+  const filteredHiringManagers = useMemo(() => {
+    if (!storeSearchText || storeSearchQuery === "No store selected") return hiringManagers;
+
+    return hiringManagers.filter((manager) => {
+      const searchableFields = [manager.location_name, manager.email];
+      return searchableFields.some((field) => field?.toLowerCase().includes(storeSearchText));
+    });
+  }, [hiringManagers, storeSearchQuery, storeSearchText]);
+
+  const shortcutOptionCount = filteredStores.length + filteredHiringManagers.length;
 
   const selectedTemplate = useMemo(
     () => jobTemplates.find((template) => template.id === selectedTemplateId) ?? null,
@@ -304,8 +272,8 @@ export default function PostJobPage() {
   const closeStoreCombobox = useCallback(() => {
     setIsStoreComboboxOpen(false);
     setHighlightedStoreIndex(0);
-    setStoreSearchQuery(selectedStore ? formatStoreOptionLabel(selectedStore) : "No store selected");
-  }, [selectedStore]);
+    setStoreSearchQuery(selectedShortcutLabel);
+  }, [selectedShortcutLabel]);
 
   const closeTemplateCombobox = useCallback(() => {
     setIsTemplateComboboxOpen(false);
@@ -329,14 +297,20 @@ export default function PostJobPage() {
   }, [closeStoreCombobox, closeTemplateCombobox]);
 
   async function loadStoreAndTemplateOptions(accessToken: string) {
-    const [storesResponse, templatesResponse] = await Promise.all([
+    const [storesResponse, managersResponse, templatesResponse] = await Promise.all([
       fetch("/api/employer/stores", { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch("/api/employer/hiring-managers", { headers: { Authorization: `Bearer ${accessToken}` } }),
       fetch("/api/employer/job-templates", { headers: { Authorization: `Bearer ${accessToken}` } }),
     ]);
 
     if (storesResponse.ok) {
       const payload = (await storesResponse.json().catch(() => null)) as { stores?: EmployerStore[] } | null;
       setStores(buildPostJobStoreOptions(payload?.stores ?? []));
+    }
+
+    if (managersResponse.ok) {
+      const payload = (await managersResponse.json().catch(() => null)) as { managers?: HiringManager[] } | null;
+      setHiringManagers(buildPostJobHiringManagerOptions(payload?.managers ?? []));
     }
 
     if (templatesResponse.ok) {
@@ -447,13 +421,23 @@ export default function PostJobPage() {
 
   function selectNoStore() {
     applyStoreSelection("");
+    setSelectedHiringManagerId("");
+    setSelectionType(null);
     setStoreSearchQuery("No store selected");
     setIsStoreComboboxOpen(false);
   }
 
   function selectStore(store: EmployerStore) {
     applyStoreSelection(store.id);
+    setSelectedHiringManagerId("");
+    setSelectionType("store");
     setStoreSearchQuery(formatStoreOptionLabel(store));
+    setIsStoreComboboxOpen(false);
+  }
+
+  function selectHiringManager(manager: HiringManager) {
+    applyHiringManagerSelection(manager.id);
+    setStoreSearchQuery(formatHiringManagerOptionLabel(manager));
     setIsStoreComboboxOpen(false);
   }
 
@@ -479,7 +463,7 @@ export default function PostJobPage() {
     if (event.key === "ArrowDown") {
       event.preventDefault();
       setIsStoreComboboxOpen(true);
-      setHighlightedStoreIndex((current) => Math.min(current + 1, filteredStores.length));
+      setHighlightedStoreIndex((current) => Math.min(current + 1, shortcutOptionCount));
       return;
     }
 
@@ -498,7 +482,13 @@ export default function PostJobPage() {
       }
 
       const highlightedStore = filteredStores[highlightedStoreIndex - 1];
-      if (highlightedStore) selectStore(highlightedStore);
+      if (highlightedStore) {
+        selectStore(highlightedStore);
+        return;
+      }
+
+      const highlightedManager = filteredHiringManagers[highlightedStoreIndex - filteredStores.length - 1];
+      if (highlightedManager) selectHiringManager(highlightedManager);
     }
   }
 
@@ -578,6 +568,16 @@ export default function PostJobPage() {
     const routingEmails = [store.store_email, store.ta_email, store.gm_op_email].filter(Boolean).join(", ");
     if (routingEmails && canManageCandidateNotificationRouting) setCandidateNotificationEmail(routingEmails);
     if (store.store_email) setWorkEmail(store.store_email);
+  }
+
+  function applyHiringManagerSelection(managerId: string) {
+    setSelectedHiringManagerId(managerId);
+    setSelectedStoreId("");
+    setSelectionType("manager");
+    const manager = hiringManagers.find((option) => option.id === managerId);
+    if (!manager) return;
+
+    if (canManageCandidateNotificationRouting) setCandidateNotificationEmail(manager.email);
   }
 
   function splitTemplateValues(value: string | null) {
@@ -767,6 +767,8 @@ export default function PostJobPage() {
     setDescription("");
     setBenefits([]);
     setSelectedStoreId("");
+    setSelectedHiringManagerId("");
+    setSelectionType(null);
     setStoreSearchQuery("No store selected");
     setIsStoreComboboxOpen(false);
     setSelectedTemplateId("");
@@ -1205,11 +1207,11 @@ export default function PostJobPage() {
             }}
           >
             <div style={{ fontSize: 18, fontWeight: 900, color: TEXT, fontFamily: "var(--font-body)", marginBottom: 12 }}>
-              Optional store and template shortcuts
+              Optional location and template shortcuts
             </div>
             <div className="rn-two-col">
               <div>
-                <label htmlFor="store-selector" style={labelStyle}>Select Store</label>
+                <label htmlFor="store-selector" style={labelStyle}>Select Location or Hiring Manager</label>
                 <div ref={storeComboboxRef} style={{ position: "relative" }}>
                   <input
                     id="store-selector"
@@ -1265,7 +1267,7 @@ export default function PostJobPage() {
                       >
                         No store selected
                       </button>
-                      {filteredStores.length === 0 ? (
+                      {shortcutOptionCount === 0 ? (
                         <div
                           style={{
                             padding: "12px 14px",
@@ -1275,38 +1277,74 @@ export default function PostJobPage() {
                             fontFamily: "var(--font-body)",
                           }}
                         >
-                          No stores found.
+                          No locations or hiring managers found.
                         </div>
                       ) : (
-                        filteredStores.map((store, index) => {
-                          const optionIndex = index + 1;
-                          const details = formatStoreOptionDetail(store);
-                          return (
-                            <button
-                              key={store.id}
-                              id={`store-selector-option-${optionIndex}`}
-                              type="button"
-                              role="option"
-                              aria-selected={selectedStoreId === store.id}
-                              onMouseEnter={() => setHighlightedStoreIndex(optionIndex)}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={() => selectStore(store)}
-                              style={storeComboboxOptionStyle(highlightedStoreIndex === optionIndex, selectedStoreId === store.id)}
-                            >
-                              <span style={{ display: "block" }}>{formatStoreOptionLabel(store)}</span>
-                              {details ? (
-                                <span style={{ display: "block", marginTop: 4, color: MUTED, fontSize: 12, fontWeight: 700 }}>
-                                  {details}
-                                </span>
-                              ) : null}
-                            </button>
-                          );
-                        })
+                        <>
+                          {filteredStores.length > 0 ? (
+                            <div style={{ padding: "8px 12px 6px", color: MUTED, fontSize: 11, fontWeight: 900, fontFamily: "var(--font-body)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+                              Store Locations
+                            </div>
+                          ) : null}
+                          {filteredStores.map((store, index) => {
+                            const optionIndex = index + 1;
+                            const details = formatStoreOptionDetail(store);
+                            return (
+                              <button
+                                key={`store-${store.id}`}
+                                id={`store-selector-option-${optionIndex}`}
+                                type="button"
+                                role="option"
+                                aria-selected={selectionType === "store" && selectedStoreId === store.id}
+                                onMouseEnter={() => setHighlightedStoreIndex(optionIndex)}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectStore(store)}
+                                style={storeComboboxOptionStyle(highlightedStoreIndex === optionIndex, selectionType === "store" && selectedStoreId === store.id)}
+                              >
+                                <span style={{ display: "block" }}>{formatStoreOptionLabel(store)}</span>
+                                {details ? (
+                                  <span style={{ display: "block", marginTop: 4, color: MUTED, fontSize: 12, fontWeight: 700 }}>
+                                    {details}
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                          {filteredHiringManagers.length > 0 ? (
+                            <div style={{ padding: filteredStores.length > 0 ? "12px 12px 6px" : "8px 12px 6px", color: MUTED, fontSize: 11, fontWeight: 900, fontFamily: "var(--font-body)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+                              Hiring Managers
+                            </div>
+                          ) : null}
+                          {filteredHiringManagers.map((manager, index) => {
+                            const optionIndex = filteredStores.length + index + 1;
+                            const details = formatHiringManagerOptionDetail(manager);
+                            return (
+                              <button
+                                key={`manager-${manager.id}`}
+                                id={`store-selector-option-${optionIndex}`}
+                                type="button"
+                                role="option"
+                                aria-selected={selectionType === "manager" && selectedHiringManagerId === manager.id}
+                                onMouseEnter={() => setHighlightedStoreIndex(optionIndex)}
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => selectHiringManager(manager)}
+                                style={storeComboboxOptionStyle(highlightedStoreIndex === optionIndex, selectionType === "manager" && selectedHiringManagerId === manager.id)}
+                              >
+                                <span style={{ display: "block" }}>{formatHiringManagerOptionLabel(manager)}</span>
+                                {details ? (
+                                  <span style={{ display: "block", marginTop: 4, color: MUTED, fontSize: 12, fontWeight: 700 }}>
+                                    {details}
+                                  </span>
+                                ) : null}
+                              </button>
+                            );
+                          })}
+                        </>
                       )}
                     </div>
                   )}
                 </div>
-                <div style={helperStyle}>Selecting a store fills available location, routing, pay, and application fields. You can still edit every field.</div>
+                <div style={helperStyle}>Select a store location to automatically fill address, routing, wage, and application fields. You can also select a hiring manager for multi-location or salary positions.</div>
               </div>
               <div>
                 <label htmlFor="template-selector" style={labelStyle}>Select Job Template</label>
