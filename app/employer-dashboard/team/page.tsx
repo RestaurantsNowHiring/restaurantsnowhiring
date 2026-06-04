@@ -568,7 +568,7 @@ export default function TeamAccessPage() {
                   <span>Allow this user to change candidate notification routing</span>
                 </label>
                 <button type="submit" className="rn-btn-primary" style={homePrimaryButton} disabled={busy}>
-                  {busy ? "Saving..." : "Save Team Access"}
+                  {busy ? "Saving..." : "Invite Team Member"}
                 </button>
               </form>
             </section>
