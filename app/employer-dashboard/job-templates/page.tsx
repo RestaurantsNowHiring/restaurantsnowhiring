@@ -501,11 +501,11 @@ Create and manage reusable templates for your employer account. Active templates
                   >
                     <span className="rn-template-list-item-main">
                       <strong>{template.template_name}</strong>
-                      <span>{template.job_title}</span>
-                    </span>
-                    <span className="rn-template-list-meta">
-                      <span className="rn-template-status-pill" data-active={template.active ? "true" : "false"}>{template.active ? "Active" : "Inactive"}</span>
-                      <span className="rn-template-badge rn-template-badge-compact">{getTemplateBadgeLabel(template)}</span>
+                      <span className="rn-template-list-item-title">{template.job_title}</span>
+                      <span className="rn-template-list-meta">
+                        <span className="rn-template-status-pill" data-active={template.active ? "true" : "false"}>{template.active ? "Active" : "Inactive"}</span>
+                        <span className="rn-template-badge rn-template-badge-compact">{getTemplateBadgeLabel(template)}</span>
+                      </span>
                     </span>
                   </button>
                 );
@@ -706,13 +706,16 @@ Create and manage reusable templates for your employer account. Active templates
           gap: 12px;
         }
         .rn-template-scroll-list {
+          box-sizing: border-box;
           display: grid;
           gap: 10px;
           max-height: min(480px, calc(100vh - 320px));
           min-height: 240px;
+          overflow-x: hidden;
           overflow-y: auto;
-          padding: 4px 6px 4px 2px;
+          padding: 4px 18px 4px 2px;
           scrollbar-gutter: stable;
+          width: 100%;
         }
         .rn-template-empty-state {
           display: grid;
@@ -723,12 +726,13 @@ Create and manage reusable templates for your employer account. Active templates
           background: #fff;
           border: 1px solid ${homeTheme.border};
           border-radius: 14px;
+          box-sizing: border-box;
           cursor: pointer;
           display: flex;
           font-family: var(--font-body);
           gap: 12px;
-          justify-content: space-between;
           min-height: 76px;
+          min-width: 0;
           padding: 12px 13px;
           text-align: left;
           transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease;
@@ -745,10 +749,12 @@ Create and manage reusable templates for your employer account. Active templates
           box-shadow: inset 4px 0 0 ${homeTheme.green}, 0 8px 18px rgba(53,128,110,.10);
         }
         .rn-template-list-item-main {
+          box-sizing: border-box;
           display: flex;
           flex: 1 1 auto;
           flex-direction: column;
           gap: 5px;
+          max-width: 100%;
           min-width: 0;
           padding-top: 1px;
         }
@@ -761,35 +767,40 @@ Create and manage reusable templates for your employer account. Active templates
           text-overflow: ellipsis;
           white-space: nowrap;
         }
-        .rn-template-list-item-main span {
+        .rn-template-list-item-title {
           color: ${homeTheme.muted};
           display: block;
           font-size: 12px;
           font-weight: 800;
           line-height: 1.3;
+          min-width: 0;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
         }
         .rn-template-list-meta {
-          align-items: flex-end;
+          align-items: center;
           display: flex;
           flex: 0 0 auto;
-          flex-direction: column;
+          flex-direction: row;
+          flex-wrap: wrap;
           gap: 6px;
           justify-content: flex-start;
-          max-width: 92px;
+          max-width: 100%;
+          min-width: 0;
         }
         .rn-template-status-pill {
           border-radius: 999px;
           color: ${homeTheme.green};
           background: rgba(53,128,110,.10);
+          box-sizing: border-box;
           display: inline-flex;
+          flex-shrink: 0;
           font-size: 10px;
           font-weight: 900;
           justify-content: center;
           line-height: 1;
-          max-width: 100%;
+          max-width: 72px;
           padding: 5px 8px;
           text-transform: uppercase;
           white-space: nowrap;
@@ -868,8 +879,10 @@ Create and manage reusable templates for your employer account. Active templates
           margin: 4px 0;
         }
         .rn-template-badge {
+          box-sizing: border-box;
           display: inline-flex;
           border-radius: 999px;
+          flex-shrink: 0;
           padding: 5px 10px;
           color: #fff;
           background: ${homeTheme.green};
@@ -883,7 +896,7 @@ Create and manage reusable templates for your employer account. Active templates
         .rn-template-badge-compact {
           font-size: 10px;
           justify-content: center;
-          max-width: 100%;
+          max-width: 72px;
           padding: 5px 8px;
         }
 
@@ -1030,11 +1043,11 @@ Create and manage reusable templates for your employer account. Active templates
             padding: 12px;
           }
           .rn-template-list-meta {
-            align-items: flex-end;
-            flex-direction: column;
-            flex-wrap: nowrap;
+            align-items: flex-start;
+            flex-direction: row;
+            flex-wrap: wrap;
             justify-content: flex-start;
-            max-width: 86px;
+            max-width: 100%;
           }
         }
       `}</style>
