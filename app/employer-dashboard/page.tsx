@@ -108,6 +108,7 @@ type CandidateStatusOption = (typeof CANDIDATE_STATUS_OPTIONS)[number];
 type CandidateFilter = "all" | CandidateStatusOption;
 type JobStatusFilter = "all" | "Active" | "Paused" | "Pending" | "Rejected";
 type JobSortOption = "newest" | "oldest" | "most_viewed";
+type PaginationItem = number | "ellipsis-start" | "ellipsis-end";
 
 const JOB_STATUS_FILTER_OPTIONS: Array<{ value: JobStatusFilter; label: string }> = [
   { value: "all", label: "All" },
@@ -116,6 +117,9 @@ const JOB_STATUS_FILTER_OPTIONS: Array<{ value: JobStatusFilter; label: string }
   { value: "Pending", label: "Pending Review" },
   { value: "Rejected", label: "Rejected" },
 ];
+
+const JOB_LISTINGS_PER_PAGE = 25;
+const JOB_PAGINATION_SIBLING_COUNT = 2;
 
 const JOB_SORT_OPTIONS: Array<{ value: JobSortOption; label: string }> = [
   { value: "newest", label: "Newest First" },
@@ -321,6 +325,50 @@ function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSPro
   };
 }
 
+function getJobPaginationItems(currentPage: number, totalPages: number): PaginationItem[] {
+  if (totalPages <= 1) return [1];
+
+  const allPages = Array.from({ length: totalPages }, (_, index) => index + 1);
+  const maxPagesWithoutEllipses = 7;
+  if (totalPages <= maxPagesWithoutEllipses) return allPages;
+
+  let leftSibling = Math.max(2, currentPage - JOB_PAGINATION_SIBLING_COUNT);
+  let rightSibling = Math.min(totalPages - 1, currentPage + JOB_PAGINATION_SIBLING_COUNT);
+
+  if (currentPage <= 1 + JOB_PAGINATION_SIBLING_COUNT) {
+    rightSibling = Math.min(totalPages - 1, 1 + JOB_PAGINATION_SIBLING_COUNT * 2);
+  }
+
+  if (currentPage >= totalPages - JOB_PAGINATION_SIBLING_COUNT) {
+    leftSibling = Math.max(2, totalPages - JOB_PAGINATION_SIBLING_COUNT * 2);
+  }
+
+  const items: PaginationItem[] = [1];
+
+  if (leftSibling > 2) {
+    items.push("ellipsis-start");
+  } else {
+    for (let page = 2; page < leftSibling; page += 1) {
+      items.push(page);
+    }
+  }
+
+  for (let page = leftSibling; page <= rightSibling; page += 1) {
+    items.push(page);
+  }
+
+  if (rightSibling < totalPages - 1) {
+    items.push("ellipsis-end");
+  } else {
+    for (let page = rightSibling + 1; page < totalPages; page += 1) {
+      items.push(page);
+    }
+  }
+
+  items.push(totalPages);
+  return items;
+}
+
 export default function EmployerDashboardPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
@@ -330,6 +378,7 @@ export default function EmployerDashboardPage() {
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [jobStatusFilter, setJobStatusFilter] = useState<JobStatusFilter>("all");
   const [jobSortOption, setJobSortOption] = useState<JobSortOption>("newest");
+  const [jobCurrentPage, setJobCurrentPage] = useState(1);
   const [areCandidatesExpanded, setAreCandidatesExpanded] = useState(false);
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidateBusyId, setCandidateBusyId] = useState<string | null>(null);
@@ -1124,6 +1173,16 @@ export default function EmployerDashboardPage() {
       });
   }, [jobSearchQuery, jobSortOption, jobStatusFilter, jobs]);
 
+  const jobTotalPages = Math.max(1, Math.ceil(filteredJobs.length / JOB_LISTINGS_PER_PAGE));
+  const safeJobCurrentPage = Math.min(jobCurrentPage, jobTotalPages);
+  const paginatedJobs = filteredJobs.slice(
+    (safeJobCurrentPage - 1) * JOB_LISTINGS_PER_PAGE,
+    safeJobCurrentPage * JOB_LISTINGS_PER_PAGE
+  );
+  const jobPaginationItems = getJobPaginationItems(safeJobCurrentPage, jobTotalPages);
+  const jobShowingStart = filteredJobs.length === 0 ? 0 : (safeJobCurrentPage - 1) * JOB_LISTINGS_PER_PAGE + 1;
+  const jobShowingEnd = Math.min(safeJobCurrentPage * JOB_LISTINGS_PER_PAGE, filteredJobs.length);
+
   const metrics = useMemo(() => {
     const active = jobs.filter((job) => job.dashboard_status === "Active").length;
     const pending = jobs.filter((job) => job.dashboard_status === "Pending").length;
@@ -1726,7 +1785,10 @@ export default function EmployerDashboardPage() {
                   <input
                     type="search"
                     value={jobSearchQuery}
-                    onChange={(event) => setJobSearchQuery(event.target.value)}
+                    onChange={(event) => {
+                      setJobSearchQuery(event.target.value);
+                      setJobCurrentPage(1);
+                    }}
                     placeholder="Search by title, city, state, or restaurant"
                     aria-label="Search job listings by title, city, state, or restaurant"
                   />
@@ -1735,7 +1797,10 @@ export default function EmployerDashboardPage() {
                   <span>Status</span>
                   <select
                     value={jobStatusFilter}
-                    onChange={(event) => setJobStatusFilter(event.target.value as JobStatusFilter)}
+                    onChange={(event) => {
+                      setJobStatusFilter(event.target.value as JobStatusFilter);
+                      setJobCurrentPage(1);
+                    }}
                     aria-label="Filter job listings by status"
                   >
                     {JOB_STATUS_FILTER_OPTIONS.map((option) => (
@@ -1749,7 +1814,10 @@ export default function EmployerDashboardPage() {
                   <span>Sort</span>
                   <select
                     value={jobSortOption}
-                    onChange={(event) => setJobSortOption(event.target.value as JobSortOption)}
+                    onChange={(event) => {
+                      setJobSortOption(event.target.value as JobSortOption);
+                      setJobCurrentPage(1);
+                    }}
                     aria-label="Sort job listings"
                   >
                     {JOB_SORT_OPTIONS.map((option) => (
@@ -1780,7 +1848,7 @@ export default function EmployerDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredJobs.map((job) => (
+                    {paginatedJobs.map((job) => (
                       <tr key={job.id}>
                         <td>{job.title}</td>
                         <td>
@@ -1839,7 +1907,7 @@ export default function EmployerDashboardPage() {
               </div>
 
               <div className="rn-dashboard-mobile-list">
-                {filteredJobs.map((job) => (
+                {paginatedJobs.map((job) => (
                   <article key={`mobile-${job.id}`} className="rn-dashboard-mobile-card">
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                       <h3 style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
@@ -1897,6 +1965,46 @@ export default function EmployerDashboardPage() {
                   </article>
                 ))}
               </div>
+
+              <nav className="rn-job-listing-pagination" aria-label="Job listings pagination">
+                <span>Showing {jobShowingStart}-{jobShowingEnd} of {filteredJobs.length}</span>
+                <div className="rn-job-listing-pagination__controls">
+                  <button
+                    type="button"
+                    className="rn-btn-secondary rn-job-listing-pagination__button"
+                    style={homeSecondaryButton}
+                    onClick={() => setJobCurrentPage((page) => Math.max(1, page - 1))}
+                    disabled={safeJobCurrentPage === 1}
+                  >
+                    Previous
+                  </button>
+                  {jobPaginationItems.map((item) => (
+                    typeof item === "number" ? (
+                      <button
+                        key={item}
+                        type="button"
+                        className={item === safeJobCurrentPage ? "rn-job-listing-pagination__page rn-job-listing-pagination__page--current" : "rn-job-listing-pagination__page"}
+                        onClick={() => setJobCurrentPage(item)}
+                        aria-current={item === safeJobCurrentPage ? "page" : undefined}
+                        aria-label={`Go to job listings page ${item}`}
+                      >
+                        {item}
+                      </button>
+                    ) : (
+                      <span key={item} className="rn-job-listing-pagination__ellipsis" aria-hidden="true">…</span>
+                    )
+                  ))}
+                  <button
+                    type="button"
+                    className="rn-btn-secondary rn-job-listing-pagination__button"
+                    style={homeSecondaryButton}
+                    onClick={() => setJobCurrentPage((page) => Math.min(jobTotalPages, page + 1))}
+                    disabled={safeJobCurrentPage === jobTotalPages}
+                  >
+                    Next
+                  </button>
+                </div>
+              </nav>
                 </>
               )}
             </>
@@ -2049,6 +2157,71 @@ export default function EmployerDashboardPage() {
           margin-top: 16px;
           padding: 24px;
           text-align: center;
+        }
+
+
+        .rn-job-listing-pagination {
+          align-items: center;
+          color: rgba(0, 0, 0, 0.68);
+          display: flex;
+          flex-wrap: wrap;
+          font-family: var(--font-body);
+          font-weight: 900;
+          gap: 12px;
+          justify-content: space-between;
+          margin-top: 14px;
+        }
+
+        .rn-job-listing-pagination__controls {
+          align-items: center;
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8px;
+          justify-content: flex-end;
+        }
+
+        .rn-job-listing-pagination__page,
+        .rn-job-listing-pagination__ellipsis {
+          align-items: center;
+          display: inline-flex;
+          font-family: var(--font-body);
+          font-size: 13px;
+          font-weight: 900;
+          justify-content: center;
+          min-height: 40px;
+          min-width: 40px;
+        }
+
+        .rn-job-listing-pagination__page {
+          background: rgba(255, 255, 255, 0.84);
+          border: 1px solid ${homeTheme.border};
+          border-radius: 999px;
+          color: ${homeTheme.green};
+          cursor: pointer;
+          transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, color 0.15s ease, transform 0.15s ease;
+        }
+
+        .rn-job-listing-pagination__page:hover,
+        .rn-job-listing-pagination__page:focus-visible {
+          border-color: rgba(31, 79, 68, 0.34);
+          box-shadow: 0 8px 20px rgba(31, 79, 68, 0.12);
+          outline: 0;
+          transform: translateY(-1px);
+        }
+
+        .rn-job-listing-pagination__page--current,
+        .rn-job-listing-pagination__page--current:hover,
+        .rn-job-listing-pagination__page--current:focus-visible {
+          background: ${homeTheme.green};
+          border-color: ${homeTheme.green};
+          box-shadow: 0 10px 22px rgba(31, 79, 68, 0.18);
+          color: #ffffff;
+          transform: none;
+        }
+
+        .rn-job-listing-pagination__ellipsis {
+          color: ${homeTheme.muted};
+          min-width: 24px;
         }
 
         .rn-billing-grid {
