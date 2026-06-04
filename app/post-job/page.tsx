@@ -44,6 +44,95 @@ type JobTemplate = {
   active: boolean;
 };
 
+
+function normalizeStoreDedupeValue(value: string | null | undefined) {
+  return value?.trim().toLowerCase().replace(/\s+/g, " ") ?? "";
+}
+
+function hasRealLocationShortcutFields(store: EmployerStore) {
+  if (!store.location_name?.trim()) return false;
+
+  // Routing emails can belong to valid store shortcuts, but team-access person rows
+  // can also carry routing emails. Require at least one non-email location/default
+  // field so person-only team rows do not appear in the Post a Job store selector.
+  return Boolean(
+    store.address?.trim() ||
+      store.city?.trim() ||
+      store.state?.trim() ||
+      store.default_application_url?.trim() ||
+      store.minimum_wage?.trim() ||
+      store.pay_range?.trim(),
+  );
+}
+
+function getStoreDedupeKey(store: EmployerStore) {
+  const parts = [store.location_name, store.city, store.state, store.address].map(normalizeStoreDedupeValue);
+  const locationKey = parts.join("|");
+  return locationKey.replace(/\|/g, "") ? locationKey : store.id;
+}
+
+function getStoreCompletenessScore(store: EmployerStore) {
+  return [
+    store.address,
+    store.city,
+    store.state,
+    store.default_application_url,
+    store.minimum_wage,
+    store.pay_range,
+    store.store_email,
+    store.ta_email,
+    store.gm_op_email,
+  ].reduce((score, value) => score + (value?.trim() ? 1 : 0), 0);
+}
+
+function preferStoreField(current: string | null, incoming: string | null) {
+  return current?.trim() ? current : incoming?.trim() ? incoming : current ?? incoming ?? null;
+}
+
+function mergeStoreOptions(current: EmployerStore, incoming: EmployerStore) {
+  const primary = getStoreCompletenessScore(incoming) > getStoreCompletenessScore(current) ? incoming : current;
+  const secondary = primary === incoming ? current : incoming;
+  const routingEmails = [
+    primary.store_email,
+    primary.ta_email,
+    primary.gm_op_email,
+    secondary.store_email,
+    secondary.ta_email,
+    secondary.gm_op_email,
+  ]
+    .map((value) => value?.trim().toLowerCase())
+    .filter((value, index, values): value is string => Boolean(value) && values.indexOf(value) === index);
+
+  return {
+    ...primary,
+    location_name: preferStoreField(primary.location_name, secondary.location_name) ?? primary.location_name,
+    address: preferStoreField(primary.address, secondary.address),
+    city: preferStoreField(primary.city, secondary.city),
+    state: preferStoreField(primary.state, secondary.state),
+    default_application_url: preferStoreField(primary.default_application_url, secondary.default_application_url),
+    minimum_wage: preferStoreField(primary.minimum_wage, secondary.minimum_wage),
+    pay_range: preferStoreField(primary.pay_range, secondary.pay_range),
+    store_email: routingEmails[0] ?? null,
+    ta_email: routingEmails[1] ?? null,
+    gm_op_email: routingEmails[2] ?? null,
+    active: current.active || incoming.active,
+  };
+}
+
+function buildPostJobStoreOptions(stores: EmployerStore[]) {
+  const dedupedStores = new Map<string, EmployerStore>();
+
+  stores.filter((store) => store.active && hasRealLocationShortcutFields(store)).forEach((store) => {
+    const key = getStoreDedupeKey(store);
+    const existing = dedupedStores.get(key);
+    dedupedStores.set(key, existing ? mergeStoreOptions(existing, store) : store);
+  });
+
+  return Array.from(dedupedStores.values()).sort((left, right) =>
+    formatStoreOptionLabel(left).localeCompare(formatStoreOptionLabel(right), undefined, { sensitivity: "base" }),
+  );
+}
+
 function formatStoreOptionLabel(store: EmployerStore) {
   return [store.location_name, store.city, store.state].filter(Boolean).join(" — ");
 }
@@ -247,7 +336,7 @@ export default function PostJobPage() {
 
     if (storesResponse.ok) {
       const payload = (await storesResponse.json().catch(() => null)) as { stores?: EmployerStore[] } | null;
-      setStores((payload?.stores ?? []).filter((store) => store.active));
+      setStores(buildPostJobStoreOptions(payload?.stores ?? []));
     }
 
     if (templatesResponse.ok) {
