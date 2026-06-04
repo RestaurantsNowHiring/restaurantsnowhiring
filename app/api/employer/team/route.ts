@@ -138,7 +138,7 @@ export async function POST(request: Request) {
     async function upsertTeamMember(payloadToSave: Record<string, unknown>) {
       return admin
         .from("employer_team_members")
-        .upsert(payloadToSave, { onConflict: "account_id,lower(btrim(email))" })
+        .upsert(payloadToSave, { onConflict: "account_id,email" })
         .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
         .single();
     }
