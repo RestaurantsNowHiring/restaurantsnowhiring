@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { supabase } from "../lib/supabase";
-import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../lib/jobStatus";
+import { isMissingStatusColumnError } from "../lib/jobStatus";
 import { absoluteUrl } from "../lib/seo";
 import { buildUniqueJobSlugMap, getJobPath } from "../lib/jobSlugs";
 import { restaurantRolePages } from "../lib/restaurantRolePages";
@@ -13,9 +13,40 @@ type SitemapJob = {
   active: boolean;
   status?: string | null;
   created_at?: string | null;
+  approved_at?: string | null;
 };
 
-const staticRoutes = ["/", "/jobs", "/contact", "/about", "/pricing", "/terms", "/privacy"];
+const JOB_LISTING_DAYS = 30;
+
+function addDaysIso(value: string | null | undefined, days: number) {
+  const baseDate = value ? new Date(value) : null;
+  if (!baseDate || Number.isNaN(baseDate.getTime())) return undefined;
+
+  baseDate.setUTCDate(baseDate.getUTCDate() + days);
+  return baseDate.toISOString();
+}
+
+function isActivePublicSitemapJob(job: SitemapJob) {
+  if (job.status !== "active" || job.active !== true) return false;
+
+  const validThrough = addDaysIso(
+    job.approved_at ?? job.created_at,
+    JOB_LISTING_DAYS,
+  );
+  if (!validThrough) return false;
+
+  return Date.now() <= new Date(validThrough).getTime();
+}
+
+const staticRoutes = [
+  "/",
+  "/jobs",
+  "/contact",
+  "/about",
+  "/pricing",
+  "/terms",
+  "/privacy",
+];
 const roleRoutes = restaurantRolePages.map((role) => `/${role.slug}`);
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
@@ -35,7 +66,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const initialResult = await supabase
     .from("jobs")
-    .select("id,title,city,state,active,status,created_at")
+    .select("id,title,city,state,active,status,created_at,approved_at")
     .order("created_at", { ascending: false })
     .limit(5000);
 
@@ -49,7 +80,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     : initialResult;
 
   const visibleJobs = ((result.data ?? []) as SitemapJob[]).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active)
+    isActivePublicSitemapJob(job),
   );
   const slugById = buildUniqueJobSlugMap(visibleJobs);
 

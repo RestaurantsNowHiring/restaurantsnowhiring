@@ -11,7 +11,12 @@ import {
   isPubliclyVisibleJob,
 } from "../../../lib/jobStatus";
 import { isRichTextHtml, sanitizeRichText } from "../../../lib/richText";
-import { absoluteUrl, noIndexRobots, truncateMetaDescription } from "../../../lib/seo";
+import {
+  SITE_NAME,
+  absoluteUrl,
+  noIndexRobots,
+  truncateMetaDescription,
+} from "../../../lib/seo";
 import {
   buildJobSlugBase,
   buildUniqueJobSlugMap,
@@ -25,22 +30,37 @@ type JobRouteParams = { id?: string };
 const JOB_DETAIL_FIELDS =
   "id,title,restaurant_name,city,state,description,created_at,approved_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
 
+const JOB_LISTING_DAYS = 30;
+const RESTAURANT_INDUSTRY = "Restaurants";
+
 async function fetchPublicJobById(id?: string) {
   if (!id) return null;
 
-  const result = await supabase.from("jobs").select(JOB_DETAIL_FIELDS).eq("id", id).limit(1);
+  const result = await supabase
+    .from("jobs")
+    .select(JOB_DETAIL_FIELDS)
+    .eq("id", id)
+    .limit(1);
 
-  if (isMissingStatusColumnError(result.error) || isMissingApprovedAtColumnError(result.error)) {
+  if (
+    isMissingStatusColumnError(result.error) ||
+    isMissingApprovedAtColumnError(result.error)
+  ) {
     const fallbackResult = await supabase
       .from("jobs")
-      .select(JOB_DETAIL_FIELDS.replace(",status", "").replace(",approved_at", ""))
+      .select(
+        JOB_DETAIL_FIELDS.replace(",status", "").replace(",approved_at", ""),
+      )
       .eq("id", id)
       .eq("active", true)
       .limit(1);
 
     if (fallbackResult.error) return null;
     const fallbackJob = fallbackResult.data?.[0] as unknown as Job | undefined;
-    return fallbackJob && isPubliclyVisibleJob(fallbackJob.status, fallbackJob.active) ? fallbackJob : null;
+    return fallbackJob &&
+      isPubliclyVisibleJob(fallbackJob.status, fallbackJob.active)
+      ? fallbackJob
+      : null;
   }
 
   if (result.error) return null;
@@ -48,7 +68,10 @@ async function fetchPublicJobById(id?: string) {
   return job && isPubliclyVisibleJob(job.status, job.active) ? job : null;
 }
 
-type SlugLookupJob = Pick<Job, "id" | "title" | "city" | "state" | "active" | "status">;
+type SlugLookupJob = Pick<
+  Job,
+  "id" | "title" | "city" | "state" | "active" | "status"
+>;
 
 async function fetchVisibleSlugJobs() {
   const initialResult = await supabase
@@ -68,14 +91,16 @@ async function fetchVisibleSlugJobs() {
 
   if (result.error) return [];
   return ((result.data ?? []) as SlugLookupJob[]).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active)
+    isPubliclyVisibleJob(job.status, job.active),
   );
 }
 
 async function getCanonicalJobPath(job: Job) {
   const visibleJobs = await fetchVisibleSlugJobs();
   const slugById = buildUniqueJobSlugMap(
-    visibleJobs.some((entry) => entry.id === job.id) ? visibleJobs : [...visibleJobs, job]
+    visibleJobs.some((entry) => entry.id === job.id)
+      ? visibleJobs
+      : [...visibleJobs, job],
   );
 
   return getJobPath(job, slugById);
@@ -99,7 +124,7 @@ async function resolvePublicJobRouteParam(routeParam?: string) {
 
     if (!result.error) {
       const job = ((result.data ?? []) as Job[]).find((entry) =>
-        isPubliclyVisibleJob(entry.status, entry.active)
+        isPubliclyVisibleJob(entry.status, entry.active),
       );
 
       if (job) return { job, canonicalPath: await getCanonicalJobPath(job) };
@@ -107,7 +132,9 @@ async function resolvePublicJobRouteParam(routeParam?: string) {
   }
 
   const visibleJobs = await fetchVisibleSlugJobs();
-  const baseMatches = visibleJobs.filter((job) => buildJobSlugBase(job) === routeParam);
+  const baseMatches = visibleJobs.filter(
+    (job) => buildJobSlugBase(job) === routeParam,
+  );
   if (baseMatches.length !== 1) return null;
 
   const job = await fetchPublicJobById(baseMatches[0].id);
@@ -120,33 +147,168 @@ async function resolvePublicJobRouteParam(routeParam?: string) {
 function formatEmploymentType(value: string | null | undefined) {
   if (!value) return undefined;
 
-  const normalized = value.trim().toUpperCase().replace(/[\s-]+/g, "_");
-  const allowed = new Set(["FULL_TIME", "PART_TIME", "CONTRACTOR", "TEMPORARY", "INTERN", "VOLUNTEER", "PER_DIEM", "OTHER"]);
+  const normalized = value
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_");
+  const allowed = new Set([
+    "FULL_TIME",
+    "PART_TIME",
+    "CONTRACTOR",
+    "TEMPORARY",
+    "INTERN",
+    "VOLUNTEER",
+    "PER_DIEM",
+    "OTHER",
+  ]);
 
   if (allowed.has(normalized)) return normalized;
   if (normalized.includes("FULL")) return "FULL_TIME";
   if (normalized.includes("PART")) return "PART_TIME";
   if (normalized.includes("TEMP")) return "TEMPORARY";
   if (normalized.includes("CONTRACT")) return "CONTRACTOR";
-  return "OTHER";
+  if (normalized.includes("INTERN")) return "INTERN";
+  return undefined;
+}
+
+function parseIsoDate(value: string | null | undefined) {
+  const date = value ? new Date(value) : null;
+  return date && Number.isFinite(date.getTime()) ? date : null;
+}
+
+function getJobPostedDate(job: Pick<Job, "approved_at" | "created_at">) {
+  return parseIsoDate(job.approved_at) ?? parseIsoDate(job.created_at);
 }
 
 function addDaysIso(value: string | null | undefined, days: number) {
-  const baseDate = value ? new Date(value) : null;
-  if (!baseDate || Number.isNaN(baseDate.getTime())) return undefined;
+  const baseDate = parseIsoDate(value);
+  if (!baseDate) return undefined;
 
   baseDate.setUTCDate(baseDate.getUTCDate() + days);
   return baseDate.toISOString();
 }
 
+function getValidThroughIso(job: Pick<Job, "approved_at" | "created_at">) {
+  return addDaysIso(job.approved_at ?? job.created_at, JOB_LISTING_DAYS);
+}
+
+function isExpiredForGoogleJobs(job: Pick<Job, "approved_at" | "created_at">) {
+  const validThrough = getValidThroughIso(job);
+  if (!validThrough) return true;
+
+  return Date.now() > new Date(validThrough).getTime();
+}
+
+function isEligibleForJobPostingSchema(job: Job) {
+  return (
+    job.status === "active" &&
+    job.active === true &&
+    !isExpiredForGoogleJobs(job)
+  );
+}
+
 function safeExternalUrl(value: string | null | undefined) {
   if (!value?.trim()) return undefined;
   const trimmed = value.trim();
-  return trimmed.startsWith("http://") || trimmed.startsWith("https://") ? trimmed : `https://${trimmed}`;
+  return trimmed.startsWith("http://") || trimmed.startsWith("https://")
+    ? trimmed
+    : `https://${trimmed}`;
 }
 
 function stripUndefinedValues<T extends Record<string, unknown>>(value: T): T {
-  return Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined)) as T;
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined),
+  ) as T;
+}
+
+function cleanStructuredDataText(value: string | null | undefined) {
+  if (!value?.trim()) return "";
+
+  const sanitized = isRichTextHtml(value) ? sanitizeRichText(value) : value;
+  return sanitized
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/p>/gi, "\n")
+    .replace(/<\/li>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/[ \t]+/g, " ")
+    .replace(/\n\s+/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+function extractJobBenefits(description: string | null | undefined) {
+  const cleanDescription = cleanStructuredDataText(description);
+  const benefitsLine = cleanDescription
+    .split(/\n+/)
+    .find((line) => line.trim().toLowerCase().startsWith("benefits:"));
+  const benefits = benefitsLine?.replace(/^benefits:\s*/i, "").trim();
+
+  if (!benefits) return undefined;
+  return benefits
+    .split(/,|;/)
+    .map((benefit) => benefit.trim())
+    .filter(Boolean);
+}
+
+function parsePayAmount(value: string | undefined) {
+  if (!value) return undefined;
+  const match = value.replace(/,/g, "").match(/\$?\s*(\d+(?:\.\d{1,2})?)/);
+  if (!match) return undefined;
+  const number = Number.parseFloat(match[1]);
+  return Number.isFinite(number) ? number : undefined;
+}
+
+function parsePayUnitText(value: string) {
+  const normalized = value.toLowerCase();
+  if (/\b(yr|year|annual|annually|salary)\b/.test(normalized)) return "YEAR";
+  if (/\b(month|monthly)\b/.test(normalized)) return "MONTH";
+  if (/\b(week|weekly)\b/.test(normalized)) return "WEEK";
+  if (/\b(day|daily)\b/.test(normalized)) return "DAY";
+  return "HOUR";
+}
+
+function buildBaseSalary(payRange: string | null | undefined) {
+  if (!payRange?.trim()) return undefined;
+
+  const normalized = payRange.trim();
+  const parts = normalized
+    .split(/\s+[–-]\s+|\s+to\s+/i)
+    .map(parsePayAmount)
+    .filter((amount): amount is number => amount !== undefined);
+  const unitText = parsePayUnitText(normalized);
+
+  if (parts.length >= 2) {
+    return {
+      "@type": "MonetaryAmount",
+      currency: "USD",
+      value: {
+        "@type": "QuantitativeValue",
+        minValue: Math.min(parts[0], parts[1]),
+        maxValue: Math.max(parts[0], parts[1]),
+        unitText,
+      },
+    };
+  }
+
+  const amount = parsePayAmount(normalized);
+  if (amount === undefined) return undefined;
+
+  return {
+    "@type": "MonetaryAmount",
+    currency: "USD",
+    value: {
+      "@type": "QuantitativeValue",
+      value: amount,
+      unitText,
+    },
+  };
 }
 
 function serializeJsonLd(value: unknown) {
@@ -154,37 +316,48 @@ function serializeJsonLd(value: unknown) {
 }
 
 function buildJobMetaDescription(job: Job) {
-  const location = job.city && job.state ? `${job.city}, ${job.state}` : "restaurant location";
+  const location =
+    job.city && job.state ? `${job.city}, ${job.state}` : "restaurant location";
   const pay = job.pay_range ? ` Pay: ${job.pay_range}.` : "";
   return truncateMetaDescription(
-    `${job.restaurant_name} is hiring a ${job.title} in ${location}.${pay} View details and apply on RestaurantsNowHiring.com.`
+    `${job.restaurant_name} is hiring a ${job.title} in ${location}.${pay} View details and apply on RestaurantsNowHiring.com.`,
   );
 }
 
 function buildJobPostingSchema(job: Job, canonicalPath: string) {
-  const jobUrl = absoluteUrl(canonicalPath);
-  const locationName = job.city && job.state ? `${job.city}, ${job.state}` : undefined;
-  const orgUrl = safeExternalUrl(job.company_website);
+  if (!isEligibleForJobPostingSchema(job)) return null;
 
-  return {
+  const jobUrl = absoluteUrl(canonicalPath);
+  const locationName =
+    job.city && job.state ? `${job.city}, ${job.state}` : undefined;
+  const orgUrl = safeExternalUrl(job.company_website);
+  const datePosted = getJobPostedDate(job)?.toISOString() ?? job.created_at;
+  const validThrough = getValidThroughIso(job);
+  const description =
+    cleanStructuredDataText(job.description) ||
+    `${job.restaurant_name} is hiring for ${job.title}${locationName ? ` in ${locationName}` : ""}.`;
+  const jobBenefits = extractJobBenefits(job.description);
+
+  return stripUndefinedValues({
     "@context": "https://schema.org",
     "@type": "JobPosting",
     "@id": `${jobUrl}#jobposting`,
     mainEntityOfPage: jobUrl,
     title: job.title,
-    description:
-      job.description ||
-      `${job.restaurant_name} is hiring for ${job.title}${locationName ? ` in ${locationName}` : ""}.`,
+    description,
     identifier: {
       "@type": "PropertyValue",
-      name: "RestaurantsNowHiring.com",
+      name: `${job.restaurant_name} via ${SITE_NAME}`,
       value: job.id,
     },
-    datePosted: job.created_at,
-    validThrough: addDaysIso(job.approved_at ?? job.created_at, 30),
+    datePosted,
+    validThrough,
     employmentType: formatEmploymentType(job.employment_type),
-    industry: "Restaurants",
+    baseSalary: buildBaseSalary(job.pay_range),
+    // RestaurantsNowHiring.com is a restaurant hiring board; use the site-level industry only when no more specific job field exists.
+    industry: RESTAURANT_INDUSTRY,
     occupationalCategory: job.role_category || undefined,
+    jobBenefits: jobBenefits?.length ? jobBenefits : undefined,
     hiringOrganization: stripUndefinedValues({
       "@type": "Organization",
       name: job.restaurant_name,
@@ -202,8 +375,9 @@ function buildJobPostingSchema(job: Job, canonicalPath: string) {
       }),
     },
     url: jobUrl,
+    // Candidates can submit interest directly from each public job detail page through CandidateSubmissionForm.
     directApply: true,
-  };
+  });
 }
 
 export async function generateMetadata({
@@ -218,15 +392,19 @@ export async function generateMetadata({
   if (!job) {
     return {
       title: "Job Not Found",
-      description: "This restaurant job may be inactive, removed, or unavailable.",
+      description:
+        "This restaurant job may be inactive, removed, or unavailable.",
       robots: noIndexRobots,
       alternates: {
-        canonical: absoluteUrl(resolvedParams?.id ? `/jobs/${resolvedParams.id}` : "/jobs"),
+        canonical: absoluteUrl(
+          resolvedParams?.id ? `/jobs/${resolvedParams.id}` : "/jobs",
+        ),
       },
     };
   }
 
-  const location = job.city && job.state ? `${job.city}, ${job.state}` : "Restaurant Job";
+  const location =
+    job.city && job.state ? `${job.city}, ${job.state}` : "Restaurant Job";
   const title = `${job.title} at ${job.restaurant_name} - ${location}`;
   const description = buildJobMetaDescription(job);
   const url = absoluteUrl(resolvedRoute?.canonicalPath ?? getJobPath(job));
@@ -241,7 +419,9 @@ export async function generateMetadata({
       url,
       siteName: "Restaurants Now Hiring",
       type: "article",
-      images: [{ url: absoluteUrl("/logo-star.png"), alt: "Restaurants Now Hiring" }],
+      images: [
+        { url: absoluteUrl("/logo-star.png"), alt: "Restaurants Now Hiring" },
+      ],
     },
     twitter: {
       card: "summary_large_image",
@@ -283,7 +463,9 @@ export default async function JobDetailsPage({
   const resolvedParams = await Promise.resolve(params);
   const routeParam = resolvedParams?.id;
   const resolvedRoute = await resolvePublicJobRouteParam(routeParam);
-  const id = resolvedRoute?.job.id ?? (isUuidRouteParam(routeParam) ? routeParam : undefined);
+  const id =
+    resolvedRoute?.job.id ??
+    (isUuidRouteParam(routeParam) ? routeParam : undefined);
 
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const serviceRoleClient =
@@ -395,21 +577,30 @@ export default async function JobDetailsPage({
 
   let job: Job | undefined = (data?.[0] as Job | undefined) ?? undefined;
 
-  const notFound = !id || !!error || !job || !isPubliclyVisibleJob(job.status, job.active);
+  const notFound =
+    !id || !!error || !job || !isPubliclyVisibleJob(job.status, job.active);
 
-  if (!notFound && resolvedRoute?.canonicalPath && routeParam !== resolvedRoute.canonicalPath.replace(/^\/jobs\//, "")) {
+  if (
+    !notFound &&
+    resolvedRoute?.canonicalPath &&
+    routeParam !== resolvedRoute.canonicalPath.replace(/^\/jobs\//, "")
+  ) {
     redirect(resolvedRoute.canonicalPath);
   }
 
   if (!notFound && !missingViews && job) {
-    const currentViews = typeof job.views === "number" && Number.isFinite(job.views) ? job.views : 0;
+    const currentViews =
+      typeof job.views === "number" && Number.isFinite(job.views)
+        ? job.views
+        : 0;
     const viewUpdateClient = serviceRoleClient ?? supabase;
-    const { data: updatedViewData, error: updateViewsError } = await viewUpdateClient
-      .from("jobs")
-      .update({ views: currentViews + 1 })
-      .eq("id", job.id)
-      .select("views")
-      .limit(1);
+    const { data: updatedViewData, error: updateViewsError } =
+      await viewUpdateClient
+        .from("jobs")
+        .update({ views: currentViews + 1 })
+        .eq("id", job.id)
+        .select("views")
+        .limit(1);
 
     if (isMissingViewsColumnError(updateViewsError)) {
       missingViews = true;
@@ -523,8 +714,14 @@ export default async function JobDetailsPage({
   };
 
   const visibleJob = job as Job;
-  const canonicalPath = !notFound && job ? resolvedRoute?.canonicalPath ?? getJobPath(visibleJob) : null;
-  const jobPostingSchema = !notFound && job && canonicalPath ? buildJobPostingSchema(visibleJob, canonicalPath) : null;
+  const canonicalPath =
+    !notFound && job
+      ? (resolvedRoute?.canonicalPath ?? getJobPath(visibleJob))
+      : null;
+  const jobPostingSchema =
+    !notFound && job && canonicalPath
+      ? buildJobPostingSchema(visibleJob, canonicalPath)
+      : null;
 
   return (
     <main
@@ -538,10 +735,15 @@ export default async function JobDetailsPage({
       {jobPostingSchema ? (
         <script
           type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jobPostingSchema) }}
+          dangerouslySetInnerHTML={{
+            __html: serializeJsonLd(jobPostingSchema),
+          }}
         />
       ) : null}
-      <div className="rn-job-detail-container" style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
+      <div
+        className="rn-job-detail-container"
+        style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}
+      >
         {/* Header row */}
         <div
           className="rn-job-detail-header"
@@ -582,7 +784,10 @@ export default async function JobDetailsPage({
             )}
           </div>
 
-          <div className="rn-job-detail-actions" style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div
+            className="rn-job-detail-actions"
+            style={{ display: "flex", gap: 12, alignItems: "center" }}
+          >
             <Link href="/jobs" style={buttonPrimary}>
               Back to Jobs
             </Link>
@@ -648,7 +853,9 @@ export default async function JobDetailsPage({
                   padding: "10px 10px 16px",
                 }}
               >
-                {visibleJob.pay_range && <span style={badgeEmphasis}>{visibleJob.pay_range}</span>}
+                {visibleJob.pay_range && (
+                  <span style={badgeEmphasis}>{visibleJob.pay_range}</span>
+                )}
 
                 {visibleJob.employment_type && (
                   <span style={badgeBase}>{visibleJob.employment_type}</span>
@@ -683,13 +890,20 @@ export default async function JobDetailsPage({
                 }}
               >
                 <InfoCard label="Company" value={visibleJob.restaurant_name} />
-                <InfoCard label="Location" value={locationText || "Not listed"} />
-                <InfoCard label="Address" value={visibleJob.address || "Not listed"} />
+                <InfoCard
+                  label="Location"
+                  value={locationText || "Not listed"}
+                />
+                <InfoCard
+                  label="Address"
+                  value={visibleJob.address || "Not listed"}
+                />
               </div>
 
               {/* Description */}
               <SectionCard title="Description">
-                {visibleJob.description && isRichTextHtml(visibleJob.description) ? (
+                {visibleJob.description &&
+                isRichTextHtml(visibleJob.description) ? (
                   <div
                     style={{
                       color: INK,
@@ -697,7 +911,9 @@ export default async function JobDetailsPage({
                       fontWeight: 650,
                       fontSize: 16,
                     }}
-                    dangerouslySetInnerHTML={{ __html: sanitizeRichText(visibleJob.description) }}
+                    dangerouslySetInnerHTML={{
+                      __html: sanitizeRichText(visibleJob.description),
+                    }}
                   />
                 ) : (
                   <div
