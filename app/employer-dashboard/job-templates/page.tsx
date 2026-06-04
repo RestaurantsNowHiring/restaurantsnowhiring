@@ -713,7 +713,7 @@ Create and manage reusable templates for your employer account. Active templates
           min-height: 240px;
           overflow-x: hidden;
           overflow-y: auto;
-          padding: 4px 18px 4px 2px;
+          padding: 4px 28px 4px 2px;
           scrollbar-gutter: stable;
           width: 100%;
         }
@@ -722,18 +722,15 @@ Create and manage reusable templates for your employer account. Active templates
           gap: 12px;
         }
         .rn-template-list-item {
-          align-items: flex-start;
           background: #fff;
           border: 1px solid ${homeTheme.border};
           border-radius: 14px;
           box-sizing: border-box;
           cursor: pointer;
-          display: flex;
+          display: block;
           font-family: var(--font-body);
-          gap: 12px;
-          min-height: 76px;
-          min-width: 0;
-          padding: 12px 13px;
+          min-height: auto;
+          padding: 12px 14px;
           text-align: left;
           transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .15s ease;
           width: 100%;
@@ -779,15 +776,11 @@ Create and manage reusable templates for your employer account. Active templates
           white-space: nowrap;
         }
         .rn-template-list-meta {
-          align-items: center;
           display: flex;
-          flex: 0 0 auto;
-          flex-direction: row;
           flex-wrap: wrap;
           gap: 6px;
-          justify-content: flex-start;
-          max-width: 100%;
-          min-width: 0;
+          margin-top: 8px;
+          width: 100%;
         }
         .rn-template-status-pill {
           border-radius: 999px;
