@@ -72,7 +72,21 @@ const EMPLOYMENT_TYPES = ["Full time", "Part time", "Seasonal", "Temporary", "Co
 const EMPTY_PAY_DEFAULTS: PayDefaults = { type: "range", min: "", max: "", rate: "" };
 
 function parseListValues(value: string | null) {
-  return (value ?? "")
+  const raw = value?.trim() ?? "";
+  if (!raw) return [];
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(parsed)) {
+      return parsed
+        .map((item) => String(item).trim())
+        .filter(Boolean);
+    }
+  } catch {
+    // Older templates stored list values as plain text. Fall through to parse that format.
+  }
+
+  return raw
     .split(/,|\n/)
     .map((item) => item.trim())
     .filter(Boolean);
@@ -81,6 +95,12 @@ function parseListValues(value: string | null) {
 function serializeListValues(values: string[]) {
   return values.join(", ");
 }
+
+function formatListValues(value: string | null) {
+  const values = parseListValues(value);
+  return values.length > 0 ? values.join(", ") : "—";
+}
+
 
 function parsePayDefaults(value: string | null): PayDefaults {
   const fallback = { ...EMPTY_PAY_DEFAULTS };
@@ -92,9 +112,9 @@ function parsePayDefaults(value: string | null): PayDefaults {
     if (["range", "minimum", "maximum", "rate"].includes(String(parsed.type))) {
       return {
         type: parsed.type as PayType,
-        min: typeof parsed.min === "string" ? parsed.min : "",
-        max: typeof parsed.max === "string" ? parsed.max : "",
-        rate: typeof parsed.rate === "string" ? parsed.rate : "",
+        min: parsed.min == null ? "" : String(parsed.min),
+        max: parsed.max == null ? "" : String(parsed.max),
+        rate: parsed.rate == null ? "" : String(parsed.rate),
       };
     }
   } catch {
@@ -110,12 +130,32 @@ function serializePayDefaults(pay: PayDefaults) {
   return JSON.stringify(pay);
 }
 
+function formatPayAmount(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const looksNumeric = /^\$?\d/.test(trimmed);
+  if (!looksNumeric) return trimmed;
+
+  const withCurrency = trimmed.startsWith("$") ? trimmed : `$${trimmed}`;
+  return /\b(?:hr|hour|hourly|year|yr|annual|annually|salary|week|wk|day|shift)\b/i.test(withCurrency) ? withCurrency : `${withCurrency}/hr`;
+}
+
 function formatPayDefaults(value: string | null) {
   const pay = parsePayDefaults(value);
-  if (pay.type === "range") return [pay.min, pay.max].filter(Boolean).join(" – ") || formatText(value);
-  if (pay.type === "minimum") return pay.min ? `Minimum ${pay.min}` : "—";
-  if (pay.type === "maximum") return pay.max ? `Maximum ${pay.max}` : "—";
-  return pay.rate || "—";
+  const min = formatPayAmount(pay.min);
+  const max = formatPayAmount(pay.max);
+  const rate = formatPayAmount(pay.rate);
+
+  if (pay.type === "range") {
+    if (min && max) return `${min} - ${max}`;
+    if (min) return `From ${min}`;
+    if (max) return `Up to ${max}`;
+    return "—";
+  }
+
+  if (pay.type === "minimum") return min ? `From ${min}` : "—";
+  if (pay.type === "maximum") return max ? `Up to ${max}` : "—";
+  return rate || "—";
 }
 
 function templateToForm(template: JobTemplate): TemplateForm {
@@ -273,9 +313,23 @@ export default function JobTemplatesPage() {
   }
 
   function runDescriptionCommand(command: string, value?: string) {
-    descriptionEditorRef.current?.focus();
+    const editor = descriptionEditorRef.current;
+    if (!editor) return;
+
+    editor.focus({ preventScroll: true });
+
+    if (!editor.innerHTML.trim() && (command === "insertUnorderedList" || command === "insertOrderedList")) {
+      editor.innerHTML = "<p><br></p>";
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+
     document.execCommand(command, false, value);
-    updateForm("job_description", sanitizeRichText(descriptionEditorRef.current?.innerHTML ?? ""));
+    updateForm("job_description", sanitizeRichText(editor.innerHTML));
   }
 
   function updateDescriptionFromEditor() {
@@ -453,48 +507,53 @@ Create and manage reusable templates for your employer account. Active templates
 
           <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
             {isEditing ? (
-              <form onSubmit={saveTemplate} style={{ display: "grid", gap: 12 }}>
-                <h2 style={{ margin: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>{selectedTemplate ? "Edit custom template" : "Create custom template"}</h2>
-                <div className="rn-template-form-grid">
+              <form onSubmit={saveTemplate} className="rn-template-editor-card">
+                <div>
+                  <h2 style={{ margin: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>{selectedTemplate ? "Edit custom template" : "Create custom template"}</h2>
+                  <p style={{ margin: "4px 0 0", color: homeTheme.muted, fontWeight: 750 }}>Set reusable defaults that can be applied on the Post a Job form.</p>
+                </div>
+
+                <div className="rn-template-form-grid rn-template-form-grid-three">
                   <label style={formLabelStyle}>Template name<input required value={form.template_name} onChange={(event) => updateForm("template_name", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={formLabelStyle}>Job title<input required value={form.job_title} onChange={(event) => updateForm("job_title", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={formLabelStyle}>Role category<select value={form.role_category ?? ""} onChange={(event) => updateForm("role_category", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}</select></label>
-                  <label style={formLabelStyle}>Employment type<select value={form.employment_type ?? ""} onChange={(event) => updateForm("employment_type", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{EMPLOYMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
-                  <div className="rn-template-wide-field">
-                    <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-                      <legend style={formLabelStyle}>Schedule</legend>
-                      <div className="rn-template-pill-grid">
-                        {SCHEDULE_OPTIONS.map((option) => (
-                          <label key={option} className="rn-template-check-pill">
-                            <input type="checkbox" checked={selectedSchedule.includes(option)} onChange={() => toggleSelectedValue(option, selectedSchedule, setSelectedSchedule)} />
-                            {option}
-                          </label>
-                        ))}
-                      </div>
-                    </fieldset>
-                  </div>
-                  <div className="rn-template-wide-field">
-                    <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
-                      <legend style={formLabelStyle}>Pay defaults</legend>
-                      <div className="rn-template-pay-grid">
-                        <label style={formLabelStyle}>Pay type<select value={payDefaults.type} onChange={(event) => updatePayDefaults("type", event.target.value as PayType)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="range">Range</option><option value="minimum">Minimum</option><option value="maximum">Maximum</option><option value="rate">Rate</option></select></label>
-                        {payDefaults.type === "range" || payDefaults.type === "minimum" ? <label style={formLabelStyle}>Minimum<input value={payDefaults.min} onChange={(event) => updatePayDefaults("min", event.target.value)} placeholder="$14/hr" style={{ ...homeInputStyle, marginTop: 6 }} /></label> : null}
-                        {payDefaults.type === "range" || payDefaults.type === "maximum" ? <label style={formLabelStyle}>Maximum<input value={payDefaults.max} onChange={(event) => updatePayDefaults("max", event.target.value)} placeholder="$18/hr" style={{ ...homeInputStyle, marginTop: 6 }} /></label> : null}
-                        {payDefaults.type === "rate" ? <label style={formLabelStyle}>Rate<input value={payDefaults.rate} onChange={(event) => updatePayDefaults("rate", event.target.value)} placeholder="$18/hr" style={{ ...homeInputStyle, marginTop: 6 }} /></label> : null}
-                      </div>
-                    </fieldset>
+                </div>
+
+                <div className="rn-template-form-section">
+                  <div className="rn-template-form-grid rn-template-form-grid-pay">
+                    <label style={formLabelStyle}>Employment type<select value={form.employment_type ?? ""} onChange={(event) => updateForm("employment_type", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{EMPLOYMENT_TYPES.map((type) => <option key={type} value={type}>{type}</option>)}</select></label>
+                    <label style={formLabelStyle}>Pay type<select value={payDefaults.type} onChange={(event) => updatePayDefaults("type", event.target.value as PayType)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="range">Range</option><option value="minimum">Minimum</option><option value="maximum">Maximum</option><option value="rate">Rate</option></select></label>
+                    {payDefaults.type === "range" || payDefaults.type === "minimum" ? <label style={formLabelStyle}>Minimum<input value={payDefaults.min} onChange={(event) => updatePayDefaults("min", event.target.value)} placeholder="$14/hr" style={{ ...homeInputStyle, marginTop: 6 }} /></label> : null}
+                    {payDefaults.type === "range" || payDefaults.type === "maximum" ? <label style={formLabelStyle}>Maximum<input value={payDefaults.max} onChange={(event) => updatePayDefaults("max", event.target.value)} placeholder="$18/hr" style={{ ...homeInputStyle, marginTop: 6 }} /></label> : null}
+                    {payDefaults.type === "rate" ? <label style={formLabelStyle}>Rate<input value={payDefaults.rate} onChange={(event) => updatePayDefaults("rate", event.target.value)} placeholder="$16/hr" style={{ ...homeInputStyle, marginTop: 6 }} /></label> : null}
                   </div>
                 </div>
-                <div>
+
+                <fieldset className="rn-template-form-section">
+                  <legend style={formLabelStyle}>Schedule</legend>
+                  <div className="rn-template-option-grid">
+                    {SCHEDULE_OPTIONS.map((option) => {
+                      const isChecked = selectedSchedule.includes(option);
+                      return (
+                        <label key={option} className={`rn-template-check-option ${isChecked ? "rn-template-check-option-selected" : ""}`}>
+                          <input type="checkbox" checked={isChecked} onChange={() => toggleSelectedValue(option, selectedSchedule, setSelectedSchedule)} />
+                          <span>{option}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+
+                <div className="rn-template-form-section">
                   <div style={formLabelStyle}>Job description</div>
                   <div className="rn-rich-text-toolbar" aria-label="Job description formatting">
-                    <button type="button" onClick={() => runDescriptionCommand("bold")}><strong>B</strong></button>
-                    <button type="button" onClick={() => runDescriptionCommand("italic")}><em>I</em></button>
-                    <button type="button" onClick={() => runDescriptionCommand("insertUnorderedList")}>• List</button>
-                    <button type="button" onClick={() => runDescriptionCommand("insertOrderedList")}>1. List</button>
-                    <button type="button" onClick={() => runDescriptionCommand("formatBlock", "h3")}>Heading</button>
-                    <button type="button" onClick={() => runDescriptionCommand("undo")}>Undo</button>
-                    <button type="button" onClick={() => runDescriptionCommand("redo")}>Redo</button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("bold")}><strong>B</strong></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("italic")}><em>I</em></button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("insertUnorderedList")}>• List</button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("insertOrderedList")}>1. List</button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("formatBlock", "h3")}>Heading</button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("undo")}>Undo</button>
+                    <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("redo")}>Redo</button>
                   </div>
                   <div
                     ref={descriptionEditorRef}
@@ -507,18 +566,23 @@ Create and manage reusable templates for your employer account. Active templates
                     suppressContentEditableWarning
                   />
                 </div>
-                <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+
+                <fieldset className="rn-template-form-section">
                   <legend style={formLabelStyle}>Benefits</legend>
-                  <div className="rn-template-pill-grid">
-                    {BENEFIT_OPTIONS.map((option) => (
-                      <label key={option} className="rn-template-check-pill">
-                        <input type="checkbox" checked={selectedBenefits.includes(option)} onChange={() => toggleSelectedValue(option, selectedBenefits, setSelectedBenefits)} />
-                        {option}
-                      </label>
-                    ))}
+                  <div className="rn-template-option-grid">
+                    {BENEFIT_OPTIONS.map((option) => {
+                      const isChecked = selectedBenefits.includes(option);
+                      return (
+                        <label key={option} className={`rn-template-check-option ${isChecked ? "rn-template-check-option-selected" : ""}`}>
+                          <input type="checkbox" checked={isChecked} onChange={() => toggleSelectedValue(option, selectedBenefits, setSelectedBenefits)} />
+                          <span>{option}</span>
+                        </label>
+                      );
+                    })}
                   </div>
                 </fieldset>
-                <label style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 900, color: homeTheme.text }}>
+
+                <label className="rn-template-active-toggle">
                   <input type="checkbox" checked={form.active} onChange={(event) => updateForm("active", event.target.checked)} />
                   Active template
                 </label>
@@ -550,12 +614,12 @@ Create and manage reusable templates for your employer account. Active templates
                   <div><dt>Job title</dt><dd>{formatText(selectedTemplate.job_title)}</dd></div>
                   <div><dt>Role category</dt><dd>{formatText(selectedTemplate.role_category)}</dd></div>
                   <div><dt>Employment type</dt><dd>{formatText(selectedTemplate.employment_type)}</dd></div>
-                  <div><dt>Schedule</dt><dd>{formatText(selectedTemplate.schedule)}</dd></div>
+                  <div><dt>Schedule</dt><dd>{formatListValues(selectedTemplate.schedule)}</dd></div>
                   <div><dt>Pay defaults</dt><dd>{formatPayDefaults(selectedTemplate.pay_defaults)}</dd></div>
                   <div><dt>Post a Job availability</dt><dd>{selectedTemplate.active ? "Available" : "Hidden until reactivated"}</dd></div>
                 </dl>
                 <div className="rn-template-long-field"><h3>Job description</h3><div dangerouslySetInnerHTML={{ __html: sanitizeRichText(selectedTemplate.job_description) || plainTextToRichText(formatText(selectedTemplate.job_description)) }} /></div>
-                <div className="rn-template-long-field"><h3>Benefits</h3><p>{formatText(selectedTemplate.benefits)}</p></div>
+                <div className="rn-template-long-field"><h3>Benefits</h3><p>{formatListValues(selectedTemplate.benefits)}</p></div>
               </div>
             ) : (
               <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>{templates.length === 0 ? "No job templates yet." : "Select a template to view details, or create a custom template."}</p>
@@ -636,6 +700,17 @@ Create and manage reusable templates for your employer account. Active templates
           line-height: 1.55;
           white-space: pre-wrap;
         }
+        .rn-template-long-field :global(ul),
+        .rn-template-long-field :global(ol) {
+          color: ${homeTheme.text};
+          font-weight: 750;
+          line-height: 1.55;
+          margin: 8px 0 0 22px;
+          padding: 0;
+        }
+        .rn-template-long-field :global(li) {
+          margin: 4px 0;
+        }
         .rn-template-badge {
           display: inline-flex;
           border-radius: 999px;
@@ -648,32 +723,67 @@ Create and manage reusable templates for your employer account. Active templates
           letter-spacing: .3px;
         }
 
-        .rn-template-wide-field {
-          grid-column: 1 / -1;
+        .rn-template-editor-card {
+          display: grid;
+          gap: 14px;
         }
-        .rn-template-pill-grid {
-          display: flex;
-          flex-wrap: wrap;
+        .rn-template-form-grid-three {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+        }
+        .rn-template-form-grid-pay {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+        .rn-template-form-section {
+          border: 1px solid rgba(0,0,0,.08);
+          border-radius: 16px;
+          background: rgba(255,255,255,.74);
+          margin: 0;
+          padding: 14px;
+        }
+        .rn-template-option-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
           gap: 8px;
           margin-top: 8px;
         }
-        .rn-template-check-pill {
-          display: inline-flex;
+        .rn-template-check-option {
+          display: flex;
           align-items: center;
-          gap: 7px;
+          gap: 8px;
           border: 1px solid ${homeTheme.border};
-          border-radius: 999px;
+          border-radius: 10px;
           background: #fff;
           color: ${homeTheme.text};
-          padding: 9px 12px;
+          cursor: pointer;
           font-size: 13px;
-          font-weight: 900;
+          font-weight: 850;
+          line-height: 1.25;
+          min-height: 34px;
+          padding: 7px 9px;
+          transition: background .15s ease, border-color .15s ease, box-shadow .15s ease;
         }
-        .rn-template-pay-grid {
-          display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
-          gap: 12px;
-          margin-top: 8px;
+        .rn-template-check-option input {
+          accent-color: ${homeTheme.green};
+          flex: 0 0 auto;
+          height: 14px;
+          margin: 0;
+          width: 14px;
+        }
+        .rn-template-check-option-selected {
+          background: rgba(53,128,110,.11);
+          border-color: rgba(53,128,110,.45);
+          box-shadow: inset 0 0 0 1px rgba(53,128,110,.08);
+          color: ${homeTheme.green};
+        }
+        .rn-template-active-toggle {
+          align-items: center;
+          color: ${homeTheme.text};
+          display: flex;
+          font-weight: 900;
+          gap: 9px;
+        }
+        .rn-template-active-toggle input {
+          accent-color: ${homeTheme.green};
         }
         .rn-rich-text-toolbar {
           display: flex;
@@ -699,7 +809,7 @@ Create and manage reusable templates for your employer account. Active templates
           font-weight: 750;
           line-height: 1.55;
           margin-top: 8px;
-          min-height: 220px;
+          min-height: 170px;
           outline: none;
           padding: 14px 16px;
         }
@@ -707,13 +817,24 @@ Create and manage reusable templates for your employer account. Active templates
           border-color: rgba(53,128,110,.55);
           box-shadow: 0 0 0 3px rgba(53,128,110,.12);
         }
+        .rn-rich-text-editor :global(ul),
+        .rn-rich-text-editor :global(ol) {
+          margin: 8px 0 8px 22px;
+          padding: 0;
+        }
+        .rn-rich-text-editor :global(li) {
+          margin: 4px 0;
+        }
+        .rn-rich-text-editor :global(h3) {
+          font-family: var(--font-heading);
+          margin: 8px 0;
+        }
         @media (max-width: 900px) {
           .rn-template-filter-grid,
           .rn-template-form-grid,
           .rn-template-detail-grid,
           .rn-template-summary-grid,
-          .rn-template-directory-grid,
-          .rn-template-pay-grid {
+          .rn-template-directory-grid {
             grid-template-columns: 1fr;
           }
         }
