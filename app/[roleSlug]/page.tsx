@@ -3,15 +3,21 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import JobsFilterPanel from "../components/JobsFilterPanel";
 import { homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
-import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../../lib/jobStatus";
+import { isMissingStatusColumnError, isNonExpiredPublicJob, isPubliclyVisibleJob } from "../../lib/jobStatus";
 import { buildUniqueJobSlugMap } from "../../lib/jobSlugs";
 import {
   getRestaurantRolePage,
   restaurantRolePages,
   type RestaurantRolePage,
 } from "../../lib/restaurantRolePages";
-import { absoluteUrl, buildPageMetadata } from "../../lib/seo";
+import { absoluteUrl, buildPageMetadata, noIndexRobots } from "../../lib/seo";
 import { supabase } from "../../lib/supabase";
+import {
+  getStateLandingPageBySlug,
+  MIN_JOBS_FOR_STATE_PAGE,
+  stateLandingPages,
+  type StateLandingPage,
+} from "../../lib/stateLandingPages";
 
 type RoleRouteParams = { roleSlug?: string };
 
@@ -22,6 +28,7 @@ type RoleJob = {
   city: string;
   state: string;
   created_at: string;
+  approved_at?: string | null;
   active: boolean;
   status?: string | null;
   role_category: string | null;
@@ -29,8 +36,8 @@ type RoleJob = {
   employment_type: string | null;
 };
 
-const JOB_SELECT = "id,title,restaurant_name,city,state,created_at,active,status,role_category,pay_range,employment_type";
-const JOB_SELECT_WITHOUT_STATUS = "id,title,restaurant_name,city,state,created_at,active,role_category,pay_range,employment_type";
+const JOB_SELECT = "id,title,restaurant_name,city,state,created_at,approved_at,active,status,role_category,pay_range,employment_type";
+const JOB_SELECT_WITHOUT_STATUS = "id,title,restaurant_name,city,state,created_at,approved_at,active,role_category,pay_range,employment_type";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -38,7 +45,10 @@ export const fetchCache = "force-no-store";
 export const dynamicParams = false;
 
 export function generateStaticParams() {
-  return restaurantRolePages.map((role) => ({ roleSlug: role.slug }));
+  return [
+    ...restaurantRolePages.map((role) => ({ roleSlug: role.slug })),
+    ...stateLandingPages.map((state) => ({ roleSlug: state.slug })),
+  ];
 }
 
 export async function generateMetadata({
@@ -47,6 +57,21 @@ export async function generateMetadata({
   params: RoleRouteParams | Promise<RoleRouteParams>;
 }): Promise<Metadata> {
   const resolvedParams = await Promise.resolve(params);
+  const state = getStateLandingPageBySlug(resolvedParams.roleSlug);
+
+  if (state) {
+    const { jobs } = await fetchVisibleJobs();
+    const stateJobs = getLiveStateJobs(jobs, state);
+
+    return buildPageMetadata({
+      title: `Restaurant Jobs in ${state.name} | Restaurants Now Hiring`,
+      description: `Browse restaurant jobs in ${state.name} including cashier, server, line cook, dishwasher, prep cook, shift leader, and restaurant manager openings.`,
+      path: `/${state.slug}`,
+      robots: stateJobs.length >= MIN_JOBS_FOR_STATE_PAGE ? undefined : noIndexRobots,
+      absoluteTitle: true,
+    });
+  }
+
   const role = getRestaurantRolePage(resolvedParams.roleSlug);
 
   if (!role) {
@@ -102,6 +127,34 @@ function jobMatchesRole(job: RoleJob, role: RestaurantRolePage) {
 
   return categoryMatches || titleMatches;
 }
+
+function getLiveStateJobs(jobs: RoleJob[], state: StateLandingPage) {
+  return jobs.filter(
+    (job) =>
+      job.state?.trim().toUpperCase() === state.code &&
+      isNonExpiredPublicJob(job),
+  );
+}
+
+function getStateCities(jobs: RoleJob[]) {
+  return Array.from(
+    new Set(
+      jobs
+        .map((job) => job.city?.trim())
+        .filter((city): city is string => Boolean(city)),
+    ),
+  ).sort((a, b) => a.localeCompare(b));
+}
+
+const roleLinks = [
+  { label: "Cashier Jobs", href: "/cashier-jobs" },
+  { label: "Server Jobs", href: "/server-jobs" },
+  { label: "Dishwasher Jobs", href: "/dishwasher-jobs" },
+  { label: "Line Cook Jobs", href: "/line-cook-jobs" },
+  { label: "Prep Cook Jobs", href: "/prep-cook-jobs" },
+  { label: "Restaurant Manager Jobs", href: "/restaurant-manager-jobs" },
+  { label: "Shift Leader Jobs", href: "/shift-leader-jobs" },
+];
 
 function serializeJsonLd(value: unknown) {
   return JSON.stringify(value).replace(/</g, "\\u003c");
@@ -159,12 +212,232 @@ function buildRolePageSchema(role: RestaurantRolePage, jobs: Array<RoleJob & { s
   ];
 }
 
+function StateLandingPageContent({
+  state,
+  jobs,
+}: {
+  state: StateLandingPage;
+  jobs: Array<RoleJob & { slug: string }>;
+}) {
+  const cities = getStateCities(jobs);
+
+  return (
+    <main
+      style={{
+        backgroundColor: homeTheme.bg,
+        minHeight: "100vh",
+        paddingTop: 90,
+        paddingBottom: 64,
+      }}
+    >
+      <section style={{ width: "100%", padding: "18px 0 14px" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
+          <p
+            style={{
+              margin: "0 0 10px",
+              color: "rgba(0,0,0,.58)",
+              fontFamily: "var(--font-body)",
+              fontSize: 13,
+              fontWeight: 900,
+              letterSpacing: ".08em",
+              textTransform: "uppercase",
+            }}
+          >
+            Restaurant jobs by state
+          </p>
+          <h1
+            style={{
+              margin: 0,
+              fontSize: 54,
+              fontWeight: 700,
+              color: homeTheme.green,
+              lineHeight: 1.05,
+              fontFamily: "var(--font-heading)",
+              letterSpacing: 0,
+            }}
+          >
+            Restaurant Jobs in {state.name}
+          </h1>
+          <p
+            style={{
+              marginTop: 12,
+              marginBottom: 0,
+              maxWidth: 860,
+              color: "rgba(0,0,0,.70)",
+              lineHeight: 1.65,
+              fontSize: 16,
+              fontFamily: "var(--font-body)",
+              fontWeight: 650,
+            }}
+          >
+            Find restaurant jobs across {state.name}, including cashier, server, line cook,
+            dishwasher, prep cook, shift leader, and restaurant manager positions.
+          </p>
+          <div style={{ display: "flex", gap: 12, marginTop: 16, flexWrap: "wrap" }}>
+            <Link href="/jobs" className="hero-button rn-btn-primary" style={homePrimaryButton}>
+              Browse Jobs
+            </Link>
+            <Link href="/post-job" className="hero-button rn-btn-secondary" style={homeSecondaryButton}>
+              Post a Job
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <section style={{ width: "100%", padding: "12px 0 0" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
+          <h2
+            style={{
+              margin: "0 0 14px",
+              color: homeTheme.green,
+              fontFamily: "var(--font-heading)",
+              fontSize: 38,
+            }}
+          >
+            Current openings in {state.name}
+          </h2>
+          <JobsFilterPanel jobs={jobs} initialLocationText={state.code} />
+        </div>
+      </section>
+
+      <section style={{ width: "100%", padding: "26px 0 0" }}>
+        <div
+          style={{
+            maxWidth: 1200,
+            margin: "0 auto",
+            padding: "0 18px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 18,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#f6f5f3",
+              border: "1px solid rgba(0,0,0,.10)",
+              borderRadius: 18,
+              padding: 22,
+              boxShadow: "0 18px 40px rgba(0,0,0,.10)",
+            }}
+          >
+            <h2 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 34 }}>
+              Browse by role
+            </h2>
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              {roleLinks.map((role) => (
+                <Link key={role.href} href={role.href} style={{ color: homeTheme.green, fontWeight: 900 }}>
+                  {role.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          <div
+            style={{
+              backgroundColor: "#f6f5f3",
+              border: "1px solid rgba(0,0,0,.10)",
+              borderRadius: 18,
+              padding: 22,
+              boxShadow: "0 18px 40px rgba(0,0,0,.10)",
+            }}
+          >
+            <h2 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 34 }}>
+              Browse by city
+            </h2>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
+              {cities.map((city) => (
+                <Link
+                  key={city}
+                  href={`/jobs?state=${encodeURIComponent(state.code)}&city=${encodeURIComponent(city)}`}
+                  style={{
+                    border: "1px solid rgba(0,0,0,.12)",
+                    borderRadius: 999,
+                    backgroundColor: "rgba(255,255,255,.76)",
+                    color: homeTheme.green,
+                    fontFamily: "var(--font-body)",
+                    fontSize: 14,
+                    fontWeight: 900,
+                    padding: "9px 12px",
+                    textDecoration: "none",
+                  }}
+                >
+                  {city}
+                </Link>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section style={{ width: "100%", padding: "26px 0 0" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
+          <div
+            style={{
+              backgroundColor: "#fef5ea",
+              border: "1px solid rgba(0,0,0,.10)",
+              borderRadius: 18,
+              padding: 24,
+              boxShadow: "0 18px 40px rgba(0,0,0,.10)",
+            }}
+          >
+            <h2 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 34 }}>
+              About restaurant jobs in {state.name}
+            </h2>
+            <p style={{ color: "rgba(0,0,0,.72)", fontWeight: 700, lineHeight: 1.65 }}>
+              Restaurants in {state.name} hire for a wide range of roles, from cashier and server positions to cooks,
+              dishwashers, shift leaders, and managers. RestaurantsNowHiring helps job seekers find local restaurant
+              openings and connect directly with employers across {state.name}.
+            </p>
+            <div
+              style={{
+                marginTop: 18,
+                padding: 20,
+                borderRadius: 18,
+                backgroundColor: "rgba(53,128,110,.10)",
+                border: "1px solid rgba(53,128,110,.20)",
+              }}
+            >
+              <h3 style={{ margin: 0, color: homeTheme.green, fontSize: 24 }}>
+                Hiring restaurant workers in {state.name}?
+              </h3>
+              <p style={{ color: "rgba(0,0,0,.72)", fontWeight: 700, lineHeight: 1.6 }}>
+                Post your restaurant job and reach local candidates looking for restaurant work in {state.name}.
+                Pricing is $9 per active approved public job ad every 30 days after the free trial.
+              </p>
+              <Link href="/post-job" className="hero-button rn-btn-primary" style={homePrimaryButton}>
+                Post a Job
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  );
+}
+
 export default async function RoleLandingPage({
   params,
 }: {
   params: RoleRouteParams | Promise<RoleRouteParams>;
 }) {
   const resolvedParams = await Promise.resolve(params);
+  const state = getStateLandingPageBySlug(resolvedParams.roleSlug);
+
+  if (state) {
+    const { jobs: visibleJobs } = await fetchVisibleJobs();
+    const stateJobs = getLiveStateJobs(visibleJobs, state);
+
+    if (stateJobs.length < MIN_JOBS_FOR_STATE_PAGE) notFound();
+
+    const slugById = buildUniqueJobSlugMap(visibleJobs);
+    const jobsWithSlugs = stateJobs.map((job) => ({
+      ...job,
+      slug: slugById.get(job.id) ?? job.id,
+    }));
+
+    return <StateLandingPageContent state={state} jobs={jobsWithSlugs} />;
+  }
+
   const role = getRestaurantRolePage(resolvedParams.roleSlug);
 
   if (!role) notFound();

@@ -25,9 +25,11 @@ type PayOption = "" | "listed";
 export default function JobsFilterPanel({
   jobs,
   initialRoleCategories = [],
+  initialLocationText = "",
 }: {
   jobs: Job[];
   initialRoleCategories?: string[];
+  initialLocationText?: string;
 }) {
   // If we arrived from Top Roles, lock results to those categories (Line/Prep, etc.)
   const lockedRoleCategories = useMemo(() => {
@@ -36,7 +38,7 @@ export default function JobsFilterPanel({
 
   // Inputs (Indeed-ish search row, but your styling)
   const [search, setSearch] = useState("");
-  const [locationText, setLocationText] = useState(""); // city/state text input (NOT dropdown)
+  const [locationText, setLocationText] = useState(initialLocationText); // city/state text input (NOT dropdown)
 
   // Pill filters
   const [roleCategory, setRoleCategory] = useState(""); // single select
@@ -52,6 +54,10 @@ export default function JobsFilterPanel({
     // If locked roles change, reset role selection to "All shown roles"
     setRoleCategory("");
   }, [lockedRoleCategories.join("|")]);
+
+  useEffect(() => {
+    setLocationText(initialLocationText);
+  }, [initialLocationText]);
 
   useEffect(() => {
     // Close menus when clicking outside
