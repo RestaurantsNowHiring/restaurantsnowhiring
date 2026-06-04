@@ -52,9 +52,13 @@ type JobTemplate = {
 };
 
 
+function isMissionBbqStore(store: EmployerStore) {
+  return store.location_name.toUpperCase().includes("MISSION BBQ");
+}
+
 function buildPostJobStoreOptions(stores: EmployerStore[]) {
   return stores
-    .filter((store) => store.active)
+    .filter((store) => store.active && isMissionBbqStore(store))
     .sort((left, right) =>
       formatStoreOptionLabel(left).localeCompare(formatStoreOptionLabel(right), undefined, { sensitivity: "base" }),
     );
