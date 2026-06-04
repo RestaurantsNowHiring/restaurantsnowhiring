@@ -54,13 +54,9 @@ type JobTemplate = {
 };
 
 
-function isMissionBbqStore(store: EmployerStore) {
-  return store.location_name.toUpperCase().includes("MISSION BBQ");
-}
-
 function buildPostJobStoreOptions(stores: EmployerStore[]) {
   return stores
-    .filter((store) => store.active && isMissionBbqStore(store))
+    .filter((store) => store.active)
     .sort((left, right) =>
       formatStoreOptionLabel(left).localeCompare(formatStoreOptionLabel(right), undefined, { sensitivity: "base" }),
     );
@@ -82,13 +78,9 @@ function formatHiringManagerOptionDetail(manager: HiringManager) {
   return manager.location_name?.trim() ? manager.email : "";
 }
 
-function isMissionBbqHiringManagerPlaceholder(manager: HiringManager) {
-  return manager.location_name?.toUpperCase().includes("MISSION BBQ") ?? false;
-}
-
 function buildPostJobHiringManagerOptions(managers: HiringManager[]) {
   return managers
-    .filter((manager) => manager.status === "active" && manager.email?.trim() && !isMissionBbqHiringManagerPlaceholder(manager))
+    .filter((manager) => manager.status === "active" && manager.email?.trim())
     .sort((left, right) =>
       formatHiringManagerOptionLabel(left).localeCompare(formatHiringManagerOptionLabel(right), undefined, { sensitivity: "base" }),
     );

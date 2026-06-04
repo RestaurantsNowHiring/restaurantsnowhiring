@@ -819,7 +819,7 @@ function EmployerLoginForm() {
                         value={restaurantBrandName}
                         onChange={(e) => setRestaurantBrandName(e.target.value)}
                         style={inputStyle}
-                        placeholder="MISSION BBQ"
+                        placeholder="Restaurant brand"
                       />
                     </div>
 
