@@ -136,14 +136,38 @@ function getLiveStateJobs(jobs: RoleJob[], state: StateLandingPage) {
   );
 }
 
-function getStateCities(jobs: RoleJob[]) {
-  return Array.from(
-    new Set(
-      jobs
-        .map((job) => job.city?.trim())
-        .filter((city): city is string => Boolean(city)),
-    ),
-  ).sort((a, b) => a.localeCompare(b));
+type StateCitySummary = {
+  name: string;
+  count: number;
+};
+
+function getStateCities(jobs: RoleJob[]): StateCitySummary[] {
+  const cityCounts = new Map<string, StateCitySummary>();
+
+  for (const job of jobs) {
+    const cityName = job.city?.trim();
+
+    if (!cityName) {
+      continue;
+    }
+
+    const cityKey = cityName.toLowerCase();
+    const existingCity = cityCounts.get(cityKey);
+
+    if (existingCity) {
+      existingCity.count += 1;
+    } else {
+      cityCounts.set(cityKey, { name: cityName, count: 1 });
+    }
+  }
+
+  return Array.from(cityCounts.values()).sort((a, b) => {
+    if (b.count !== a.count) {
+      return b.count - a.count;
+    }
+
+    return a.name.localeCompare(b.name);
+  });
 }
 
 const roleLinks = [
@@ -220,6 +244,8 @@ function StateLandingPageContent({
   jobs: Array<RoleJob & { slug: string }>;
 }) {
   const cities = getStateCities(jobs);
+  const visibleCities = cities.slice(0, 12);
+  const hasMoreCities = cities.length > visibleCities.length;
   const companyCount = new Set(
     jobs
       .map((job) => job.restaurant_name?.trim().toLowerCase())
@@ -468,58 +494,118 @@ function StateLandingPageContent({
             gap: 18,
           }}
         >
-          <div style={homeCardStyle}>
+          <div style={{ ...homeCardStyle, padding: 22 }}>
             <h2 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 34 }}>
               Browse by role
             </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 16 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(185px, 1fr))",
+                columnGap: 24,
+                rowGap: 0,
+                marginTop: 12,
+              }}
+            >
               {roleLinks.map((role) => (
                 <Link
                   key={role.href}
                   href={role.href}
                   style={{
-                    border: "1px solid rgba(53,128,110,.20)",
-                    borderRadius: 14,
-                    backgroundColor: "rgba(255,255,255,.82)",
+                    borderBottom: "1px solid rgba(53,128,110,.14)",
                     color: homeTheme.green,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 10,
                     fontFamily: "var(--font-body)",
-                    fontSize: 14,
+                    fontSize: 15,
                     fontWeight: 900,
-                    padding: "12px 13px",
+                    padding: "9px 0",
                     textDecoration: "none",
-                    boxShadow: "0 8px 18px rgba(0,0,0,.05)",
                   }}
                 >
-                  {role.label}
+                  <span>{role.label}</span>
+                  <span aria-hidden="true" style={{ color: "rgba(53,128,110,.72)", fontWeight: 900 }}>
+                    →
+                  </span>
                 </Link>
               ))}
             </div>
           </div>
 
-          <div style={homeCardStyle}>
+          <div style={{ ...homeCardStyle, padding: 22 }}>
             <h2 style={{ margin: 0, color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 34 }}>
               Browse by city
             </h2>
-            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-              {cities.map((city) => (
+            <p
+              style={{
+                margin: "6px 0 0",
+                color: "rgba(0,0,0,.62)",
+                fontFamily: "var(--font-body)",
+                fontSize: 14,
+                fontWeight: 750,
+                lineHeight: 1.45,
+              }}
+            >
+              Top cities by active restaurant job count.
+            </p>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(185px, 1fr))",
+                columnGap: 18,
+                rowGap: 0,
+                marginTop: 10,
+              }}
+            >
+              {visibleCities.map((city) => (
                 <Link
-                  key={city}
-                  href={`/jobs?state=${encodeURIComponent(state.code)}&city=${encodeURIComponent(city)}`}
+                  key={city.name.toLowerCase()}
+                  href={`/jobs?state=${encodeURIComponent(state.code)}&city=${encodeURIComponent(city.name)}`}
                   style={{
-                    border: "1px solid rgba(0,0,0,.12)",
-                    borderRadius: 999,
-                    backgroundColor: "rgba(255,255,255,.76)",
+                    borderBottom: "1px solid rgba(0,0,0,.10)",
                     color: homeTheme.green,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 12,
                     fontFamily: "var(--font-body)",
                     fontSize: 14,
                     fontWeight: 900,
-                    padding: "9px 12px",
+                    padding: "9px 0",
                     textDecoration: "none",
                   }}
                 >
-                  {city}
+                  <span>{city.name}</span>
+                  <span style={{ color: "rgba(0,0,0,.54)", fontSize: 13, fontWeight: 850 }}>
+                    {city.count} {city.count === 1 ? "job" : "jobs"}
+                  </span>
                 </Link>
               ))}
+            </div>
+            {hasMoreCities ? (
+              <p
+                style={{
+                  margin: "12px 0 0",
+                  color: "rgba(0,0,0,.58)",
+                  fontFamily: "var(--font-body)",
+                  fontSize: 13,
+                  fontWeight: 750,
+                  lineHeight: 1.45,
+                }}
+              >
+                Showing the top {visibleCities.length} of {cities.length} cities with active jobs.
+              </p>
+            ) : null}
+            <div style={{ marginTop: 14 }}>
+              <Link
+                href={stateJobsHref}
+                className="hero-button rn-btn-secondary"
+                style={{ ...homeSecondaryButton, padding: "10px 14px", borderRadius: 12 }}
+              >
+                View all {state.name} jobs
+              </Link>
             </div>
           </div>
         </div>
