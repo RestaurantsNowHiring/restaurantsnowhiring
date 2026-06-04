@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../lib/candidateNotificationEmails";
 import { supabase } from "../../lib/supabase";
@@ -42,6 +42,14 @@ type JobTemplate = {
   active: boolean;
 };
 
+function formatStoreOptionLabel(store: EmployerStore) {
+  return [store.location_name, store.city, store.state].filter(Boolean).join(" — ");
+}
+
+function formatStoreOptionDetail(store: EmployerStore) {
+  return [store.address, store.store_email, store.ta_email, store.gm_op_email].filter(Boolean).join(" • ");
+}
+
 export default function PostJobPage() {
   const router = useRouter();
 
@@ -55,9 +63,13 @@ export default function PostJobPage() {
   const [stores, setStores] = useState<EmployerStore[]>([]);
   const [jobTemplates, setJobTemplates] = useState<JobTemplate[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState("");
+  const [storeSearchQuery, setStoreSearchQuery] = useState("No store selected");
+  const [isStoreComboboxOpen, setIsStoreComboboxOpen] = useState(false);
+  const [highlightedStoreIndex, setHighlightedStoreIndex] = useState(0);
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const successDialogRef = useRef<HTMLDivElement>(null);
+  const storeComboboxRef = useRef<HTMLDivElement>(null);
 
   // Step 1
   const [companyName, setCompanyName] = useState("");
@@ -168,6 +180,50 @@ export default function PostJobPage() {
     if (!showSuccessModal) return;
     successDialogRef.current?.focus();
   }, [showSuccessModal]);
+
+  const selectedStore = useMemo(
+    () => stores.find((store) => store.id === selectedStoreId) ?? null,
+    [selectedStoreId, stores]
+  );
+
+  const storeSearchText = storeSearchQuery.trim().toLowerCase();
+  const filteredStores = useMemo(() => {
+    if (!storeSearchText || storeSearchQuery === "No store selected") return stores;
+
+    return stores.filter((store) => {
+      const searchableFields = [
+        store.location_name,
+        store.address,
+        store.city,
+        store.state,
+        store.store_email,
+        store.ta_email,
+        store.gm_op_email,
+        store.minimum_wage,
+        store.pay_range,
+        store.default_application_url,
+      ];
+
+      return searchableFields.some((field) => field?.toLowerCase().includes(storeSearchText));
+    });
+  }, [storeSearchQuery, storeSearchText, stores]);
+
+  const closeStoreCombobox = useCallback(() => {
+    setIsStoreComboboxOpen(false);
+    setHighlightedStoreIndex(0);
+    setStoreSearchQuery(selectedStore ? formatStoreOptionLabel(selectedStore) : "No store selected");
+  }, [selectedStore]);
+
+  useEffect(() => {
+    function handleDocumentMouseDown(event: MouseEvent) {
+      if (storeComboboxRef.current && !storeComboboxRef.current.contains(event.target as Node)) {
+        closeStoreCombobox();
+      }
+    }
+
+    document.addEventListener("mousedown", handleDocumentMouseDown);
+    return () => document.removeEventListener("mousedown", handleDocumentMouseDown);
+  }, [closeStoreCombobox]);
 
   async function loadStoreAndTemplateOptions(accessToken: string) {
     const [storesResponse, templatesResponse] = await Promise.all([
@@ -285,6 +341,51 @@ export default function PostJobPage() {
       mounted = false;
     };
   }, [router]);
+
+  function selectNoStore() {
+    applyStoreSelection("");
+    setStoreSearchQuery("No store selected");
+    setIsStoreComboboxOpen(false);
+  }
+
+  function selectStore(store: EmployerStore) {
+    applyStoreSelection(store.id);
+    setStoreSearchQuery(formatStoreOptionLabel(store));
+    setIsStoreComboboxOpen(false);
+  }
+
+  function handleStoreComboboxKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeStoreCombobox();
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsStoreComboboxOpen(true);
+      setHighlightedStoreIndex((current) => Math.min(current + 1, filteredStores.length));
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsStoreComboboxOpen(true);
+      setHighlightedStoreIndex((current) => Math.max(current - 1, 0));
+      return;
+    }
+
+    if (event.key === "Enter" && isStoreComboboxOpen) {
+      event.preventDefault();
+      if (highlightedStoreIndex === 0) {
+        selectNoStore();
+        return;
+      }
+
+      const highlightedStore = filteredStores[highlightedStoreIndex - 1];
+      if (highlightedStore) selectStore(highlightedStore);
+    }
+  }
 
   function applyStoreSelection(storeId: string) {
     setSelectedStoreId(storeId);
@@ -639,6 +740,21 @@ export default function PostJobPage() {
     boxShadow: "0 8px 18px rgba(0,0,0,.05)",
   };
 
+  const storeComboboxOptionStyle = (highlighted: boolean, selected: boolean): React.CSSProperties => ({
+    width: "100%",
+    border: 0,
+    borderRadius: 10,
+    backgroundColor: highlighted || selected ? SOFT_GREEN : "transparent",
+    color: TEXT,
+    cursor: "pointer",
+    display: "block",
+    fontFamily: "var(--font-body)",
+    fontSize: 14,
+    fontWeight: 900,
+    padding: "10px 12px",
+    textAlign: "left",
+  });
+
   const textareaStyle: React.CSSProperties = {
     width: "100%",
     minHeight: 130,
@@ -893,14 +1009,102 @@ export default function PostJobPage() {
             <div className="rn-two-col">
               <div>
                 <label htmlFor="store-selector" style={labelStyle}>Select Store</label>
-                <select id="store-selector" value={selectedStoreId} onChange={(event) => applyStoreSelection(event.target.value)} style={inputStyle}>
-                  <option value="">No store selected</option>
-                  {stores.map((store) => (
-                    <option key={store.id} value={store.id}>
-                      {[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}
-                    </option>
-                  ))}
-                </select>
+                <div ref={storeComboboxRef} style={{ position: "relative" }}>
+                  <input
+                    id="store-selector"
+                    type="text"
+                    role="combobox"
+                    aria-autocomplete="list"
+                    aria-expanded={isStoreComboboxOpen}
+                    aria-controls="store-selector-results"
+                    aria-activedescendant={isStoreComboboxOpen ? `store-selector-option-${highlightedStoreIndex}` : undefined}
+                    value={storeSearchQuery}
+                    onFocus={() => {
+                      setIsStoreComboboxOpen(true);
+                      if (!selectedStoreId && storeSearchQuery === "No store selected") setStoreSearchQuery("");
+                    }}
+                    onChange={(event) => {
+                      setStoreSearchQuery(event.target.value);
+                      setHighlightedStoreIndex(0);
+                      setIsStoreComboboxOpen(true);
+                    }}
+                    onKeyDown={handleStoreComboboxKeyDown}
+                    placeholder="No store selected"
+                    autoComplete="off"
+                    style={inputStyle}
+                  />
+                  {isStoreComboboxOpen && (
+                    <div
+                      id="store-selector-results"
+                      role="listbox"
+                      style={{
+                        position: "absolute",
+                        zIndex: 20,
+                        top: "calc(100% + 8px)",
+                        left: 0,
+                        right: 0,
+                        maxHeight: 280,
+                        overflowY: "auto",
+                        borderRadius: 14,
+                        border: `1px solid ${BORDER}`,
+                        backgroundColor: CARD,
+                        boxShadow: "0 14px 28px rgba(0,0,0,.12)",
+                        padding: 6,
+                      }}
+                    >
+                      <button
+                        id="store-selector-option-0"
+                        type="button"
+                        role="option"
+                        aria-selected={!selectedStoreId}
+                        onMouseEnter={() => setHighlightedStoreIndex(0)}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={selectNoStore}
+                        style={storeComboboxOptionStyle(highlightedStoreIndex === 0, !selectedStoreId)}
+                      >
+                        No store selected
+                      </button>
+                      {filteredStores.length === 0 ? (
+                        <div
+                          style={{
+                            padding: "12px 14px",
+                            color: MUTED,
+                            fontSize: 14,
+                            fontWeight: 800,
+                            fontFamily: "var(--font-body)",
+                          }}
+                        >
+                          No stores found.
+                        </div>
+                      ) : (
+                        filteredStores.map((store, index) => {
+                          const optionIndex = index + 1;
+                          const details = formatStoreOptionDetail(store);
+                          return (
+                            <button
+                              key={store.id}
+                              id={`store-selector-option-${optionIndex}`}
+                              type="button"
+                              role="option"
+                              aria-selected={selectedStoreId === store.id}
+                              onMouseEnter={() => setHighlightedStoreIndex(optionIndex)}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => selectStore(store)}
+                              style={storeComboboxOptionStyle(highlightedStoreIndex === optionIndex, selectedStoreId === store.id)}
+                            >
+                              <span style={{ display: "block" }}>{formatStoreOptionLabel(store)}</span>
+                              {details ? (
+                                <span style={{ display: "block", marginTop: 4, color: MUTED, fontSize: 12, fontWeight: 700 }}>
+                                  {details}
+                                </span>
+                              ) : null}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div style={helperStyle}>Selecting a store fills available location, routing, pay, and application fields. You can still edit every field.</div>
               </div>
               <div>
