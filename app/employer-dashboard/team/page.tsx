@@ -703,7 +703,7 @@ export default function TeamAccessPage() {
                   <select
                     value={role}
                     onChange={(event) => setRole(event.target.value as EmployerRole)}
-                    className="rn-team-select"
+                    className="rn-team-select rn-combobox__input"
                     style={{ ...homeInputStyle, marginTop: 6, minHeight: 50, appearance: "none" }}
                   >
                     {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => (
@@ -726,7 +726,7 @@ export default function TeamAccessPage() {
                       }
                       if (nextScope === "multi_location") setShowSingleStorePicker(true);
                     }}
-                    className="rn-team-select"
+                    className="rn-team-select rn-combobox__input"
                     style={{ ...homeInputStyle, marginTop: 6, minHeight: 50, appearance: "none" }}
                   >
                     {(Object.keys(ACCESS_SCOPE_LABELS) as EmployerAccessScope[]).map((option) => (
@@ -744,11 +744,11 @@ export default function TeamAccessPage() {
                     {showSingleStorePicker ? (
                       <>
                         <input value={storeSearch} onChange={(event) => setStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
-                        <div style={{ display: "grid", gap: 8, maxHeight: 220, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
+                        <div className="rn-team-location-row-list" style={{ display: "grid", gap: 8, maxHeight: 220, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
                           {filteredStoreOptions.map((store) => (
-                            <label key={store.id} className="rn-team-checkbox-row" style={{ color: homeTheme.text }}>
-                              <input className="rn-team-checkbox" type="radio" name="assigned-store" checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
-                              <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
+                            <label key={store.id} className="rn-team-location-row" style={{ color: homeTheme.text }}>
+                              <input className="rn-team-checkbox rn-team-location-row__checkbox" type="radio" name="assigned-store" checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
+                              <span className="rn-team-location-row__content"><strong>{store.location_name}</strong><span>{[store.city, store.state].filter(Boolean).join(", ")}</span></span>
                             </label>
                           ))}
                           {filteredStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No assignable active stores found.</span> : null}
@@ -827,7 +827,7 @@ export default function TeamAccessPage() {
                 </label>
                 <label>
                   Account status
-                  <select value={accountStatusFilter} onChange={(event) => setAccountStatusFilter(event.target.value as AccountStatusFilter)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                  <select value={accountStatusFilter} onChange={(event) => setAccountStatusFilter(event.target.value as AccountStatusFilter)} className="rn-team-select rn-combobox__input" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
                     <option value="all">All</option>
                     <option value="active">Active</option>
                     <option value="invited">Invitation pending</option>
@@ -835,28 +835,28 @@ export default function TeamAccessPage() {
                 </label>
                 <label>
                   State
-                  <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                  <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} className="rn-team-select rn-combobox__input" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
                     <option value="all">All states</option>
                     {uniqueStates.map((state) => <option key={state} value={state}>{state}</option>)}
                   </select>
                 </label>
                 <label>
                   Location
-                  <select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                  <select value={locationFilter} onChange={(event) => setLocationFilter(event.target.value)} className="rn-team-select rn-combobox__input" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
                     <option value="all">All locations</option>
                     {uniqueLocations.map((location) => <option key={location} value={location}>{location}</option>)}
                   </select>
                 </label>
                 <label>
                   Role
-                  <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as "all" | EmployerRole)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                  <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as "all" | EmployerRole)} className="rn-team-select rn-combobox__input" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
                     <option value="all">All roles</option>
                     {(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}
                   </select>
                 </label>
                 <label>
                   Candidate routing
-                  <select value={routingFilter} onChange={(event) => setRoutingFilter(event.target.value as RoutingFilter)} className="rn-team-select" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+                  <select value={routingFilter} onChange={(event) => setRoutingFilter(event.target.value as RoutingFilter)} className="rn-team-select rn-combobox__input" style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
                     <option value="all">All routing</option>
                     <option value="enabled">Enabled</option>
                     <option value="disabled">Disabled</option>
@@ -957,7 +957,7 @@ export default function TeamAccessPage() {
                 <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeEditModal} disabled={busy}>Close</button>
               </div>
               <form className="rn-team-edit-grid" onSubmit={saveEditModal}>
-                <label>Access scope / user type<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.user_type} onChange={(event) => {
+                <label>Access scope / user type<select className="rn-team-select rn-combobox__input" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.user_type} onChange={(event) => {
                   const nextScope = event.target.value as EmployerAccessScope;
                   setEditForm((current) => {
                     if (!current) return current;
@@ -972,7 +972,7 @@ export default function TeamAccessPage() {
                 }}>{(Object.keys(ACCESS_SCOPE_LABELS) as EmployerAccessScope[]).map((option) => <option key={option} value={option}>{ACCESS_SCOPE_LABELS[option]}</option>)}</select></label>
                 {editForm.user_type === "multi_location" ? (
                   <>
-                    <label>Role<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
+                    <label>Role<select className="rn-team-select rn-combobox__input" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
                     <label className="rn-team-checkbox-row rn-team-edit-checkbox"><input className="rn-team-checkbox" type="checkbox" checked={editForm.can_manage_notification_routing} onChange={(event) => updateEditField("can_manage_notification_routing", event.target.checked)} disabled={editingMember.role === "account_owner"} /><span>Candidate routing enabled</span></label>
                   </>
                 ) : null}
@@ -983,11 +983,11 @@ export default function TeamAccessPage() {
                     {showEditSingleStorePicker ? (
                       <>
                         <input value={editStoreSearch} onChange={(event) => setEditStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
-                        <div style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
+                        <div className="rn-team-location-row-list" style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
                           {filteredEditStoreOptions.map((store) => (
-                            <label key={store.id} className="rn-team-checkbox-row">
-                              <input className="rn-team-checkbox" type="radio" name="edit-assigned-store" checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
-                              <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
+                            <label key={store.id} className="rn-team-location-row">
+                              <input className="rn-team-checkbox rn-team-location-row__checkbox" type="radio" name="edit-assigned-store" checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
+                              <span className="rn-team-location-row__content"><strong>{store.location_name}</strong><span>{[store.city, store.state].filter(Boolean).join(", ")}</span></span>
                             </label>
                           ))}
                           {filteredEditStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No assignable active stores found.</span> : null}
@@ -1038,7 +1038,7 @@ export default function TeamAccessPage() {
                 ) : null}
                 {editForm.user_type !== "multi_location" ? (
                   <>
-                    <label>Role<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
+                    <label>Role<select className="rn-team-select rn-combobox__input" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
                     <label className="rn-team-checkbox-row rn-team-edit-checkbox"><input className="rn-team-checkbox" type="checkbox" checked={editForm.can_manage_notification_routing} onChange={(event) => updateEditField("can_manage_notification_routing", event.target.checked)} disabled={editingMember.role === "account_owner"} /><span>Candidate routing enabled</span></label>
                   </>
                 ) : null}

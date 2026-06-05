@@ -1330,7 +1330,7 @@ export default function PostJobPage() {
             <div className="rn-two-col">
               <div>
                 <label htmlFor="store-selector" style={labelStyle}>Select Location or Hiring Manager</label>
-                <div ref={storeComboboxRef} style={{ position: "relative" }}>
+                <div ref={storeComboboxRef} className="rn-combobox" style={{ position: "relative" }}>
                   <input
                     id="store-selector"
                     type="text"
@@ -1352,12 +1352,14 @@ export default function PostJobPage() {
                     onKeyDown={handleStoreComboboxKeyDown}
                     placeholder={EMPTY_LOCATION_SELECTION_LABEL}
                     autoComplete="off"
+                    className="rn-combobox__input"
                     style={inputStyle}
                   />
                   {isStoreComboboxOpen && (
                     <div
                       id="store-selector-results"
                       role="listbox"
+                      className="rn-combobox__menu"
                       style={{
                         position: "absolute",
                         zIndex: 20,
@@ -1381,26 +1383,19 @@ export default function PostJobPage() {
                         onMouseEnter={() => setHighlightedStoreIndex(0)}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={selectNoStore}
+                        className={`rn-combobox__option${highlightedStoreIndex === 0 || !selectedStoreId ? " rn-combobox__option--active" : ""}`}
                         style={storeComboboxOptionStyle(highlightedStoreIndex === 0, !selectedStoreId)}
                       >
-                        No location or hiring manager selected
+                        <span className="rn-combobox__option-title">No location or hiring manager selected</span>
                       </button>
                       {shortcutOptionCount === 0 ? (
-                        <div
-                          style={{
-                            padding: "12px 14px",
-                            color: MUTED,
-                            fontSize: 14,
-                            fontWeight: 800,
-                            fontFamily: "var(--font-body)",
-                          }}
-                        >
+                        <div className="rn-combobox__empty">
                           No locations or hiring managers found.
                         </div>
                       ) : (
                         <>
                           {filteredStores.length > 0 ? (
-                            <div style={{ padding: "8px 12px 6px", color: MUTED, fontSize: 11, fontWeight: 900, fontFamily: "var(--font-body)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+                            <div className="rn-combobox__section">
                               Store Locations
                             </div>
                           ) : null}
@@ -1417,11 +1412,12 @@ export default function PostJobPage() {
                                 onMouseEnter={() => setHighlightedStoreIndex(optionIndex)}
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => selectStore(store)}
+                                className={`rn-combobox__option${highlightedStoreIndex === optionIndex || (selectionType === "store" && selectedStoreId === store.id) ? " rn-combobox__option--active" : ""}`}
                                 style={storeComboboxOptionStyle(highlightedStoreIndex === optionIndex, selectionType === "store" && selectedStoreId === store.id)}
                               >
-                                <span style={{ display: "block" }}>{formatStoreOptionLabel(store)}</span>
+                                <span className="rn-combobox__option-title">{formatStoreOptionLabel(store)}</span>
                                 {details ? (
-                                  <span style={{ display: "block", marginTop: 4, color: MUTED, fontSize: 12, fontWeight: 700 }}>
+                                  <span className="rn-combobox__option-detail">
                                     {details}
                                   </span>
                                 ) : null}
@@ -1429,7 +1425,7 @@ export default function PostJobPage() {
                             );
                           })}
                           {filteredHiringManagers.length > 0 ? (
-                            <div style={{ padding: filteredStores.length > 0 ? "12px 12px 6px" : "8px 12px 6px", color: MUTED, fontSize: 11, fontWeight: 900, fontFamily: "var(--font-body)", textTransform: "uppercase", letterSpacing: ".08em" }}>
+                            <div className="rn-combobox__section" style={{ paddingTop: filteredStores.length > 0 ? 12 : 8 }}>
                               Hiring Managers
                             </div>
                           ) : null}
@@ -1446,11 +1442,12 @@ export default function PostJobPage() {
                                 onMouseEnter={() => setHighlightedStoreIndex(optionIndex)}
                                 onMouseDown={(event) => event.preventDefault()}
                                 onClick={() => selectHiringManager(manager)}
+                                className={`rn-combobox__option${highlightedStoreIndex === optionIndex || (selectionType === "manager" && selectedHiringManagerId === manager.id) ? " rn-combobox__option--active" : ""}`}
                                 style={storeComboboxOptionStyle(highlightedStoreIndex === optionIndex, selectionType === "manager" && selectedHiringManagerId === manager.id)}
                               >
-                                <span style={{ display: "block" }}>{formatHiringManagerOptionLabel(manager)}</span>
+                                <span className="rn-combobox__option-title">{formatHiringManagerOptionLabel(manager)}</span>
                                 {details ? (
-                                  <span style={{ display: "block", marginTop: 4, color: MUTED, fontSize: 12, fontWeight: 700 }}>
+                                  <span className="rn-combobox__option-detail">
                                     {details}
                                   </span>
                                 ) : null}
@@ -1466,7 +1463,7 @@ export default function PostJobPage() {
               </div>
               <div>
                 <label htmlFor="template-selector" style={labelStyle}>Select Job Template</label>
-                <div ref={templateComboboxRef} style={{ position: "relative" }}>
+                <div ref={templateComboboxRef} className="rn-combobox" style={{ position: "relative" }}>
                   <input
                     id="template-selector"
                     type="text"
@@ -1488,12 +1485,14 @@ export default function PostJobPage() {
                     onKeyDown={handleTemplateComboboxKeyDown}
                     placeholder="No template selected"
                     autoComplete="off"
+                    className="rn-combobox__input"
                     style={inputStyle}
                   />
                   {isTemplateComboboxOpen && (
                     <div
                       id="template-selector-results"
                       role="listbox"
+                      className="rn-combobox__menu"
                       style={{
                         position: "absolute",
                         zIndex: 20,
@@ -1517,20 +1516,13 @@ export default function PostJobPage() {
                         onMouseEnter={() => setHighlightedTemplateIndex(0)}
                         onMouseDown={(event) => event.preventDefault()}
                         onClick={selectNoTemplate}
+                        className={`rn-combobox__option${highlightedTemplateIndex === 0 || !selectedTemplateId ? " rn-combobox__option--active" : ""}`}
                         style={storeComboboxOptionStyle(highlightedTemplateIndex === 0, !selectedTemplateId)}
                       >
-                        No template selected
+                        <span className="rn-combobox__option-title">No template selected</span>
                       </button>
                       {filteredTemplates.length === 0 ? (
-                        <div
-                          style={{
-                            padding: "12px 14px",
-                            color: MUTED,
-                            fontSize: 14,
-                            fontWeight: 800,
-                            fontFamily: "var(--font-body)",
-                          }}
-                        >
+                        <div className="rn-combobox__empty">
                           No templates found.
                         </div>
                       ) : (
@@ -1547,11 +1539,12 @@ export default function PostJobPage() {
                               onMouseEnter={() => setHighlightedTemplateIndex(optionIndex)}
                               onMouseDown={(event) => event.preventDefault()}
                               onClick={() => selectTemplate(template)}
+                              className={`rn-combobox__option${highlightedTemplateIndex === optionIndex || selectedTemplateId === template.id ? " rn-combobox__option--active" : ""}`}
                               style={storeComboboxOptionStyle(highlightedTemplateIndex === optionIndex, selectedTemplateId === template.id)}
                             >
-                              <span style={{ display: "block" }}>{formatTemplateOptionLabel(template)}</span>
+                              <span className="rn-combobox__option-title">{formatTemplateOptionLabel(template)}</span>
                               {details ? (
-                                <span style={{ display: "block", marginTop: 4, color: MUTED, fontSize: 12, fontWeight: 700 }}>
+                                <span className="rn-combobox__option-detail">
                                   {details}
                                 </span>
                               ) : null}
@@ -1616,6 +1609,7 @@ export default function PostJobPage() {
                   aria-describedby={message ? "post-job-form-error" : undefined}
                   value={employeeCount}
                   onChange={(e) => setEmployeeCount(e.target.value)}
+                  className="rn-combobox__input"
                   style={inputStyle}
                 >
                   <option value="">Select…</option>
@@ -1673,6 +1667,7 @@ export default function PostJobPage() {
                     aria-describedby={message ? "post-job-form-error" : undefined}
                     value={restaurantType}
                     onChange={(e) => setRestaurantType(e.target.value)}
+                    className="rn-combobox__input"
                     style={inputStyle}
                   >
                     <option value="">Select…</option>
@@ -1743,6 +1738,7 @@ export default function PostJobPage() {
                     aria-describedby={message ? "post-job-form-error" : undefined}
                     value={stateVal}
                     onChange={(e) => setStateVal(e.target.value)}
+                    className="rn-combobox__input"
                     style={inputStyle}
                   >
                     <option value="">Select…</option>

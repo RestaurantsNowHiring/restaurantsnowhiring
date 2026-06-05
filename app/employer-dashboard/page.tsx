@@ -1354,6 +1354,7 @@ export default function EmployerDashboardPage() {
                   <label style={{ display: "grid", gap: 6, maxWidth: 360, color: homeTheme.muted, fontSize: 13 }}>
                     Account selector
                     <select
+                      className="rn-combobox__input"
                       value={employerAccess?.accountId ?? ""}
                       onChange={(event) => handleEmployerAccountChange(event.target.value)}
                       style={{
@@ -1635,6 +1636,7 @@ export default function EmployerDashboardPage() {
                 <label className="rn-candidate-filter-control">
                   <span>Job Role</span>
                   <select
+                    className="rn-combobox__input"
                     value={activeCandidateJobRoleFilter}
                     onChange={(event) => setCandidateJobRoleFilter(event.target.value)}
                     aria-label="Filter interested candidates by job role"
@@ -1650,6 +1652,7 @@ export default function EmployerDashboardPage() {
                 <label className="rn-candidate-filter-control">
                   <span>Location</span>
                   <select
+                    className="rn-combobox__input"
                     value={activeCandidateLocationFilter}
                     onChange={(event) => setCandidateLocationFilter(event.target.value)}
                     aria-label="Filter interested candidates by location"
@@ -1665,6 +1668,7 @@ export default function EmployerDashboardPage() {
                 <label className="rn-candidate-filter-control">
                   <span>Job Level</span>
                   <select
+                    className="rn-combobox__input"
                     value={candidateJobLevelFilter}
                     onChange={(event) => setCandidateJobLevelFilter(event.target.value as CandidateJobLevelFilter)}
                     aria-label="Filter interested candidates by job level"
@@ -1902,6 +1906,7 @@ export default function EmployerDashboardPage() {
                 <label className="rn-job-listing-control">
                   <span>Status</span>
                   <select
+                    className="rn-combobox__input"
                     value={jobStatusFilter}
                     onChange={(event) => {
                       setJobStatusFilter(event.target.value as JobStatusFilter);
@@ -1919,6 +1924,7 @@ export default function EmployerDashboardPage() {
                 <label className="rn-job-listing-control">
                   <span>Sort</span>
                   <select
+                    className="rn-combobox__input"
                     value={jobSortOption}
                     onChange={(event) => {
                       setJobSortOption(event.target.value as JobSortOption);
