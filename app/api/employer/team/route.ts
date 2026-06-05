@@ -27,6 +27,7 @@ type TeamMemberRow = {
   role: EmployerRole;
   user_type: EmployerAccessScope;
   assigned_store_ids?: string[];
+  employer_store_id?: string | null;
   status: string;
   can_manage_notification_routing: boolean;
   created_at: string;
@@ -56,6 +57,112 @@ function cleanAccessScope(value: unknown, role?: EmployerRole): EmployerAccessSc
 function cleanStoreIds(value: unknown) {
   if (!Array.isArray(value)) return [];
   return Array.from(new Set(value.map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean)));
+}
+
+function normalizeMatchText(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+const TEAM_MEMBER_SELECT = "id,email,location_name,user_id,role,user_type,status,can_manage_notification_routing,created_at,updated_at,invite_token";
+const SINGLE_LOCATION_ERROR = "Select one assigned store location before saving Single Location access.";
+
+async function loadTeamMemberForSingleLocationMatch(admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>, accountId: string, memberId: string) {
+  let result = await admin
+    .from("employer_team_members")
+    .select("id,email,location_name,employer_store_id")
+    .eq("id", memberId)
+    .eq("account_id", accountId)
+    .maybeSingle();
+
+  if (result.error?.code === "PGRST204" || result.error?.code === "42703" || (result.error?.message ?? "").toLowerCase().includes("employer_store_id")) {
+    result = await admin
+      .from("employer_team_members")
+      .select("id,email,location_name")
+      .eq("id", memberId)
+      .eq("account_id", accountId)
+      .maybeSingle();
+  }
+
+  if (result.error) throw new Error(result.error.message || "Could not load team user for location matching.");
+  return (result.data ?? null) as Pick<TeamMemberRow, "id" | "email" | "location_name" | "employer_store_id"> | null;
+}
+
+
+async function loadTeamMemberForSingleLocationMatchByEmail(admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>, accountId: string, email: string) {
+  let result = await admin
+    .from("employer_team_members")
+    .select("id,email,location_name,employer_store_id")
+    .eq("account_id", accountId)
+    .ilike("email", email)
+    .maybeSingle();
+
+  if (result.error?.code === "PGRST204" || result.error?.code === "42703" || (result.error?.message ?? "").toLowerCase().includes("employer_store_id")) {
+    result = await admin
+      .from("employer_team_members")
+      .select("id,email,location_name")
+      .eq("account_id", accountId)
+      .ilike("email", email)
+      .maybeSingle();
+  }
+
+  if (result.error) throw new Error(result.error.message || "Could not load team user for location matching.");
+  return (result.data ?? null) as Pick<TeamMemberRow, "id" | "email" | "location_name" | "employer_store_id"> | null;
+}
+
+async function autoDetectSingleAssignedStoreId(input: {
+  admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
+  accountId: string;
+  member: Pick<TeamMemberRow, "email" | "location_name" | "employer_store_id">;
+}) {
+  const { admin, accountId, member } = input;
+  const { data, error } = await admin
+    .from("employer_stores")
+    .select("id,location_name,store_email,ta_email,gm_op_email")
+    .eq("employer_account_id", accountId)
+    .eq("active", true);
+
+  if (error) throw new Error(error.message || "Could not match an assigned store location.");
+
+  const activeStores = (data ?? []).map((store) => ({
+    id: String(store.id ?? ""),
+    locationName: normalizeMatchText(store.location_name),
+    emails: [store.store_email, store.ta_email, store.gm_op_email].map(normalizeMatchText).filter(Boolean),
+  })).filter((store) => store.id);
+
+  const linkedStoreId = typeof member.employer_store_id === "string" ? member.employer_store_id.trim() : "";
+  if (linkedStoreId && activeStores.some((store) => store.id === linkedStoreId)) return linkedStoreId;
+
+  const memberLocationName = normalizeMatchText(member.location_name);
+  if (memberLocationName) {
+    const locationMatches = activeStores.filter((store) => store.locationName === memberLocationName);
+    if (locationMatches.length === 1) return locationMatches[0].id;
+    if (locationMatches.length > 1) throw new Error(SINGLE_LOCATION_ERROR);
+  }
+
+  const memberEmail = normalizeMatchText(member.email);
+  if (memberEmail) {
+    const emailMatches = activeStores.filter((store) => store.emails.includes(memberEmail));
+    if (emailMatches.length === 1) return emailMatches[0].id;
+    if (emailMatches.length > 1) throw new Error(SINGLE_LOCATION_ERROR);
+  }
+
+  throw new Error(SINGLE_LOCATION_ERROR);
+}
+
+async function resolveAssignedStoreIdsForAccessScope(input: {
+  admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
+  accountId: string;
+  userType: EmployerAccessScope;
+  assignedStoreIds: string[];
+  member?: Pick<TeamMemberRow, "email" | "location_name" | "employer_store_id"> | null;
+}) {
+  const { admin, accountId, userType, assignedStoreIds, member } = input;
+  if (userType === "full_account_access") return [];
+  if (userType === "multi_location") return assignedStoreIds;
+  if (assignedStoreIds.length === 1) return assignedStoreIds;
+  if (assignedStoreIds.length > 1) throw new Error(SINGLE_LOCATION_ERROR);
+  if (!member) throw new Error(SINGLE_LOCATION_ERROR);
+  return [await autoDetectSingleAssignedStoreId({ admin, accountId, member })];
 }
 
 async function validateAssignableStoreIds(admin: ReturnType<typeof getSupabaseAdminClient>, accountId: string, storeIds: string[]) {
@@ -145,12 +252,26 @@ export async function GET(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
-    const { data, error } = await supabaseAdmin
+    const teamMembersResultWithStore = await supabaseAdmin
       .from("employer_team_members")
-      .select("id,email,location_name,user_id,role,user_type,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+      .select("id,email,location_name,user_id,role,user_type,status,can_manage_notification_routing,created_at,updated_at,invite_token,employer_store_id")
       .eq("account_id", context.accountId)
       .in("status", ["active", "invited", "pending"])
       .order("created_at", { ascending: true });
+
+    let data: unknown[] | null = teamMembersResultWithStore.data as unknown[] | null;
+    let error = teamMembersResultWithStore.error;
+
+    if (error?.code === "PGRST204" || error?.code === "42703" || (error?.message ?? "").toLowerCase().includes("employer_store_id")) {
+      const teamMembersResult = await supabaseAdmin
+        .from("employer_team_members")
+        .select(TEAM_MEMBER_SELECT)
+        .eq("account_id", context.accountId)
+        .in("status", ["active", "invited", "pending"])
+        .order("created_at", { ascending: true });
+      data = teamMembersResult.data as unknown[] | null;
+      error = teamMembersResult.error;
+    }
 
     if (error) throw new Error(error.message || "Could not load team users.");
     const membersWithAssignments = await attachStoreAssignments(supabaseAdmin, (data ?? []) as TeamMemberRow[]);
@@ -184,6 +305,16 @@ export async function POST(request: Request) {
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
     const admin = supabaseAdmin;
 
+    const preResolvedAssignedStoreIds = userType === "single_location" && assignedStoreIds.length === 0
+      ? await resolveAssignedStoreIdsForAccessScope({
+          admin,
+          accountId: context.accountId,
+          userType,
+          assignedStoreIds,
+          member: await loadTeamMemberForSingleLocationMatchByEmail(admin, context.accountId, email) ?? { email, location_name: cleanLocationName(payload?.location_name), employer_store_id: null },
+        })
+      : null;
+
     const { data: users } = await admin.auth.admin.listUsers();
     const matchedUser = users.users.find((candidate) => candidate.email?.toLowerCase() === email);
 
@@ -207,7 +338,7 @@ export async function POST(request: Request) {
       return admin
         .from("employer_team_members")
         .upsert(payloadToSave, { onConflict: "account_id,email" })
-        .select("id,email,location_name,user_id,role,user_type,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+        .select(TEAM_MEMBER_SELECT)
         .single();
     }
 
@@ -219,7 +350,14 @@ export async function POST(request: Request) {
     }
 
     if (error) throw new Error(error.message || "Could not save team user.");
-    const savedAssignedStoreIds = await syncStoreAssignments({ admin, accountId: context.accountId, memberId: String((data as TeamMemberRow).id), storeIds: assignedStoreIds, createdByUserId: user.id });
+    const storeIdsToSave = preResolvedAssignedStoreIds ?? await resolveAssignedStoreIdsForAccessScope({
+      admin,
+      accountId: context.accountId,
+      userType,
+      assignedStoreIds,
+      member: data as TeamMemberRow,
+    });
+    const savedAssignedStoreIds = await syncStoreAssignments({ admin, accountId: context.accountId, memberId: String((data as TeamMemberRow).id), storeIds: storeIdsToSave, createdByUserId: user.id });
     data = { ...(data as TeamMemberRow), assigned_store_ids: savedAssignedStoreIds } as typeof data;
 
     const inviteEmail = await sendInviteForMember({
@@ -235,7 +373,8 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("Employer team save failed", { error });
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not save team user." }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Could not save team user.";
+    return NextResponse.json({ error: message }, { status: message === SINGLE_LOCATION_ERROR ? 400 : 500 });
   }
 }
 
@@ -260,6 +399,16 @@ export async function PATCH(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
+    const currentMember = await loadTeamMemberForSingleLocationMatch(supabaseAdmin, context.accountId, id);
+    if (!currentMember) return NextResponse.json({ error: "Team user was not found." }, { status: 404 });
+    const storeIdsToSave = await resolveAssignedStoreIdsForAccessScope({
+      admin: supabaseAdmin,
+      accountId: context.accountId,
+      userType,
+      assignedStoreIds,
+      member: { ...currentMember, location_name: locationName ?? currentMember.location_name },
+    });
+
     const { data, error } = await supabaseAdmin
       .from("employer_team_members")
       .update({
@@ -271,15 +420,16 @@ export async function PATCH(request: Request) {
       })
       .eq("id", id)
       .eq("account_id", context.accountId)
-      .select("id,email,location_name,user_id,role,user_type,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+      .select(TEAM_MEMBER_SELECT)
       .single();
 
     if (error) throw new Error(error.message || "Could not update team user.");
-    const savedAssignedStoreIds = await syncStoreAssignments({ admin: supabaseAdmin, accountId: context.accountId, memberId: String((data as TeamMemberRow).id), storeIds: assignedStoreIds, createdByUserId: user.id });
+    const savedAssignedStoreIds = await syncStoreAssignments({ admin: supabaseAdmin, accountId: context.accountId, memberId: String((data as TeamMemberRow).id), storeIds: storeIdsToSave, createdByUserId: user.id });
     return NextResponse.json({ member: { ...(data as TeamMemberRow), assigned_store_ids: savedAssignedStoreIds } });
   } catch (error) {
     console.error("Employer team update failed", { error });
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update team user." }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Could not update team user.";
+    return NextResponse.json({ error: message }, { status: message === SINGLE_LOCATION_ERROR ? 400 : 500 });
   }
 }
 
