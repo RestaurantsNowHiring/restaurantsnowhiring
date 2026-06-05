@@ -107,6 +107,10 @@ function getAccountStatus(member: TeamMember) {
   return isPendingTeamInvite(member) ? "Invitation Pending" : "Active";
 }
 
+function getTeamMemberAccessScope(member: TeamMember) {
+  return member.user_type ?? "single_location";
+}
+
 function getTeamMemberDisplayName(member: TeamMember) {
   return member.location_name?.trim() || member.email;
 }
@@ -339,6 +343,8 @@ export default function TeamAccessPage() {
   }, [normalizeEmail]);
 
   const findStoreForMember = useCallback((member: TeamMember) => {
+    if (getTeamMemberAccessScope(member) !== "single_location") return null;
+
     const activeStores = stores.filter((store) => store.active && store.is_assignable_location !== false);
     const assignedStoreIds = member.assigned_store_ids ?? [];
     if (assignedStoreIds.length === 1) return activeStores.find((store) => store.id === assignedStoreIds[0]) ?? null;
@@ -364,6 +370,8 @@ export default function TeamAccessPage() {
   }, [findStoreForMember]);
 
   const getMemberLocationDisplay = useCallback((member: TeamMember) => {
+    if (getTeamMemberAccessScope(member) !== "single_location") return getTeamMemberDisplayName(member);
+
     const store = findStoreForMember(member);
     const state = getMemberStateDisplay(member);
     const city = store?.city?.trim() ?? "";
@@ -565,7 +573,7 @@ export default function TeamAccessPage() {
       const state = getMemberStateDisplay(member);
       const accountStatus = isPendingTeamInvite(member) ? "invited" : "active";
       const routingStatus = member.can_manage_notification_routing ? "enabled" : "disabled";
-      const matchesSearch = !normalizedSearch || [member.location_name, state, member.email, ROLE_LABELS[member.role], getAccountStatus(member)]
+      const matchesSearch = !normalizedSearch || [getMemberLocationDisplay(member), member.location_name, state, member.email, ROLE_LABELS[member.role], getAccountStatus(member)]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedSearch));
       return matchesSearch
@@ -575,7 +583,7 @@ export default function TeamAccessPage() {
         && (roleFilter === "all" || member.role === roleFilter)
         && (routingFilter === "all" || routingFilter === routingStatus);
     });
-  }, [accountStatusFilter, getMemberStateDisplay, locationFilter, members, roleFilter, routingFilter, searchQuery, stateFilter]);
+  }, [accountStatusFilter, getMemberLocationDisplay, getMemberStateDisplay, locationFilter, members, roleFilter, routingFilter, searchQuery, stateFilter]);
 
 
   const rowsPerPage = 25;
