@@ -526,13 +526,41 @@ end $$;
 alter table public.employer_team_members
   add column if not exists user_type public.employer_access_scope not null default 'single_location';
 
-update public.employer_team_members
+update public.employer_team_members member
 set user_type = case
-  when role = 'account_owner' then 'full_account_access'::public.employer_access_scope
-  else 'single_location'::public.employer_access_scope
+  when member.role = 'account_owner' then 'full_account_access'::public.employer_access_scope
+  when exists (
+    select 1
+    from public.employer_stores store
+    where store.employer_account_id = member.account_id
+      and store.active = true
+      and store.is_assignable_location = true
+      and (
+        lower(btrim(store.location_name)) = lower(btrim(coalesce(member.location_name, '')))
+        or lower(btrim(coalesce(store.store_email, ''))) = lower(btrim(member.email))
+        or lower(btrim(coalesce(store.ta_email, ''))) = lower(btrim(member.email))
+        or lower(btrim(coalesce(store.gm_op_email, ''))) = lower(btrim(member.email))
+      )
+  ) then 'single_location'::public.employer_access_scope
+  else 'multi_location'::public.employer_access_scope
 end
-where user_type is null
-  or (role = 'account_owner' and user_type <> 'full_account_access'::public.employer_access_scope);
+where member.user_type is distinct from case
+  when member.role = 'account_owner' then 'full_account_access'::public.employer_access_scope
+  when exists (
+    select 1
+    from public.employer_stores store
+    where store.employer_account_id = member.account_id
+      and store.active = true
+      and store.is_assignable_location = true
+      and (
+        lower(btrim(store.location_name)) = lower(btrim(coalesce(member.location_name, '')))
+        or lower(btrim(coalesce(store.store_email, ''))) = lower(btrim(member.email))
+        or lower(btrim(coalesce(store.ta_email, ''))) = lower(btrim(member.email))
+        or lower(btrim(coalesce(store.gm_op_email, ''))) = lower(btrim(member.email))
+      )
+  ) then 'single_location'::public.employer_access_scope
+  else 'multi_location'::public.employer_access_scope
+end;
 
 create table if not exists public.employer_team_member_stores (
   id uuid primary key default gen_random_uuid(),
@@ -594,5 +622,6 @@ with check (
     where store.id = employer_team_member_stores.store_id
       and store.employer_account_id = employer_team_member_stores.employer_account_id
       and store.active = true
+      and store.is_assignable_location = true
   )
 );

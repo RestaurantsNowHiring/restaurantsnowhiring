@@ -19,6 +19,7 @@ type StorePayload = {
   pay_range?: string | null;
   default_application_url?: string | null;
   active?: boolean;
+  is_assignable_location?: boolean;
 };
 
 function cleanText(value: unknown, maxLength: number) {
@@ -70,6 +71,7 @@ function buildStoreRow(payload: StorePayload, employerAccountId: string) {
       pay_range: cleanText(payload.pay_range, 120),
       default_application_url: cleanUrl(payload.default_application_url),
       active: payload.active !== false,
+      is_assignable_location: payload.is_assignable_location !== false,
       updated_at: new Date().toISOString(),
     },
   };
@@ -88,7 +90,7 @@ export async function GET(request: Request) {
 
     const { data: stores, error } = await supabaseAdmin
       .from("employer_stores")
-      .select("id,employer_account_id,location_name,address,city,state,store_email,ta_email,gm_op_email,minimum_wage,pay_range,default_application_url,active,created_at,updated_at")
+      .select("id,employer_account_id,location_name,address,city,state,store_email,ta_email,gm_op_email,minimum_wage,pay_range,default_application_url,active,is_assignable_location,created_at,updated_at")
       .eq("employer_account_id", context.accountId)
       .order("location_name", { ascending: true });
 
@@ -148,7 +150,7 @@ export async function POST(request: Request) {
     const { data, error } = await supabaseAdmin
       .from("employer_stores")
       .insert(built.row)
-      .select("id,employer_account_id,location_name,address,city,state,store_email,ta_email,gm_op_email,minimum_wage,pay_range,default_application_url,active,created_at,updated_at")
+      .select("id,employer_account_id,location_name,address,city,state,store_email,ta_email,gm_op_email,minimum_wage,pay_range,default_application_url,active,is_assignable_location,created_at,updated_at")
       .single();
 
     if (error) throw new Error(error.message || "Could not save store.");
@@ -184,7 +186,7 @@ export async function PATCH(request: Request) {
       .update(built.row)
       .eq("id", storeId)
       .eq("employer_account_id", context.accountId)
-      .select("id,employer_account_id,location_name,address,city,state,store_email,ta_email,gm_op_email,minimum_wage,pay_range,default_application_url,active,created_at,updated_at")
+      .select("id,employer_account_id,location_name,address,city,state,store_email,ta_email,gm_op_email,minimum_wage,pay_range,default_application_url,active,is_assignable_location,created_at,updated_at")
       .single();
 
     if (error) throw new Error(error.message || "Could not update store.");

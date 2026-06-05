@@ -119,7 +119,8 @@ async function autoDetectSingleAssignedStoreId(input: {
     .from("employer_stores")
     .select("id,location_name,store_email,ta_email,gm_op_email")
     .eq("employer_account_id", accountId)
-    .eq("active", true);
+    .eq("active", true)
+    .eq("is_assignable_location", true);
 
   if (error) throw new Error(error.message || "Could not match an assigned store location.");
 
@@ -172,10 +173,11 @@ async function validateAssignableStoreIds(admin: ReturnType<typeof getSupabaseAd
     .select("id")
     .eq("employer_account_id", accountId)
     .eq("active", true)
+    .eq("is_assignable_location", true)
     .in("id", storeIds);
   if (error) throw new Error(error.message || "Could not validate assigned locations.");
   const validIds = new Set((data ?? []).map((row) => String(row.id)));
-  if (validIds.size !== storeIds.length) throw new Error("Assigned locations must be active stores on this employer account.");
+  if (validIds.size !== storeIds.length) throw new Error("Assigned locations must be active, assignable stores on this employer account.");
   return storeIds.filter((id) => validIds.has(id));
 }
 

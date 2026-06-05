@@ -31,6 +31,7 @@ type EmployerStore = {
   pay_range: string | null;
   default_application_url: string | null;
   active: boolean;
+  is_assignable_location: boolean;
 };
 type HiringManager = {
   id: string;
@@ -56,7 +57,7 @@ type JobTemplate = {
 
 function buildPostJobStoreOptions(stores: EmployerStore[]) {
   return stores
-    .filter((store) => store.active)
+    .filter((store) => store.active && store.is_assignable_location !== false)
     .sort((left, right) =>
       formatStoreOptionLabel(left).localeCompare(formatStoreOptionLabel(right), undefined, { sensitivity: "base" }),
     );
