@@ -27,12 +27,13 @@ type Store = {
   pay_range: string | null;
   default_application_url: string | null;
   active: boolean;
+  is_assignable_location: boolean;
   created_at: string;
   updated_at: string;
 };
 
 type StoreJob = { id: string; title: string; city: string | null; state: string | null };
-type StoreForm = Omit<Store, "id" | "employer_account_id" | "created_at" | "updated_at">;
+type StoreForm = Omit<Store, "id" | "employer_account_id" | "is_assignable_location" | "created_at" | "updated_at">;
 
 type StoreStatusFilter = "all" | "active" | "inactive";
 
@@ -123,7 +124,7 @@ export default function StoreDirectoryPage() {
 
     const [meResponse, storesResponse] = await Promise.all([
       fetch("/api/employer/me", { headers: employerAccountHeaders(token) }),
-      fetch("/api/employer/stores", { headers: employerAccountHeaders(token) }),
+      fetch("/api/employer/stores?assignableOnly=true", { headers: employerAccountHeaders(token) }),
     ]);
 
     const mePayload = (await meResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
@@ -156,6 +157,7 @@ export default function StoreDirectoryPage() {
   const filteredStores = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return stores.filter((store) => {
+      if (!store.active || store.is_assignable_location !== true) return false;
       const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? store.active : !store.active);
       const matchesState = stateFilter === "all" || store.state === stateFilter;
       const matchesSearch = !normalizedSearch || [store.location_name, store.address, store.city, store.state, store.store_email, store.ta_email, store.gm_op_email]
@@ -167,6 +169,7 @@ export default function StoreDirectoryPage() {
 
   const selectedStore = useMemo(() => stores.find((store) => store.id === selectedStoreId) ?? null, [selectedStoreId, stores]);
   const canManageStores = Boolean(access?.canManageTeam);
+  const storeFormLabelStyle = { fontWeight: 900, color: homeTheme.text };
 
   function startNewStore() {
     setSelectedStoreId(null);
@@ -318,16 +321,16 @@ export default function StoreDirectoryPage() {
               <form onSubmit={saveStore} style={{ display: "grid", gap: 12 }}>
                 <h2 style={{ margin: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>{selectedStore ? "Edit store" : "Add store"}</h2>
                 <div className="rn-store-form-grid">
-                  <label style={{ fontWeight: 900 }}>Store/location name<input required value={form.location_name} onChange={(event) => updateForm("location_name", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Address<input value={form.address ?? ""} onChange={(event) => updateForm("address", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>City<input value={form.city ?? ""} onChange={(event) => updateForm("city", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>State<select value={form.state ?? ""} onChange={(event) => updateForm("state", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{STATES.map((state) => <option key={state} value={state}>{state}</option>)}</select></label>
-                  <label style={{ fontWeight: 900 }}>Candidate routing email 1<input type="email" value={form.store_email ?? ""} onChange={(event) => updateForm("store_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Candidate routing email 2<input type="email" value={form.ta_email ?? ""} onChange={(event) => updateForm("ta_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Candidate routing email 3<input type="email" value={form.gm_op_email ?? ""} onChange={(event) => updateForm("gm_op_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Minimum wage<input value={form.minimum_wage ?? ""} onChange={(event) => updateForm("minimum_wage", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Pay range<input value={form.pay_range ?? ""} onChange={(event) => updateForm("pay_range", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={{ fontWeight: 900 }}>Default application URL<input value={form.default_application_url ?? ""} onChange={(event) => updateForm("default_application_url", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>Store/location name<input required value={form.location_name} onChange={(event) => updateForm("location_name", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>Address<input value={form.address ?? ""} onChange={(event) => updateForm("address", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>City<input value={form.city ?? ""} onChange={(event) => updateForm("city", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>State<select value={form.state ?? ""} onChange={(event) => updateForm("state", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{STATES.map((state) => <option key={state} value={state}>{state}</option>)}</select></label>
+                  <label style={storeFormLabelStyle}>Candidate routing email 1<input type="email" value={form.store_email ?? ""} onChange={(event) => updateForm("store_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>Candidate routing email 2<input type="email" value={form.ta_email ?? ""} onChange={(event) => updateForm("ta_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>Candidate routing email 3<input type="email" value={form.gm_op_email ?? ""} onChange={(event) => updateForm("gm_op_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>Minimum wage<input value={form.minimum_wage ?? ""} onChange={(event) => updateForm("minimum_wage", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>Pay range<input value={form.pay_range ?? ""} onChange={(event) => updateForm("pay_range", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
+                  <label style={storeFormLabelStyle}>Default application URL<input value={form.default_application_url ?? ""} onChange={(event) => updateForm("default_application_url", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                 </div>
                 <label style={{ display: "flex", gap: 10, alignItems: "center", fontWeight: 900, color: homeTheme.text }}>
                   <input type="checkbox" checked={form.active} onChange={(event) => updateForm("active", event.target.checked)} />
