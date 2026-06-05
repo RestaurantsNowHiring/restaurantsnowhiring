@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
 import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
-import { canUserAccessJob } from "../../../../lib/employerJobAccess";
 import { filterEmployerVisibleJobs, loadEmployerJobsForDashboard } from "../../../../lib/employerVisibleJobs";
 
 const ALLOWED_STATUSES = new Set(["new", "reviewed", "contacted", "archived"]);
@@ -119,27 +118,27 @@ export async function PATCH(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
+    const { jobs } = await loadEmployerJobsForDashboard(supabaseAdmin, context);
+    const visibleJobs = filterEmployerVisibleJobs(user, context, jobs);
+    const visibleJobIds = new Set(visibleJobs.map((job) => String(job.id ?? "").trim()).filter(Boolean));
+
+    if (visibleJobIds.size === 0) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
+
     const { data: existing, error: lookupError } = await supabaseAdmin
       .from("candidate_submissions")
-      .select("id,employer_user_id,employer_email,jobs!inner(employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails)")
+      .select("id,job_id")
       .eq("id", id)
       .maybeSingle();
 
     if (lookupError) throw new Error(lookupError.message || "Could not load candidate submission.");
     const row = existing as Record<string, unknown> | null;
-    const job = row?.jobs && typeof row.jobs === "object" ? (row.jobs as Record<string, unknown>) : null;
-    const ownsSubmission =
-      row?.employer_user_id === user.id ||
-      row?.employer_user_id === context.ownerUserId ||
-      String(row?.employer_email ?? "").toLowerCase() === user.email.toLowerCase() ||
-      String(row?.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
-      job?.employer_user_id === user.id ||
-      job?.employer_user_id === context.ownerUserId ||
-      String(job?.employer_email ?? "").toLowerCase() === user.email.toLowerCase() ||
-      String(job?.employer_email ?? "").toLowerCase() === context.ownerEmail.toLowerCase() ||
-      (context.accountId && job?.employer_account_id === context.accountId);
+    const candidateJobId = String(row?.job_id ?? "").trim();
 
-    if (!row || !ownsSubmission || !canUserAccessJob({ email: user.email, userType: context.userType, assignedStoreIds: context.assignedStoreIds }, context.role, job)) return NextResponse.json({ error: "Not found." }, { status: 404 });
+    if (!row || !candidateJobId || !visibleJobIds.has(candidateJobId)) {
+      return NextResponse.json({ error: "Not found." }, { status: 404 });
+    }
 
     const { data, error } = await supabaseAdmin
       .from("candidate_submissions")

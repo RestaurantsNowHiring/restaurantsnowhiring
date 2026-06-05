@@ -625,3 +625,80 @@ with check (
       and store.is_assignable_location = true
   )
 );
+
+-- Store-scoped candidate status updates for assigned-location team members.
+-- Mirrors dashboard candidate visibility: full-account users can update all account
+-- candidates, while single-/multi-location users can update candidates only when
+-- the submission's job is tied to one of their assigned stores.
+create or replace function public.can_update_visible_candidate_status(candidate_job_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.jobs job
+    join public.employer_team_members member
+      on member.account_id = job.employer_account_id
+    where job.id = candidate_job_id
+      and member.status in ('active', 'accepted')
+      and member.role in ('account_owner', 'hiring_manager', 'viewer')
+      and (
+        member.user_id = auth.uid()
+        or member.auth_user_id = auth.uid()
+        or lower(btrim(member.email)) = lower(btrim(coalesce(auth.email(), auth.jwt() ->> 'email', '')))
+      )
+      and (
+        member.role = 'account_owner'
+        or member.user_type = 'full_account_access'::public.employer_access_scope
+        or exists (
+          select 1
+          from public.employer_team_member_stores assignment
+          where assignment.team_member_id = member.id
+            and assignment.employer_account_id = job.employer_account_id
+            and assignment.store_id = job.employer_store_id
+        )
+      )
+  );
+$$;
+
+grant execute on function public.can_update_visible_candidate_status(uuid) to authenticated;
+
+drop policy if exists "Employers can update status for owned job candidates" on public.candidate_submissions;
+create policy "Employers can update status for owned job candidates"
+on public.candidate_submissions
+for update
+to authenticated
+using (
+  public.can_update_visible_candidate_status(job_id)
+  or employer_user_id = auth.uid()
+  or lower(coalesce(employer_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+  or exists (
+    select 1 from public.jobs job
+    where job.id = candidate_submissions.job_id
+      and (
+        job.employer_user_id = auth.uid()
+        or lower(coalesce(job.employer_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+      )
+  )
+  or public.current_user_is_admin()
+)
+with check (
+  status in ('new', 'reviewed', 'contacted', 'archived')
+  and (
+    public.can_update_visible_candidate_status(job_id)
+    or employer_user_id = auth.uid()
+    or lower(coalesce(employer_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+    or exists (
+      select 1 from public.jobs job
+      where job.id = candidate_submissions.job_id
+        and (
+          job.employer_user_id = auth.uid()
+          or lower(coalesce(job.employer_email, '')) = lower(coalesce(auth.jwt() ->> 'email', ''))
+        )
+    )
+    or public.current_user_is_admin()
+  )
+);
