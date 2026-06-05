@@ -60,6 +60,7 @@ type CandidateSubmission = {
   restaurant_name: string | null;
   city: string | null;
   state: string | null;
+  role_category: string | null;
 };
 
 type BillingInfo = {
@@ -107,6 +108,7 @@ const DELETE_CONFIRMATION_MESSAGE =
 const CANDIDATE_STATUS_OPTIONS = ["new", "reviewed", "contacted", "archived"] as const;
 type CandidateStatusOption = (typeof CANDIDATE_STATUS_OPTIONS)[number];
 type CandidateFilter = "all" | CandidateStatusOption;
+type CandidateJobLevelFilter = "all" | "hourly_store" | "salaried_manager" | "general_manager" | "area_director" | "regional_director" | "other";
 type JobStatusFilter = "all" | "Active" | "Paused" | "Pending" | "Rejected";
 type JobSortOption = "newest" | "oldest" | "most_viewed";
 type PaginationItem = number | "ellipsis-start" | "ellipsis-end";
@@ -134,6 +136,16 @@ const CANDIDATE_FILTER_OPTIONS: Array<{ value: CandidateFilter; label: string }>
   { value: "reviewed", label: "Reviewed" },
   { value: "contacted", label: "Contacted" },
   { value: "archived", label: "Archived" },
+];
+
+const CANDIDATE_JOB_LEVEL_OPTIONS: Array<{ value: CandidateJobLevelFilter; label: string }> = [
+  { value: "all", label: "All levels" },
+  { value: "hourly_store", label: "Hourly / Store role" },
+  { value: "salaried_manager", label: "Salaried Manager" },
+  { value: "general_manager", label: "General Manager" },
+  { value: "area_director", label: "Area Director" },
+  { value: "regional_director", label: "Regional Director" },
+  { value: "other", label: "Other" },
 ];
 
 function formatBillingDate(isoDate?: string | null) {
@@ -229,6 +241,37 @@ function formatDate(isoDate: string) {
 
 function formatCandidateStatus(status: string) {
   return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function normalizeCandidateFilterValue(value?: string | null) {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function getCandidateLocationLabel(candidate: Pick<CandidateSubmission, "restaurant_name" | "city" | "state">) {
+  const cityState = [candidate.city, candidate.state].map((part) => part?.trim()).filter(Boolean).join(", ");
+  return [candidate.restaurant_name?.trim(), cityState].filter(Boolean).join(" — ") || "Unlisted location";
+}
+
+function getCandidateJobLevel(candidate: Pick<CandidateSubmission, "job_title" | "role_category">): CandidateJobLevelFilter {
+  const roleText = `${candidate.job_title ?? ""} ${candidate.role_category ?? ""}`.toLowerCase();
+
+  if (/\bregional\s+director\b/.test(roleText)) return "regional_director";
+  if (/\barea\s+director\b/.test(roleText)) return "area_director";
+  if (/\bgeneral\s+manager\b/.test(roleText)) return "general_manager";
+
+  if (/\b(salaried|manager|management|assistant\s+manager|shift\s+lead|shift\s+leader|supervisor)\b/.test(roleText)) {
+    return "salaried_manager";
+  }
+
+  if (/\b(hourly|store|crew|team\s+member|cashier|server|host|hostess|cook|line\s+cook|prep|grill|dishwasher|bartender|barista|service|representative)\b/.test(roleText)) {
+    return "hourly_store";
+  }
+
+  return "other";
+}
+
+function getCandidateJobLevelLabel(value: CandidateJobLevelFilter) {
+  return CANDIDATE_JOB_LEVEL_OPTIONS.find((option) => option.value === value)?.label ?? "Other";
 }
 
 function getCandidateStatusTheme(status: string) {
@@ -363,6 +406,10 @@ export default function EmployerDashboardPage() {
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [candidates, setCandidates] = useState<CandidateSubmission[]>([]);
   const [candidateFilter, setCandidateFilter] = useState<CandidateFilter>("all");
+  const [candidateSearchQuery, setCandidateSearchQuery] = useState("");
+  const [candidateJobRoleFilter, setCandidateJobRoleFilter] = useState("all");
+  const [candidateLocationFilter, setCandidateLocationFilter] = useState("all");
+  const [candidateJobLevelFilter, setCandidateJobLevelFilter] = useState<CandidateJobLevelFilter>("all");
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [jobStatusFilter, setJobStatusFilter] = useState<JobStatusFilter>("all");
   const [jobSortOption, setJobSortOption] = useState<JobSortOption>("newest");
@@ -1081,20 +1128,64 @@ export default function EmployerDashboardPage() {
     setCandidateBusyId(null);
   }
 
+  const candidateJobRoleOptions = useMemo(() => {
+    return Array.from(new Set(candidates.map((candidate) => candidate.job_title.trim()).filter(Boolean))).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [candidates]);
+
+  const candidateLocationOptions = useMemo(() => {
+    return Array.from(new Set(candidates.map((candidate) => getCandidateLocationLabel(candidate)))).sort((a, b) =>
+      a.localeCompare(b, undefined, { sensitivity: "base" })
+    );
+  }, [candidates]);
+
+  const activeCandidateJobRoleFilter = candidateJobRoleFilter === "all" || candidateJobRoleOptions.includes(candidateJobRoleFilter) ? candidateJobRoleFilter : "all";
+  const activeCandidateLocationFilter = candidateLocationFilter === "all" || candidateLocationOptions.includes(candidateLocationFilter) ? candidateLocationFilter : "all";
+
+  const candidateBaseFilteredCandidates = useMemo(() => {
+    const normalizedSearch = candidateSearchQuery.trim().toLowerCase();
+
+    return candidates.filter((candidate) => {
+      const locationLabel = getCandidateLocationLabel(candidate);
+      const jobLevel = getCandidateJobLevel(candidate);
+      const searchableText = [
+        candidate.candidate_name,
+        candidate.candidate_email,
+        candidate.candidate_phone,
+        candidate.job_title,
+        candidate.role_category,
+        candidate.restaurant_name,
+        candidate.city,
+        candidate.state,
+        locationLabel,
+      ]
+        .map(normalizeCandidateFilterValue)
+        .join(" ");
+
+      const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
+      const matchesRole = activeCandidateJobRoleFilter === "all" || candidate.job_title.trim() === activeCandidateJobRoleFilter;
+      const matchesLocation = activeCandidateLocationFilter === "all" || locationLabel === activeCandidateLocationFilter;
+      const matchesLevel = candidateJobLevelFilter === "all" || jobLevel === candidateJobLevelFilter;
+
+      return matchesSearch && matchesRole && matchesLocation && matchesLevel;
+    });
+  }, [activeCandidateJobRoleFilter, activeCandidateLocationFilter, candidateJobLevelFilter, candidateSearchQuery, candidates]);
+
   const candidateStatusCounts = useMemo(() => {
     return CANDIDATE_STATUS_OPTIONS.reduce(
       (counts, status) => ({
         ...counts,
-        [status]: candidates.filter((candidate) => candidate.status === status).length,
+        [status]: candidateBaseFilteredCandidates.filter((candidate) => candidate.status === status).length,
       }),
-      { all: candidates.length } as Record<CandidateFilter, number>
+      { all: candidateBaseFilteredCandidates.length } as Record<CandidateFilter, number>
     );
-  }, [candidates]);
+  }, [candidateBaseFilteredCandidates]);
 
   const filteredCandidates = useMemo(() => {
-    if (candidateFilter === "all") return candidates;
-    return candidates.filter((candidate) => candidate.status === candidateFilter);
-  }, [candidateFilter, candidates]);
+    if (candidateFilter === "all") return candidateBaseFilteredCandidates;
+    return candidateBaseFilteredCandidates.filter((candidate) => candidate.status === candidateFilter);
+  }, [candidateBaseFilteredCandidates, candidateFilter]);
 
 
   const filteredJobs = useMemo(() => {
@@ -1529,24 +1620,88 @@ export default function EmployerDashboardPage() {
           ) : (
             <div id="interested-candidates-content">
           {candidates.length > 0 ? (
-            <div className="rn-candidate-filters" aria-label="Filter interested candidates by status">
-              {CANDIDATE_FILTER_OPTIONS.map((filter) => {
-                const isActive = candidateFilter === filter.value;
-
-                return (
-                  <button
-                    type="button"
-                    className={`rn-candidate-filter${isActive ? " rn-candidate-filter-active" : ""}`}
-                    key={filter.value}
-                    onClick={() => setCandidateFilter(filter.value)}
-                    aria-pressed={isActive}
+            <>
+              <div className="rn-candidate-filter-controls" aria-label="Filter interested candidates">
+                <label className="rn-candidate-filter-control rn-candidate-filter-control-search">
+                  <span>Search</span>
+                  <input
+                    type="search"
+                    value={candidateSearchQuery}
+                    onChange={(event) => setCandidateSearchQuery(event.target.value)}
+                    placeholder="Search name, email, phone, job, or location"
+                    aria-label="Search interested candidates"
+                  />
+                </label>
+                <label className="rn-candidate-filter-control">
+                  <span>Job Role</span>
+                  <select
+                    value={activeCandidateJobRoleFilter}
+                    onChange={(event) => setCandidateJobRoleFilter(event.target.value)}
+                    aria-label="Filter interested candidates by job role"
                   >
-                    <span>{filter.label}</span>
-                    <strong>{candidateStatusCounts[filter.value]}</strong>
-                  </button>
-                );
-              })}
-            </div>
+                    <option value="all">All job roles</option>
+                    {candidateJobRoleOptions.map((role) => (
+                      <option key={role} value={role}>
+                        {role}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="rn-candidate-filter-control">
+                  <span>Location</span>
+                  <select
+                    value={activeCandidateLocationFilter}
+                    onChange={(event) => setCandidateLocationFilter(event.target.value)}
+                    aria-label="Filter interested candidates by location"
+                  >
+                    <option value="all">All locations</option>
+                    {candidateLocationOptions.map((location) => (
+                      <option key={location} value={location}>
+                        {location}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="rn-candidate-filter-control">
+                  <span>Job Level</span>
+                  <select
+                    value={candidateJobLevelFilter}
+                    onChange={(event) => setCandidateJobLevelFilter(event.target.value as CandidateJobLevelFilter)}
+                    aria-label="Filter interested candidates by job level"
+                  >
+                    {CANDIDATE_JOB_LEVEL_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+
+              <div className="rn-candidate-filter-summary" role="status">
+                Showing {filteredCandidates.length} of {candidates.length} access-allowed candidates
+                {candidateJobLevelFilter !== "all" ? ` • ${getCandidateJobLevelLabel(candidateJobLevelFilter)}` : ""}
+              </div>
+
+              <div className="rn-candidate-filters" aria-label="Filter interested candidates by status">
+                {CANDIDATE_FILTER_OPTIONS.map((filter) => {
+                  const isActive = candidateFilter === filter.value;
+
+                  return (
+                    <button
+                      type="button"
+                      className={`rn-candidate-filter${isActive ? " rn-candidate-filter-active" : ""}`}
+                      key={filter.value}
+                      onClick={() => setCandidateFilter(filter.value)}
+                      aria-pressed={isActive}
+                    >
+                      <span>{filter.label}</span>
+                      <strong>{candidateStatusCounts[filter.value]}</strong>
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           ) : null}
 
           {candidates.length === 0 ? (
@@ -1555,7 +1710,7 @@ export default function EmployerDashboardPage() {
             </div>
           ) : filteredCandidates.length === 0 ? (
             <div className="rn-candidate-empty">
-              No {formatCandidateStatus(candidateFilter)} candidates right now. Try another status filter.
+              No candidates match the selected search, job role, location, job level, and status filters.
             </div>
           ) : (
             <div className="rn-candidate-list">
@@ -2439,6 +2594,69 @@ export default function EmployerDashboardPage() {
           padding: 18px;
         }
 
+        .rn-candidate-filter-controls {
+          align-items: end;
+          display: grid;
+          gap: 12px;
+          grid-template-columns: minmax(260px, 1.4fr) repeat(3, minmax(170px, 1fr));
+          margin: 18px 0 10px;
+        }
+
+        .rn-candidate-filter-control {
+          color: ${homeTheme.muted};
+          display: grid;
+          font-family: var(--font-body);
+          font-size: 12px;
+          font-weight: 900;
+          gap: 7px;
+          letter-spacing: 0.35px;
+          text-transform: uppercase;
+        }
+
+        .rn-candidate-filter-control input,
+        .rn-candidate-filter-control select {
+          appearance: none;
+          background: rgba(255, 255, 255, 0.92);
+          border: 1px solid ${homeTheme.border};
+          border-radius: 14px;
+          color: ${homeTheme.text};
+          font-family: var(--font-body);
+          font-size: 14px;
+          font-weight: 800;
+          min-height: 46px;
+          outline: 0;
+          padding: 0 14px;
+          text-transform: none;
+          width: 100%;
+        }
+
+        .rn-candidate-filter-control select {
+          background-image: linear-gradient(45deg, transparent 50%, ${homeTheme.green} 50%), linear-gradient(135deg, ${homeTheme.green} 50%, transparent 50%);
+          background-position: calc(100% - 18px) 19px, calc(100% - 13px) 19px;
+          background-repeat: no-repeat;
+          background-size: 5px 5px, 5px 5px;
+          cursor: pointer;
+          padding-right: 36px;
+        }
+
+        .rn-candidate-filter-control input:focus,
+        .rn-candidate-filter-control select:focus {
+          border-color: rgba(31, 79, 68, 0.34);
+          box-shadow: 0 0 0 3px rgba(31, 79, 68, 0.12);
+        }
+
+        .rn-candidate-filter-control input::placeholder {
+          color: rgba(85, 99, 93, 0.72);
+        }
+
+        .rn-candidate-filter-summary {
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-size: 13px;
+          font-weight: 900;
+          margin: 0 0 12px;
+        }
+
         .rn-candidate-filters {
           display: flex;
           flex-wrap: wrap;
@@ -2676,7 +2894,8 @@ export default function EmployerDashboardPage() {
         }
 
         @media (max-width: 760px) {
-          .rn-job-listing-controls {
+          .rn-job-listing-controls,
+          .rn-candidate-filter-controls {
             grid-template-columns: 1fr;
           }
 
@@ -2725,6 +2944,10 @@ export default function EmployerDashboardPage() {
           .rn-candidate-filters {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+
+          .rn-candidate-filter-control-search {
+            grid-column: auto;
           }
 
           .rn-candidate-filter {
