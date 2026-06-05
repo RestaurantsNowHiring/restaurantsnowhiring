@@ -6,6 +6,23 @@ import { canUserAccessJob } from "../../../../lib/employerJobAccess";
 
 const ALLOWED_STATUSES = new Set(["new", "reviewed", "contacted", "archived"]);
 
+const CANDIDATE_SUBMISSION_SELECT = "id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails)";
+
+function uniqueSubmissionRows(rows: Array<Record<string, unknown>>) {
+  const rowsById = new Map<string, Record<string, unknown>>();
+
+  rows.forEach((row) => {
+    const id = String(row.id ?? "");
+    if (id) rowsById.set(id, row);
+  });
+
+  return Array.from(rowsById.values()).sort((a, b) => {
+    const aCreated = new Date(String(a.created_at ?? "")).getTime();
+    const bCreated = new Date(String(b.created_at ?? "")).getTime();
+    return bCreated - aCreated;
+  });
+}
+
 function serializeSubmission(row: Record<string, unknown>) {
   const job = row.jobs && typeof row.jobs === "object" ? (row.jobs as Record<string, unknown>) : null;
   return {
@@ -36,16 +53,73 @@ export async function GET(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
-    const { data, error } = await supabaseAdmin
-      .from("candidate_submissions")
-      .select("id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails)")
-      .order("created_at", { ascending: false })
-      .limit(500);
+    const assignedStoreIds = Array.from(new Set(context.assignedStoreIds.map((id) => id.trim()).filter(Boolean)));
 
-    if (error) throw new Error(error.message || "Could not load candidate submissions.");
+    if ((context.userType === "multi_location" || context.userType === "single_location") && assignedStoreIds.length === 0) {
+      return NextResponse.json({ candidates: [] });
+    }
+
+    const candidateQueries = [];
+
+    if (context.accountId) {
+      let accountQuery = supabaseAdmin
+        .from("candidate_submissions")
+        .select(CANDIDATE_SUBMISSION_SELECT)
+        .eq("jobs.employer_account_id", context.accountId)
+        .order("created_at", { ascending: false })
+        .limit(500);
+
+      if (assignedStoreIds.length > 0 && context.userType !== "full_account_access") {
+        accountQuery = accountQuery.in("jobs.employer_store_id", assignedStoreIds);
+      }
+
+      candidateQueries.push(accountQuery);
+    } else if (assignedStoreIds.length > 0 && context.userType !== "full_account_access") {
+      candidateQueries.push(
+        supabaseAdmin
+          .from("candidate_submissions")
+          .select(CANDIDATE_SUBMISSION_SELECT)
+          .in("jobs.employer_store_id", assignedStoreIds)
+          .order("created_at", { ascending: false })
+          .limit(500),
+      );
+    } else {
+      candidateQueries.push(
+        supabaseAdmin
+          .from("candidate_submissions")
+          .select(CANDIDATE_SUBMISSION_SELECT)
+          .eq("employer_user_id", context.ownerUserId)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabaseAdmin
+          .from("candidate_submissions")
+          .select(CANDIDATE_SUBMISSION_SELECT)
+          .eq("employer_email", context.ownerEmail)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabaseAdmin
+          .from("candidate_submissions")
+          .select(CANDIDATE_SUBMISSION_SELECT)
+          .eq("jobs.employer_user_id", context.ownerUserId)
+          .order("created_at", { ascending: false })
+          .limit(500),
+        supabaseAdmin
+          .from("candidate_submissions")
+          .select(CANDIDATE_SUBMISSION_SELECT)
+          .eq("jobs.employer_email", context.ownerEmail)
+          .order("created_at", { ascending: false })
+          .limit(500),
+      );
+    }
+
+    const candidateResults = await Promise.all(candidateQueries);
+    const queryError = candidateResults.find((result) => result.error)?.error ?? null;
+    if (queryError) throw new Error(queryError.message || "Could not load candidate submissions.");
+
+    const candidateRows = uniqueSubmissionRows(candidateResults.flatMap((result) => (result.data ?? []) as Array<Record<string, unknown>>));
 
     const userEmail = user.email.toLowerCase();
-    const visibleRows = (data ?? []).filter((entry) => {
+    const visibleRows = candidateRows.filter((entry) => {
       const row = entry as Record<string, unknown>;
       const job = row.jobs && typeof row.jobs === "object" ? (row.jobs as Record<string, unknown>) : null;
       const belongsToEmployerAccount = Boolean(
@@ -60,7 +134,7 @@ export async function GET(request: Request) {
         (context.accountId && job?.employer_account_id === context.accountId)
       );
 
-      // Team Members/Viewers are location/email-scoped by the job's candidate interest email field.
+      // Team Members/Viewers reuse the same assigned-store/job visibility check used across employer access.
       return belongsToEmployerAccount && canUserAccessJob({ email: user.email, userType: context.userType, assignedStoreIds: context.assignedStoreIds }, context.role, job);
     });
 

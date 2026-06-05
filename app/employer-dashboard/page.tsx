@@ -15,7 +15,6 @@ import {
   canEmployerPauseResume,
   dashboardStatusForJob,
   getEmployerPauseResumeUpdate,
-  isMissingViewsColumnError,
 } from "../../lib/jobStatus";
 import { canUserAccessJob } from "../../lib/employerJobAccess";
 
@@ -210,19 +209,6 @@ function isMissingEmployerUserIdColumnError(error: SupabaseActionError | null | 
   );
 }
 
-
-const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
-  {
-    fields: "id,title,restaurant_name,city,state,active,status,created_at,views,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails",
-    includesStatus: true,
-    includesViews: true,
-  },
-  {
-    fields: "id,title,restaurant_name,city,state,active,status,created_at,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails",
-    includesStatus: true,
-    includesViews: false,
-  },
-];
 
 
 
@@ -434,68 +420,30 @@ export default function EmployerDashboardPage() {
   useEffect(() => {
     let mounted = true;
 
-    async function loadEmployerJobs(currentOwner: EmployerOwner): Promise<JobsQueryResult> {
-      let liveJobs: Array<Record<string, unknown>> | null = null;
-      let error: { code?: string; message?: string } | null = null;
-      let selectedVariant: JobsQueryVariant | null = null;
+    async function loadEmployerJobs(): Promise<JobsQueryResult> {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) return { liveJobs: [], selectedVariant: null, error: { message: "Please sign in again before loading job listings." } };
 
-      for (const variant of JOB_QUERY_VARIANTS) {
-        const queries = currentOwner.accountId
-          ? [
-              supabase
-                .from("jobs")
-                .select(variant.fields)
-                .eq("employer_account_id", currentOwner.accountId)
-                .order("created_at", { ascending: false }),
-            ]
-          : [
-              supabase
-                .from("jobs")
-                .select(variant.fields)
-                .eq("employer_user_id", currentOwner.ownerUserId ?? currentOwner.userId)
-                .order("created_at", { ascending: false }),
-              supabase
-                .from("jobs")
-                .select(variant.fields)
-                .eq("employer_email", currentOwner.ownerEmail ?? currentOwner.email)
-                .order("created_at", { ascending: false }),
-            ];
+      const response = await fetch("/api/employer/jobs", {
+        headers: employerAccountHeaders(accessToken),
+      });
 
-        const results = await Promise.all(queries);
-        const variantError = results.find((result) => result.error)?.error ?? null;
+      const payload = (await response.json().catch(() => null)) as {
+        jobs?: Array<Record<string, unknown>>;
+        includesViews?: boolean;
+        error?: string;
+      } | null;
 
-        if (!variantError) {
-          const jobsById = new Map<string, Record<string, unknown>>();
-
-          results.flatMap((result) => result.data ?? []).forEach((job) => {
-            const jobRecord = job as unknown as Record<string, unknown>;
-            const id = String(jobRecord.id ?? "");
-            if (id) {
-              jobsById.set(id, jobRecord);
-            }
-          });
-
-          liveJobs = Array.from(jobsById.values()).sort((a, b) => {
-            const aCreated = new Date(String(a.created_at ?? "")).getTime();
-            const bCreated = new Date(String(b.created_at ?? "")).getTime();
-            return bCreated - aCreated;
-          });
-          selectedVariant = variant;
-          error = null;
-          break;
-        }
-
-        const missingViews = isMissingViewsColumnError(variantError);
-        if (missingViews) {
-          error = variantError;
-          continue;
-        }
-
-        error = variantError;
-        break;
+      if (!response.ok) {
+        return { liveJobs: null, selectedVariant: null, error: { message: payload?.error || "Could not load your employer listings." } };
       }
 
-      return { liveJobs, selectedVariant, error };
+      return {
+        liveJobs: payload?.jobs ?? [],
+        selectedVariant: { fields: "api", includesStatus: true, includesViews: Boolean(payload?.includesViews) },
+        error: null,
+      };
     }
 
     function employerAccountHeaders(accessToken: string) {
@@ -610,7 +558,7 @@ export default function EmployerDashboardPage() {
         if (mounted) setCandidatesError(error instanceof Error ? error.message : "Could not load interested candidates.");
       }
 
-      const jobsResult = await loadEmployerJobs(currentOwner);
+      const jobsResult = await loadEmployerJobs();
 
       if (jobsResult.error || !jobsResult.liveJobs || !jobsResult.selectedVariant) {
         if (mounted) {
