@@ -18,6 +18,7 @@ type Step = 1 | 2 | 3 | 4;
 type PayMode = "range" | "minimum" | "maximum" | "rate";
 type EmployerAccess = { accountId: string | null; canManageJobs: boolean; canManageNotificationRouting: boolean; defaultCandidateNotificationRouting: string; supportEmail: string | null; };
 type SelectionType = "store" | "manager" | null;
+type EmployerAccessScope = "single_location" | "multi_location" | "full_account_access";
 type EmployerStore = {
   id: string;
   location_name: string;
@@ -38,6 +39,7 @@ type HiringManager = {
   email: string;
   location_name: string | null;
   status: string;
+  user_type: EmployerAccessScope;
 };
 const EMPTY_LOCATION_SELECTION_LABEL = "No location or hiring manager selected";
 
@@ -79,9 +81,15 @@ function formatHiringManagerOptionDetail(manager: HiringManager) {
   return manager.location_name?.trim() ? manager.email : "";
 }
 
+const POST_JOB_HIRING_MANAGER_STATUSES = new Set(["active", "invited", "pending"]);
+
 function buildPostJobHiringManagerOptions(managers: HiringManager[]) {
   return managers
-    .filter((manager) => manager.status === "active" && manager.email?.trim())
+    .filter((manager) =>
+      POST_JOB_HIRING_MANAGER_STATUSES.has(manager.status) &&
+      manager.user_type !== "single_location" &&
+      manager.email?.trim()
+    )
     .sort((left, right) =>
       formatHiringManagerOptionLabel(left).localeCompare(formatHiringManagerOptionLabel(right), undefined, { sensitivity: "base" }),
     );
@@ -301,7 +309,7 @@ export default function PostJobPage() {
 
   async function loadStoreAndTemplateOptions(accessToken: string) {
     const [storesResponse, managersResponse, templatesResponse] = await Promise.all([
-      fetch("/api/employer/stores", { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch("/api/employer/stores?assignableOnly=true", { headers: { Authorization: `Bearer ${accessToken}` } }),
       fetch("/api/employer/hiring-managers", { headers: { Authorization: `Bearer ${accessToken}` } }),
       fetch("/api/employer/job-templates", { headers: { Authorization: `Bearer ${accessToken}` } }),
     ]);
