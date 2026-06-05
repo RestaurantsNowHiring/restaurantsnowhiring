@@ -556,25 +556,36 @@ export default function PostJobPage() {
   }
 
   function runDescriptionCommand(command: string, value?: string) {
-    const editor = descriptionEditorRef.current;
-    if (!editor) return;
+  const editor = descriptionEditorRef.current;
+  if (!editor) return;
 
-    editor.focus({ preventScroll: true });
+  editor.focus({ preventScroll: true });
 
-    if (!editor.innerHTML.trim() && (command === "insertUnorderedList" || command === "insertOrderedList")) {
-      editor.innerHTML = "<p><br></p>";
-      const selection = window.getSelection();
-      const range = document.createRange();
-      range.selectNodeContents(editor);
-      range.collapse(false);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
+  if (command === "insertUnorderedList") {
+    document.execCommand(
+      "insertHTML",
+      false,
+      "<ul><li>List item</li></ul>"
+    );
 
-    document.execCommand(command, false, value);
     setDescription(sanitizeRichText(editor.innerHTML));
+    return;
   }
 
+  if (command === "insertOrderedList") {
+    document.execCommand(
+      "insertHTML",
+      false,
+      "<ol><li>List item</li></ol>"
+    );
+
+    setDescription(sanitizeRichText(editor.innerHTML));
+    return;
+  }
+
+  document.execCommand(command, false, value);
+  setDescription(sanitizeRichText(editor.innerHTML));
+}
   function updateDescriptionFromEditor() {
     setDescription(sanitizeRichText(descriptionEditorRef.current?.innerHTML ?? ""));
   }
