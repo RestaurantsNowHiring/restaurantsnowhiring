@@ -6,7 +6,7 @@ import { canUserAccessJob } from "../../../../lib/employerJobAccess";
 
 const ALLOWED_STATUSES = new Set(["new", "reviewed", "contacted", "archived"]);
 
-const CANDIDATE_SUBMISSION_SELECT = "id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails)";
+const CANDIDATE_SUBMISSION_SELECT = "id,job_id,employer_user_id,employer_email,candidate_name,candidate_email,candidate_phone,message,resume_filename,status,created_at,jobs!inner(title,restaurant_name,city,state,role_category,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails)";
 
 function uniqueSubmissionRows(rows: Array<Record<string, unknown>>) {
   const rowsById = new Map<string, Record<string, unknown>>();
@@ -39,6 +39,7 @@ function serializeSubmission(row: Record<string, unknown>) {
     restaurant_name: typeof job?.restaurant_name === "string" ? job.restaurant_name : null,
     city: typeof job?.city === "string" ? job.city : null,
     state: typeof job?.state === "string" ? job.state : null,
+    role_category: typeof job?.role_category === "string" ? job.role_category : null,
   };
 }
 
