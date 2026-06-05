@@ -14,8 +14,9 @@ import {
 } from "../../../../styles/homepageDesignSystem";
 
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
-type EmployerAccess = { role: EmployerRole; accountId: string | null; ownerUserId: string; ownerEmail: string; canManageJobs: boolean; };
-type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string; role?: EmployerRole; canManageJobs?: boolean };
+type EmployerAccessScope = "single_location" | "multi_location" | "full_account_access";
+type EmployerAccess = { role: EmployerRole; userType: EmployerAccessScope; assignedStoreIds: string[]; accountId: string | null; ownerUserId: string; ownerEmail: string; canManageJobs: boolean; };
+type EmployerOwner = { userId: string; email: string; accountId?: string | null; ownerUserId?: string; ownerEmail?: string; role?: EmployerRole; userType?: EmployerAccessScope; assignedStoreIds?: string[]; canManageJobs?: boolean };
 
 type JobRecord = {
   id: string;
@@ -30,6 +31,7 @@ type JobRecord = {
   active: boolean;
   created_at: string;
   candidate_notification_email: string | null;
+  employer_store_id?: string | null;
   candidate_notification_emails?: string[] | null;
   candidate_notification_routing: string | null;
 };
@@ -73,7 +75,7 @@ function parseLocationInput(location: string) {
 }
 
 async function loadOwnedJob(jobId: string, owner: EmployerOwner) {
-  const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at,candidate_notification_email,candidate_notification_emails,candidate_notification_routing";
+  const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at,candidate_notification_email,candidate_notification_emails,candidate_notification_routing,employer_store_id";
   const queries = [];
 
   if (owner.accountId) {
@@ -94,7 +96,7 @@ async function loadOwnedJob(jobId: string, owner: EmployerOwner) {
     if (job) {
       // Team Members/Viewers are location/email-scoped by the job's
       // "Where should candidate interest emails be sent?" candidate email field.
-      return canUserAccessJob({ email: owner.email }, owner.role ?? "account_owner", job)
+      return canUserAccessJob({ email: owner.email, userType: owner.userType, assignedStoreIds: owner.assignedStoreIds }, owner.role ?? "account_owner", job)
         ? { job, error: null }
         : { job: null, error: null };
     }
@@ -187,6 +189,8 @@ function EmployerJobEditForm() {
         ownerUserId: access?.ownerUserId ?? userId,
         ownerEmail: access?.ownerEmail ?? email,
         role: access?.role ?? "account_owner",
+        userType: access?.userType,
+        assignedStoreIds: access?.assignedStoreIds,
         canManageJobs: access?.canManageJobs ?? true,
       };
       const result = await loadOwnedJob(jobId, currentOwner);

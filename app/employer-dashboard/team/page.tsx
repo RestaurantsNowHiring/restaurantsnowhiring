@@ -7,6 +7,7 @@ import { supabase } from "../../../lib/supabase";
 import { homeCardStyle, homeInputStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../../styles/homepageDesignSystem";
 
 type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
+type EmployerAccessScope = "single_location" | "multi_location" | "full_account_access";
 type AccountStatusFilter = "all" | "active" | "invited";
 type RoutingFilter = "all" | "enabled" | "disabled";
 
@@ -40,6 +41,8 @@ type TeamEditForm = {
   default_application_url: string;
   can_manage_notification_routing: boolean;
   role: EmployerRole;
+  user_type: EmployerAccessScope;
+  assigned_store_ids: string[];
 };
 
 type EmployerAccess = {
@@ -58,6 +61,20 @@ type TeamMember = {
   created_at: string;
   updated_at: string;
   employer_store_id?: string | null;
+  user_type: EmployerAccessScope;
+  assigned_store_ids?: string[];
+};
+
+const ACCESS_SCOPE_LABELS: Record<EmployerAccessScope, string> = {
+  single_location: "Single Location",
+  multi_location: "Multi Location",
+  full_account_access: "Full Account Access",
+};
+
+const ACCESS_SCOPE_HELP: Record<EmployerAccessScope, string> = {
+  single_location: "Preserves existing store/location login behavior.",
+  multi_location: "Viewer access can span selected active stores without changing role permissions.",
+  full_account_access: "Can see every location on this employer account.",
 };
 
 const ROLE_LABELS: Record<EmployerRole, string> = {
@@ -135,6 +152,10 @@ export default function TeamAccessPage() {
   const [stores, setStores] = useState<EmployerStore[]>([]);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<EmployerRole>("viewer");
+  const [accessScope, setAccessScope] = useState<EmployerAccessScope>("single_location");
+  const [assignedStoreIds, setAssignedStoreIds] = useState<string[]>([]);
+  const [storeSearch, setStoreSearch] = useState("");
+  const [editStoreSearch, setEditStoreSearch] = useState("");
   const [canRouteNotifications, setCanRouteNotifications] = useState(false);
   const [detailsSelection, setDetailsSelection] = useState<{ member: TeamMember; store: EmployerStore | null } | null>(null);
   const [editingSelection, setEditingSelection] = useState<{ member: TeamMember; store: EmployerStore | null } | null>(null);
@@ -204,7 +225,7 @@ export default function TeamAccessPage() {
     const response = await fetch("/api/employer/team", {
       method: "POST",
       headers: employerAccountHeaders(token, "application/json"),
-      body: JSON.stringify({ email, role, can_manage_notification_routing: canRouteNotifications }),
+      body: JSON.stringify({ email, role, user_type: accessScope, assigned_store_ids: accessScope === "full_account_access" ? [] : assignedStoreIds, can_manage_notification_routing: canRouteNotifications }),
     });
     const payload = (await response.json().catch(() => null)) as { error?: string; inviteEmailWarning?: string | null } | null;
 
@@ -216,6 +237,9 @@ export default function TeamAccessPage() {
 
     setEmail("");
     setRole("viewer");
+    setAccessScope("single_location");
+    setAssignedStoreIds([]);
+    setStoreSearch("");
     setCanRouteNotifications(false);
     setMessage(payload?.inviteEmailWarning || "Team access saved and invitation email sent.");
     setBusy(false);
@@ -277,6 +301,30 @@ export default function TeamAccessPage() {
     return value?.trim().toLowerCase() ?? "";
   }, []);
 
+  const activeStoreOptions = useMemo(() => {
+    const byId = new Map<string, EmployerStore>();
+    stores.forEach((store) => {
+      if (store.active && store.id) byId.set(store.id, store);
+    });
+    return Array.from(byId.values()).sort((left, right) => left.location_name.localeCompare(right.location_name, undefined, { sensitivity: "base" }));
+  }, [stores]);
+
+  const filteredStoreOptions = useMemo(() => {
+    const normalizedSearch = storeSearch.trim().toLowerCase();
+    if (!normalizedSearch) return activeStoreOptions;
+    return activeStoreOptions.filter((store) => [store.location_name, store.city, store.state].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedSearch)));
+  }, [activeStoreOptions, storeSearch]);
+
+  const filteredEditStoreOptions = useMemo(() => {
+    const normalizedSearch = editStoreSearch.trim().toLowerCase();
+    if (!normalizedSearch) return activeStoreOptions;
+    return activeStoreOptions.filter((store) => [store.location_name, store.city, store.state].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedSearch)));
+  }, [activeStoreOptions, editStoreSearch]);
+
+  function toggleAssignedStore(storeId: string) {
+    setAssignedStoreIds((current) => current.includes(storeId) ? current.filter((id) => id !== storeId) : [...current, storeId]);
+  }
+
   const getStoreRoutingEmailKeys = useCallback((store: EmployerStore) => {
     return new Set([store.store_email, store.ta_email, store.gm_op_email].map(normalizeEmail).filter(Boolean));
   }, [normalizeEmail]);
@@ -327,6 +375,8 @@ export default function TeamAccessPage() {
       default_application_url: store?.default_application_url ?? "",
       can_manage_notification_routing: member.can_manage_notification_routing,
       role: member.role,
+      user_type: member.user_type ?? "single_location",
+      assigned_store_ids: member.assigned_store_ids ?? [],
     };
   }
 
@@ -343,12 +393,24 @@ export default function TeamAccessPage() {
     const store = findStoreForMember(member);
     setEditingSelection({ member: { ...member }, store });
     setEditForm(buildEditForm(member, store));
+    setEditStoreSearch("");
     setMessage(null);
   }
 
   function closeEditModal() {
     setEditingSelection(null);
     setEditForm(null);
+    setEditStoreSearch("");
+  }
+
+  function toggleEditAssignedStore(storeId: string) {
+    setEditForm((current) => {
+      if (!current) return current;
+      const assigned = current.assigned_store_ids.includes(storeId)
+        ? current.assigned_store_ids.filter((id) => id !== storeId)
+        : [...current.assigned_store_ids, storeId];
+      return { ...current, assigned_store_ids: assigned };
+    });
   }
 
   function updateEditField<K extends keyof TeamEditForm>(field: K, value: TeamEditForm[K]) {
@@ -377,6 +439,8 @@ export default function TeamAccessPage() {
       body: JSON.stringify({
         id: member.id,
         role: editForm.role,
+        user_type: editForm.user_type,
+        assigned_store_ids: editForm.user_type === "full_account_access" ? [] : editForm.assigned_store_ids,
         can_manage_notification_routing: editForm.can_manage_notification_routing,
         location_name: locationName || null,
       }),
@@ -404,7 +468,7 @@ export default function TeamAccessPage() {
       editForm.default_application_url.trim(),
     );
 
-    if (hasStoreDetails) {
+    if (editForm.user_type === "single_location" && hasStoreDetails) {
       const storePayload = {
         ...(store?.id ? { id: store.id } : {}),
         location_name: locationName || member.location_name || member.email,
@@ -494,6 +558,46 @@ export default function TeamAccessPage() {
   const detailsMember = detailsSelection?.member ?? null;
   const detailsStore = detailsSelection?.store ?? null;
   const editingMember = editingSelection?.member ?? null;
+  const detailsAssignedStores = activeStoreOptions.filter((store) => detailsMember?.assigned_store_ids?.includes(store.id));
+  const detailsRows = detailsMember?.user_type === "multi_location"
+    ? [
+        ["Name/location", detailsMember.location_name ?? detailsMember.email],
+        ["Email", detailsMember.email],
+        ["Access scope", ACCESS_SCOPE_LABELS.multi_location],
+        ["Access level", ROLE_LABELS[detailsMember.role]],
+        ["Assigned locations", detailsAssignedStores.length > 0 ? detailsAssignedStores.map((store) => [store.location_name, store.city, store.state].filter(Boolean).join(" — ")).join(", ") : "—"],
+        ["Account status", getAccountStatus(detailsMember)],
+        ["Candidate routing", detailsMember.can_manage_notification_routing ? "Enabled" : "Disabled"],
+        ["Joined date", getJoinedDisplay(detailsMember)],
+      ]
+    : detailsMember?.user_type === "full_account_access"
+      ? [
+          ["Name/location", detailsMember.location_name ?? detailsMember.email],
+          ["Email", detailsMember.email],
+          ["Access scope", ACCESS_SCOPE_LABELS.full_account_access],
+          ["Access level", ROLE_LABELS[detailsMember.role]],
+          ["Assigned locations", "All locations available"],
+          ["Account status", getAccountStatus(detailsMember)],
+          ["Candidate routing", detailsMember.can_manage_notification_routing ? "Enabled" : "Disabled"],
+          ["Joined date", getJoinedDisplay(detailsMember)],
+        ]
+      : detailsMember
+        ? [
+            ["Location name", detailsStore?.location_name ?? detailsMember.location_name ?? "—"],
+            ["Address", detailsStore?.address ?? "—"],
+            ["City", detailsStore?.city ?? "—"],
+            ["State", (detailsStore?.state ?? getMemberState(detailsMember)) || "—"],
+            ["Candidate routing emails", formatCandidateRoutingEmails(detailsStore)],
+            ["Minimum wage", detailsStore?.minimum_wage ?? "—"],
+            ["Pay range", detailsStore?.pay_range ?? "—"],
+            ["Default application URL", detailsStore?.default_application_url ?? "—"],
+            ["Access scope", ACCESS_SCOPE_LABELS.single_location],
+            ["Role", ROLE_LABELS[detailsMember.role]],
+            ["Account status", getAccountStatus(detailsMember)],
+            ["Candidate routing", detailsMember.can_manage_notification_routing ? "Enabled" : "Disabled"],
+            ["Joined date", getJoinedDisplay(detailsMember)],
+          ]
+        : [];
 
   if (authStatus === "loading") {
     return <main className="rn-team-page" style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading team access…</main>;
@@ -539,7 +643,7 @@ export default function TeamAccessPage() {
                     required
                     value={email}
                     onChange={(event) => setEmail(event.target.value)}
-                    placeholder="manager@mission-bbq.com"
+                    placeholder="manager@example.com"
                     className="rn-team-input"
                     style={{ ...homeInputStyle, marginTop: 6, minHeight: 50 }}
                   />
@@ -558,6 +662,39 @@ export default function TeamAccessPage() {
                   </select>
                   <span style={{ display: "block", marginTop: 6, color: homeTheme.muted, fontSize: 13 }}>{ROLE_HELP[role]}</span>
                 </label>
+                <label style={{ fontWeight: 900, color: homeTheme.text }}>
+                  Access scope / user type
+                  <select
+                    value={accessScope}
+                    onChange={(event) => {
+                      const nextScope = event.target.value as EmployerAccessScope;
+                      setAccessScope(nextScope);
+                      if (nextScope === "full_account_access") setAssignedStoreIds([]);
+                    }}
+                    className="rn-team-select"
+                    style={{ ...homeInputStyle, marginTop: 6, minHeight: 50, appearance: "none" }}
+                  >
+                    {(Object.keys(ACCESS_SCOPE_LABELS) as EmployerAccessScope[]).map((option) => (
+                      <option key={option} value={option}>{ACCESS_SCOPE_LABELS[option]}</option>
+                    ))}
+                  </select>
+                  <span style={{ display: "block", marginTop: 6, color: homeTheme.muted, fontSize: 13 }}>{ACCESS_SCOPE_HELP[accessScope]}</span>
+                </label>
+                {accessScope === "multi_location" ? (
+                  <div style={{ display: "grid", gap: 8, fontWeight: 900, color: homeTheme.text }}>
+                    <span>Assigned active stores</span>
+                    <input value={storeSearch} onChange={(event) => setStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
+                    <div style={{ display: "grid", gap: 8, maxHeight: 220, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
+                      {filteredStoreOptions.map((store) => (
+                        <label key={store.id} className="rn-team-checkbox-row" style={{ color: homeTheme.text }}>
+                          <input className="rn-team-checkbox" type="checkbox" checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
+                          <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
+                        </label>
+                      ))}
+                      {filteredStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No active stores found.</span> : null}
+                    </div>
+                  </div>
+                ) : null}
                 <label className="rn-team-checkbox-row" style={{ fontWeight: 800, color: homeTheme.text }}>
                   <input
                     className="rn-team-checkbox"
@@ -652,8 +789,9 @@ export default function TeamAccessPage() {
                       <strong className="rn-team-access-card__location" title={getMemberLocationDisplay(member)}>{getMemberLocationDisplay(member)}</strong>
                       <span className="rn-team-access-card__email" title={member.email}>{member.email}</span>
                     </div>
-                    <div className="rn-team-access-card__badges" aria-label={`${ROLE_LABELS[member.role]}, ${getAccountStatus(member)}, candidate routing ${member.can_manage_notification_routing ? "enabled" : "disabled"}`}>
+                    <div className="rn-team-access-card__badges" aria-label={`${ROLE_LABELS[member.role]}, ${ACCESS_SCOPE_LABELS[member.user_type ?? "single_location"]}, ${getAccountStatus(member)}, candidate routing ${member.can_manage_notification_routing ? "enabled" : "disabled"}`}>
                       <span className="rn-team-role-pill">{ROLE_LABELS[member.role]}</span>
+                      <span className="rn-team-role-pill">{ACCESS_SCOPE_LABELS[member.user_type ?? "single_location"]}</span>
                       <span className={isPendingTeamInvite(member) ? "rn-team-status-pill rn-team-status-pill--pending" : "rn-team-status-pill rn-team-status-pill--active"}>{getAccountStatus(member)}</span>
                       <span className={member.can_manage_notification_routing ? "rn-team-routing-pill rn-team-routing-pill--enabled" : "rn-team-routing-pill"}>{member.can_manage_notification_routing ? "Routing enabled" : "Routing disabled"}</span>
                     </div>
@@ -689,20 +827,7 @@ export default function TeamAccessPage() {
                 <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeDetailsModal}>Close</button>
               </div>
               <div className="rn-team-detail-grid">
-                {[
-                  ["Location name", detailsStore?.location_name ?? detailsMember.location_name ?? "—"],
-                  ["Address", detailsStore?.address ?? "—"],
-                  ["City", detailsStore?.city ?? "—"],
-                  ["State", (detailsStore?.state ?? getMemberState(detailsMember)) || "—"],
-                  ["Candidate routing emails", formatCandidateRoutingEmails(detailsStore)],
-                  ["Minimum wage", detailsStore?.minimum_wage ?? "—"],
-                  ["Pay range", detailsStore?.pay_range ?? "—"],
-                  ["Default application URL", detailsStore?.default_application_url ?? "—"],
-                  ["Role", ROLE_LABELS[detailsMember.role]],
-                  ["Account status", getAccountStatus(detailsMember)],
-                  ["Candidate routing", detailsMember.can_manage_notification_routing ? "Enabled" : "Disabled"],
-                  ["Joined date", getJoinedDisplay(detailsMember)],
-                ].map(([label, value]) => (
+                {detailsRows.map(([label, value]) => (
                   <div key={label} className="rn-team-detail-item">
                     <span>{label}</span>
                     <strong>{value}</strong>
@@ -729,16 +854,39 @@ export default function TeamAccessPage() {
                 <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeEditModal} disabled={busy}>Close</button>
               </div>
               <form className="rn-team-edit-grid" onSubmit={saveEditModal}>
-                <label>Location name<input className="rn-team-input" style={homeInputStyle} value={editForm.location_name} onChange={(event) => updateEditField("location_name", event.target.value)} maxLength={180} placeholder="MISSION BBQ Columbia, MD" /></label>
-                <label>State<input className="rn-team-input" style={homeInputStyle} value={editForm.state} onChange={(event) => updateEditField("state", event.target.value.toUpperCase().slice(0, 2))} maxLength={2} placeholder="MD" /></label>
-                <label>Address<input className="rn-team-input" style={homeInputStyle} value={editForm.address} onChange={(event) => updateEditField("address", event.target.value)} /></label>
-                <label>City<input className="rn-team-input" style={homeInputStyle} value={editForm.city} onChange={(event) => updateEditField("city", event.target.value)} /></label>
-                <label>Candidate routing email 1<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.store_email} onChange={(event) => updateEditField("store_email", event.target.value)} placeholder="routing1@example.com" /></label>
-                <label>Candidate routing email 2<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.ta_email} onChange={(event) => updateEditField("ta_email", event.target.value)} placeholder="routing2@example.com" /></label>
-                <label>Candidate routing email 3<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.gm_op_email} onChange={(event) => updateEditField("gm_op_email", event.target.value)} placeholder="routing3@example.com" /></label>
-                <label>Minimum wage<input className="rn-team-input" style={homeInputStyle} value={editForm.minimum_wage} onChange={(event) => updateEditField("minimum_wage", event.target.value)} /></label>
-                <label>Pay range<input className="rn-team-input" style={homeInputStyle} value={editForm.pay_range} onChange={(event) => updateEditField("pay_range", event.target.value)} /></label>
-                <label>Default application URL<input className="rn-team-input" style={homeInputStyle} value={editForm.default_application_url} onChange={(event) => updateEditField("default_application_url", event.target.value)} placeholder="https://" /></label>
+                <label>Access scope / user type<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.user_type} onChange={(event) => updateEditField("user_type", event.target.value as EmployerAccessScope)}>{(Object.keys(ACCESS_SCOPE_LABELS) as EmployerAccessScope[]).map((option) => <option key={option} value={option}>{ACCESS_SCOPE_LABELS[option]}</option>)}</select></label>
+                {editForm.user_type === "multi_location" ? (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <strong>Assigned active stores</strong>
+                    <input value={editStoreSearch} onChange={(event) => setEditStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
+                    <div style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
+                      {filteredEditStoreOptions.map((store) => (
+                        <label key={store.id} className="rn-team-checkbox-row">
+                          <input className="rn-team-checkbox" type="checkbox" checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
+                          <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
+                        </label>
+                      ))}
+                      {filteredEditStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No active stores found.</span> : null}
+                    </div>
+                  </div>
+                ) : null}
+                {editForm.user_type === "full_account_access" ? (
+                  <div style={{ color: homeTheme.muted, fontWeight: 800 }}>Full Account Access users can view all locations on this employer account.</div>
+                ) : null}
+                {editForm.user_type === "single_location" ? (
+                  <>
+                    <label>Location name<input className="rn-team-input" style={homeInputStyle} value={editForm.location_name} onChange={(event) => updateEditField("location_name", event.target.value)} maxLength={180} placeholder="Store name, City, ST" /></label>
+                    <label>State<input className="rn-team-input" style={homeInputStyle} value={editForm.state} onChange={(event) => updateEditField("state", event.target.value.toUpperCase().slice(0, 2))} maxLength={2} placeholder="MD" /></label>
+                    <label>Address<input className="rn-team-input" style={homeInputStyle} value={editForm.address} onChange={(event) => updateEditField("address", event.target.value)} /></label>
+                    <label>City<input className="rn-team-input" style={homeInputStyle} value={editForm.city} onChange={(event) => updateEditField("city", event.target.value)} /></label>
+                    <label>Candidate routing email 1<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.store_email} onChange={(event) => updateEditField("store_email", event.target.value)} placeholder="routing1@example.com" /></label>
+                    <label>Candidate routing email 2<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.ta_email} onChange={(event) => updateEditField("ta_email", event.target.value)} placeholder="routing2@example.com" /></label>
+                    <label>Candidate routing email 3<input className="rn-team-input" style={homeInputStyle} type="email" value={editForm.gm_op_email} onChange={(event) => updateEditField("gm_op_email", event.target.value)} placeholder="routing3@example.com" /></label>
+                    <label>Minimum wage<input className="rn-team-input" style={homeInputStyle} value={editForm.minimum_wage} onChange={(event) => updateEditField("minimum_wage", event.target.value)} /></label>
+                    <label>Pay range<input className="rn-team-input" style={homeInputStyle} value={editForm.pay_range} onChange={(event) => updateEditField("pay_range", event.target.value)} /></label>
+                    <label>Default application URL<input className="rn-team-input" style={homeInputStyle} value={editForm.default_application_url} onChange={(event) => updateEditField("default_application_url", event.target.value)} placeholder="https://" /></label>
+                  </>
+                ) : null}
                 <label>Role<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
                 <label className="rn-team-checkbox-row rn-team-edit-checkbox"><input className="rn-team-checkbox" type="checkbox" checked={editForm.can_manage_notification_routing} onChange={(event) => updateEditField("can_manage_notification_routing", event.target.checked)} disabled={editingMember.role === "account_owner"} /><span>Candidate routing enabled</span></label>
                 <div className="rn-team-modal__actions">

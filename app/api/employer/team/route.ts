@@ -1,12 +1,13 @@
 import { randomUUID } from "crypto";
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
-import { EmployerRole, getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
+import { EmployerAccessScope, EmployerRole, getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
 import { sendTeamInviteEmail } from "../../../../lib/teamInviteEmail";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const ROLES = new Set<EmployerRole>(["account_owner", "hiring_manager", "viewer"]);
+const ACCESS_SCOPES = new Set<EmployerAccessScope>(["single_location", "multi_location", "full_account_access"]);
 
 type TeamPayload = {
   id?: string;
@@ -14,6 +15,8 @@ type TeamPayload = {
   role?: EmployerRole;
   can_manage_notification_routing?: boolean;
   location_name?: string | null;
+  user_type?: EmployerAccessScope;
+  assigned_store_ids?: string[];
 };
 
 type TeamMemberRow = {
@@ -22,6 +25,8 @@ type TeamMemberRow = {
   location_name: string | null;
   user_id: string | null;
   role: EmployerRole;
+  user_type: EmployerAccessScope;
+  assigned_store_ids?: string[];
   status: string;
   can_manage_notification_routing: boolean;
   created_at: string;
@@ -41,6 +46,65 @@ function cleanLocationName(value: unknown) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed.slice(0, 180) : null;
+}
+
+function cleanAccessScope(value: unknown, role?: EmployerRole): EmployerAccessScope {
+  if (role === "account_owner") return "full_account_access";
+  return ACCESS_SCOPES.has(value as EmployerAccessScope) ? (value as EmployerAccessScope) : "single_location";
+}
+
+function cleanStoreIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((id) => (typeof id === "string" ? id.trim() : "")).filter(Boolean)));
+}
+
+async function validateAssignableStoreIds(admin: ReturnType<typeof getSupabaseAdminClient>, accountId: string, storeIds: string[]) {
+  if (!admin || storeIds.length === 0) return [];
+  const { data, error } = await admin
+    .from("employer_stores")
+    .select("id")
+    .eq("employer_account_id", accountId)
+    .eq("active", true)
+    .in("id", storeIds);
+  if (error) throw new Error(error.message || "Could not validate assigned locations.");
+  const validIds = new Set((data ?? []).map((row) => String(row.id)));
+  if (validIds.size !== storeIds.length) throw new Error("Assigned locations must be active stores on this employer account.");
+  return storeIds.filter((id) => validIds.has(id));
+}
+
+async function syncStoreAssignments(input: { admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>; accountId: string; memberId: string; storeIds: string[]; createdByUserId: string }) {
+  const { admin, accountId, memberId, storeIds, createdByUserId } = input;
+  const validStoreIds = await validateAssignableStoreIds(admin, accountId, storeIds);
+  const { error: deleteError } = await admin.from("employer_team_member_stores").delete().eq("team_member_id", memberId);
+  if (deleteError) throw new Error(deleteError.message || "Could not update assigned locations.");
+  if (validStoreIds.length === 0) return [];
+  const { data, error } = await admin
+    .from("employer_team_member_stores")
+    .insert(validStoreIds.map((storeId) => ({ employer_account_id: accountId, team_member_id: memberId, store_id: storeId, created_by_user_id: createdByUserId })))
+    .select("store_id");
+  if (error) throw new Error(error.message || "Could not save assigned locations.");
+  return (data ?? []).map((row) => String(row.store_id));
+}
+
+async function attachStoreAssignments(admin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>, members: TeamMemberRow[]) {
+  const memberIds = members.map((member) => member.id).filter(Boolean);
+  if (memberIds.length === 0) return members;
+  const { data, error } = await admin
+    .from("employer_team_member_stores")
+    .select("team_member_id,store_id")
+    .in("team_member_id", memberIds);
+  if (error) {
+    if (error.code === "42P01" || error.code === "42703") return members.map((member) => ({ ...member, assigned_store_ids: [] }));
+    throw new Error(error.message || "Could not load assigned locations.");
+  }
+  const assignments = new Map<string, string[]>();
+  (data ?? []).forEach((row) => {
+    const memberId = String(row.team_member_id ?? "");
+    const storeId = String(row.store_id ?? "");
+    if (!memberId || !storeId) return;
+    assignments.set(memberId, [...(assignments.get(memberId) ?? []), storeId]);
+  });
+  return members.map((member) => ({ ...member, assigned_store_ids: assignments.get(member.id) ?? [] }));
 }
 
 async function sendInviteForMember(input: {
@@ -83,13 +147,14 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("employer_team_members")
-      .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+      .select("id,email,location_name,user_id,role,user_type,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .eq("account_id", context.accountId)
       .in("status", ["active", "invited", "pending"])
       .order("created_at", { ascending: true });
 
     if (error) throw new Error(error.message || "Could not load team users.");
-    return NextResponse.json({ members: data ?? [] });
+    const membersWithAssignments = await attachStoreAssignments(supabaseAdmin, (data ?? []) as TeamMemberRow[]);
+    return NextResponse.json({ members: membersWithAssignments });
   } catch (error) {
     console.error("Employer team load failed", { error });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not load team users." }, { status: 500 });
@@ -109,6 +174,8 @@ export async function POST(request: Request) {
     const payload = (await request.json().catch(() => null)) as TeamPayload | null;
     const email = cleanEmail(payload?.email);
     const role = cleanRole(payload?.role);
+    const userType = cleanAccessScope(payload?.user_type, role ?? undefined);
+    const assignedStoreIds = userType === "multi_location" || userType === "single_location" ? cleanStoreIds(payload?.assigned_store_ids) : [];
 
     if (!email || !EMAIL_PATTERN.test(email)) return NextResponse.json({ error: "Enter a valid team user email." }, { status: 400 });
     if (!role) return NextResponse.json({ error: "Choose a valid access level." }, { status: 400 });
@@ -127,6 +194,7 @@ export async function POST(request: Request) {
       user_id: matchedUser?.id ?? null,
       auth_user_id: matchedUser?.id ?? null,
       role,
+      user_type: userType,
       status: matchedUser ? "active" : "invited",
       invite_token: randomUUID(),
       invite_accepted_at: matchedUser ? now : null,
@@ -139,7 +207,7 @@ export async function POST(request: Request) {
       return admin
         .from("employer_team_members")
         .upsert(payloadToSave, { onConflict: "account_id,email" })
-        .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+        .select("id,email,location_name,user_id,role,user_type,status,can_manage_notification_routing,created_at,updated_at,invite_token")
         .single();
     }
 
@@ -151,6 +219,8 @@ export async function POST(request: Request) {
     }
 
     if (error) throw new Error(error.message || "Could not save team user.");
+    const savedAssignedStoreIds = await syncStoreAssignments({ admin, accountId: context.accountId, memberId: String((data as TeamMemberRow).id), storeIds: assignedStoreIds, createdByUserId: user.id });
+    data = { ...(data as TeamMemberRow), assigned_store_ids: savedAssignedStoreIds } as typeof data;
 
     const inviteEmail = await sendInviteForMember({
       member: data as TeamMemberRow,
@@ -182,6 +252,8 @@ export async function PATCH(request: Request) {
     const payload = (await request.json().catch(() => null)) as TeamPayload | null;
     const id = payload?.id?.trim();
     const role = cleanRole(payload?.role);
+    const userType = cleanAccessScope(payload?.user_type, role ?? undefined);
+    const assignedStoreIds = userType === "multi_location" || userType === "single_location" ? cleanStoreIds(payload?.assigned_store_ids) : [];
     const locationName = cleanLocationName(payload?.location_name);
     if (!id || !role) return NextResponse.json({ error: "Choose a team member and valid access level." }, { status: 400 });
 
@@ -192,17 +264,19 @@ export async function PATCH(request: Request) {
       .from("employer_team_members")
       .update({
         role,
+        user_type: userType,
         location_name: locationName,
         can_manage_notification_routing: Boolean(payload?.can_manage_notification_routing),
         updated_at: new Date().toISOString(),
       })
       .eq("id", id)
       .eq("account_id", context.accountId)
-      .select("id,email,location_name,user_id,role,status,can_manage_notification_routing,created_at,updated_at,invite_token")
+      .select("id,email,location_name,user_id,role,user_type,status,can_manage_notification_routing,created_at,updated_at,invite_token")
       .single();
 
     if (error) throw new Error(error.message || "Could not update team user.");
-    return NextResponse.json({ member: data });
+    const savedAssignedStoreIds = await syncStoreAssignments({ admin: supabaseAdmin, accountId: context.accountId, memberId: String((data as TeamMemberRow).id), storeIds: assignedStoreIds, createdByUserId: user.id });
+    return NextResponse.json({ member: { ...(data as TeamMemberRow), assigned_store_ids: savedAssignedStoreIds } });
   } catch (error) {
     console.error("Employer team update failed", { error });
     return NextResponse.json({ error: error instanceof Error ? error.message : "Could not update team user." }, { status: 500 });

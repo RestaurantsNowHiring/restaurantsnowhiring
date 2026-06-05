@@ -514,3 +514,85 @@ comment on table public.employer_team_members is 'Role-based users/invites for e
 comment on column public.jobs.candidate_notification_email is 'Legacy comma-separated per-job/location email list for candidate submission notifications.';
 comment on column public.jobs.candidate_notification_emails is 'Normalized per-job/location email array for candidate submission notifications.';
 comment on column public.jobs.candidate_notification_routing is 'Controls whether candidate emails use owner, poster, company support, or custom job email.';
+
+-- Universal employer team location visibility scopes.
+do $$
+begin
+  if not exists (select 1 from pg_type where typname = 'employer_access_scope') then
+    create type public.employer_access_scope as enum ('single_location', 'multi_location', 'full_account_access');
+  end if;
+end $$;
+
+alter table public.employer_team_members
+  add column if not exists user_type public.employer_access_scope not null default 'single_location';
+
+update public.employer_team_members
+set user_type = case
+  when role = 'account_owner' then 'full_account_access'::public.employer_access_scope
+  else 'single_location'::public.employer_access_scope
+end
+where user_type is null
+  or (role = 'account_owner' and user_type <> 'full_account_access'::public.employer_access_scope);
+
+create table if not exists public.employer_team_member_stores (
+  id uuid primary key default gen_random_uuid(),
+  employer_account_id uuid not null references public.employer_accounts(id) on delete cascade,
+  team_member_id uuid not null references public.employer_team_members(id) on delete cascade,
+  store_id uuid not null references public.employer_stores(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  created_by_user_id uuid references auth.users(id) on delete set null,
+  unique(team_member_id, store_id)
+);
+
+create index if not exists employer_team_member_stores_account_idx
+on public.employer_team_member_stores (employer_account_id);
+
+create index if not exists employer_team_member_stores_store_idx
+on public.employer_team_member_stores (store_id);
+
+alter table public.employer_team_member_stores enable row level security;
+
+revoke all on public.employer_team_member_stores from public, anon;
+grant select, insert, update, delete on public.employer_team_member_stores to authenticated;
+
+drop policy if exists "Employer members can view team store assignments" on public.employer_team_member_stores;
+create policy "Employer members can view team store assignments"
+on public.employer_team_member_stores
+for select to authenticated
+using (
+  exists (
+    select 1 from public.employer_team_members etm
+    where etm.account_id = employer_team_member_stores.employer_account_id
+      and (etm.user_id = auth.uid() or etm.auth_user_id = auth.uid())
+      and etm.status in ('active', 'accepted')
+  )
+);
+
+drop policy if exists "Account owners can manage team store assignments" on public.employer_team_member_stores;
+create policy "Account owners can manage team store assignments"
+on public.employer_team_member_stores
+for all to authenticated
+using (
+  exists (
+    select 1 from public.employer_team_members etm
+    where etm.account_id = employer_team_member_stores.employer_account_id
+      and (etm.user_id = auth.uid() or etm.auth_user_id = auth.uid())
+      and etm.role = 'account_owner'
+      and etm.status in ('active', 'accepted')
+  )
+)
+with check (
+  exists (
+    select 1 from public.employer_team_members etm
+    where etm.account_id = employer_team_member_stores.employer_account_id
+      and (etm.user_id = auth.uid() or etm.auth_user_id = auth.uid())
+      and etm.role = 'account_owner'
+      and etm.status in ('active', 'accepted')
+  )
+  and exists (
+    select 1 from public.employer_stores store
+    where store.id = employer_team_member_stores.store_id
+      and store.employer_account_id = employer_team_member_stores.employer_account_id
+      and store.active = true
+  )
+);

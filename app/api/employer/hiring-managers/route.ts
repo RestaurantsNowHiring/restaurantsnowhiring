@@ -10,10 +10,6 @@ type HiringManagerRow = {
   status: string;
 };
 
-function isMissionBbqLocationName(locationName: string | null) {
-  return locationName?.toUpperCase().includes("MISSION BBQ") ?? false;
-}
-
 export async function GET(request: Request) {
   try {
     const user = await getAuthUserFromRequest(request);
@@ -35,7 +31,7 @@ export async function GET(request: Request) {
 
     if (error) throw new Error(error.message || "Could not load hiring managers.");
 
-    const managers = ((data ?? []) as HiringManagerRow[]).filter((manager) => !isMissionBbqLocationName(manager.location_name));
+    const managers = (data ?? []) as HiringManagerRow[];
 
     return NextResponse.json({ managers });
   } catch (error) {
