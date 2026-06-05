@@ -269,14 +269,14 @@ export default function StoreDirectoryPage() {
             </label>
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
               State
-              <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+              <select className="rn-combobox__input" value={stateFilter} onChange={(event) => setStateFilter(event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
                 <option value="all">All states</option>
                 {uniqueStates.map((state) => <option key={state} value={state}>{state}</option>)}
               </select>
             </label>
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
               Status
-              <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StoreStatusFilter)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
+              <select className="rn-combobox__input" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as StoreStatusFilter)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}>
                 <option value="all">All statuses</option>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
@@ -324,7 +324,7 @@ export default function StoreDirectoryPage() {
                   <label style={storeFormLabelStyle}>Store/location name<input required value={form.location_name} onChange={(event) => updateForm("location_name", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={storeFormLabelStyle}>Address<input value={form.address ?? ""} onChange={(event) => updateForm("address", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={storeFormLabelStyle}>City<input value={form.city ?? ""} onChange={(event) => updateForm("city", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
-                  <label style={storeFormLabelStyle}>State<select value={form.state ?? ""} onChange={(event) => updateForm("state", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{STATES.map((state) => <option key={state} value={state}>{state}</option>)}</select></label>
+                  <label style={storeFormLabelStyle}>State<select className="rn-combobox__input" value={form.state ?? ""} onChange={(event) => updateForm("state", event.target.value)} style={{ ...homeInputStyle, marginTop: 6, appearance: "none" }}><option value="">Select…</option>{STATES.map((state) => <option key={state} value={state}>{state}</option>)}</select></label>
                   <label style={storeFormLabelStyle}>Candidate routing email 1<input type="email" value={form.store_email ?? ""} onChange={(event) => updateForm("store_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={storeFormLabelStyle}>Candidate routing email 2<input type="email" value={form.ta_email ?? ""} onChange={(event) => updateForm("ta_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
                   <label style={storeFormLabelStyle}>Candidate routing email 3<input type="email" value={form.gm_op_email ?? ""} onChange={(event) => updateForm("gm_op_email", event.target.value)} style={{ ...homeInputStyle, marginTop: 6 }} /></label>
