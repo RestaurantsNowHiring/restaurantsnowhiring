@@ -1854,14 +1854,76 @@ export default function PostJobPage() {
               <div style={{ marginTop: 16 }}>
                 <label htmlFor="job-description" style={labelStyle}>Job description *</label>
                 <div className="rn-rich-text-toolbar" aria-label="Job description formatting">
-                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("bold")}><strong>B</strong></button>
-                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("italic")}><em>I</em></button>
-                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("insertUnorderedList")}>• List</button>
-                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("insertOrderedList")}>1. List</button>
-                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("formatBlock", "h3")}>Heading</button>
-                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("undo")}>Undo</button>
-                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("redo")}>Redo</button>
-                </div>
+  <button
+    type="button"
+    onMouseDown={(event) => {
+      event.preventDefault();
+      runDescriptionCommand("bold");
+    }}
+  >
+    <strong>B</strong>
+  </button>
+
+  <button
+    type="button"
+    onMouseDown={(event) => {
+      event.preventDefault();
+      runDescriptionCommand("italic");
+    }}
+  >
+    <em>I</em>
+  </button>
+
+  <button
+    type="button"
+    onMouseDown={(event) => {
+      event.preventDefault();
+      runDescriptionCommand("insertUnorderedList");
+    }}
+  >
+    • List
+  </button>
+
+  <button
+    type="button"
+    onMouseDown={(event) => {
+      event.preventDefault();
+      runDescriptionCommand("insertOrderedList");
+    }}
+  >
+    1. List
+  </button>
+
+  <button
+    type="button"
+    onMouseDown={(event) => {
+      event.preventDefault();
+      runDescriptionCommand("formatBlock", "h3");
+    }}
+  >
+    Heading
+  </button>
+
+  <button
+    type="button"
+    onMouseDown={(event) => {
+      event.preventDefault();
+      runDescriptionCommand("undo");
+    }}
+  >
+    Undo
+  </button>
+
+  <button
+    type="button"
+    onMouseDown={(event) => {
+      event.preventDefault();
+      runDescriptionCommand("redo");
+    }}
+  >
+    Redo
+  </button>
+</div>
                 <div
                   id="job-description"
                   ref={descriptionEditorRef}
