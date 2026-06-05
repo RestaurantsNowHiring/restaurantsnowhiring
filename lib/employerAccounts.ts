@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from "./supabaseAdmin";
 
 export type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
+export type EmployerAccessScope = "single_location" | "multi_location" | "full_account_access";
 export type CandidateNotificationRouting = "account_owner" | "job_poster" | "company_support" | "custom_job_email";
 
 export type EmployerAccountMembership = {
@@ -10,6 +11,8 @@ export type EmployerAccountMembership = {
   role: EmployerRole;
   status: string;
   invitationPending: boolean;
+  userType: EmployerAccessScope;
+  assignedStoreIds: string[];
 };
 
 export type EmployerAccountContext = {
@@ -18,6 +21,8 @@ export type EmployerAccountContext = {
   restaurantBrandName: string | null;
   locationName: string | null;
   role: EmployerRole;
+  userType: EmployerAccessScope;
+  assignedStoreIds: string[];
   memberships: EmployerAccountMembership[];
   userId: string;
   email: string;
@@ -80,6 +85,11 @@ function cleanString(value: unknown, maxLength: number) {
 
 function normalizeRole(value: unknown): EmployerRole {
   return value === "hiring_manager" || value === "viewer" || value === "account_owner" ? value : "account_owner";
+}
+
+function normalizeAccessScope(value: unknown, role?: EmployerRole): EmployerAccessScope {
+  if (role === "account_owner") return "full_account_access";
+  return value === "multi_location" || value === "full_account_access" || value === "single_location" ? value : "single_location";
 }
 
 function normalizeRouting(value: unknown): CandidateNotificationRouting {
@@ -221,6 +231,7 @@ async function provisionNewEmployerAccount(user: { id: string; email: string }) 
         auth_user_id: user.id,
         email: user.email.toLowerCase(),
         role: "account_owner",
+        user_type: "full_account_access",
         status: "active",
         can_manage_notification_routing: true,
         updated_at: now,
@@ -301,9 +312,9 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
       return true;
     }
 
-    const loadedTeamRows = await addTeamMembershipRows("account_id,user_id,email,location_name,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email)");
+    const loadedTeamRows = await addTeamMembershipRows("id,account_id,user_id,email,location_name,role,user_type,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email)");
     if (!loadedTeamRows) {
-      await addTeamMembershipRows("account_id,user_id,email,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,company_name,default_candidate_notification_routing,support_email)");
+      await addTeamMembershipRows("id,account_id,user_id,email,location_name,role,status,can_manage_notification_routing,employer_accounts!inner(id,owner_user_id,owner_email,account_name,restaurant_brand_name,company_name,default_candidate_notification_routing,support_email)");
     }
 
     const { data: ownedAccounts, error: ownedAccountsError } = await admin
@@ -326,6 +337,7 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
         email: user.email,
         location_name: null,
         role: "account_owner",
+        user_type: "full_account_access",
         status: "active",
         can_manage_notification_routing: true,
         employer_accounts: account,
@@ -359,6 +371,23 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
     : null;
 
   const role = normalizeRole(memberRow?.role);
+  const userType = normalizeAccessScope(memberRow?.user_type, role);
+  let assignedStoreIds: string[] = [];
+  const teamMemberId = cleanString(memberRow?.id, 80);
+  if (teamMemberId) {
+    const { data: assignmentRows, error: assignmentError } = await admin
+      .from("employer_team_member_stores")
+      .select("store_id")
+      .eq("team_member_id", teamMemberId);
+
+    if (assignmentError && assignmentError.code !== "42P01" && assignmentError.code !== "42703") {
+      throw new Error(assignmentError.message || "Could not load assigned employer locations.");
+    }
+
+    assignedStoreIds = Array.from(new Set((assignmentRows ?? [])
+      .map((row) => cleanString((row as Record<string, unknown>).store_id, 80))
+      .filter((id): id is string => Boolean(id))));
+  }
   const permissions = ROLE_PERMISSIONS[role];
   const canManageNotificationRouting =
     permissions.canManageNotificationRouting || Boolean(memberRow?.can_manage_notification_routing);
@@ -376,6 +405,8 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
         role: normalizeRole(membership.role),
         status: normalizeStatus(membership.status),
         invitationPending: isPendingAccessStatus(normalizeStatus(membership.status)),
+        userType: normalizeAccessScope(membership.user_type, normalizeRole(membership.role)),
+        assignedStoreIds: accountId === cleanString(account?.id, 80) ? assignedStoreIds : [],
       };
     })
     .filter((membership): membership is EmployerAccountMembership => Boolean(membership));
@@ -387,6 +418,8 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
       restaurantBrandName: cleanString(account.restaurant_brand_name, 180) ?? cleanString(account.company_name, 180),
       locationName: cleanString(memberRow.location_name, 180),
       role,
+      userType,
+      assignedStoreIds,
       memberships: membershipSummaries,
       userId: user.id,
       email: user.email,
@@ -405,6 +438,8 @@ export async function getEmployerAccountContext(user: { id: string; email: strin
     restaurantBrandName: null,
     locationName: null,
     role: "account_owner",
+    userType: "full_account_access",
+    assignedStoreIds: [],
     memberships: [],
     userId: user.id,
     email: user.email,
