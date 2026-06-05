@@ -905,6 +905,7 @@ export default async function JobDetailsPage({
                 {visibleJob.description &&
                 isRichTextHtml(visibleJob.description) ? (
                   <div
+                    className="rn-job-description-content"
                     style={{
                       color: INK,
                       lineHeight: 1.8,
@@ -953,6 +954,32 @@ export default async function JobDetailsPage({
       <style
         dangerouslySetInnerHTML={{
           __html: `
+            .rn-job-description-content ul,
+            .rn-job-description-content ol {
+              color: inherit;
+              margin: 8px 0;
+              padding-left: 26px;
+            }
+
+            .rn-job-description-content ul {
+              list-style: disc outside;
+            }
+
+            .rn-job-description-content ol {
+              list-style: decimal outside;
+            }
+
+            .rn-job-description-content li {
+              color: inherit;
+              display: list-item;
+              margin: 4px 0;
+            }
+
+            .rn-job-description-content li > ul,
+            .rn-job-description-content li > ol {
+              margin: 4px 0;
+            }
+
             @media (max-width: 640px) {
               .rn-job-detail-header {
                 display: grid !important;

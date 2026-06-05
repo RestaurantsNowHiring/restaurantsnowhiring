@@ -57,6 +57,86 @@ type JobTemplate = {
 };
 
 
+function selectionIsInsideEditor(editor: HTMLElement) {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) return false;
+
+  const range = selection.getRangeAt(0);
+  const container = range.commonAncestorContainer;
+  const selectionNode = container.nodeType === Node.ELEMENT_NODE ? container : container.parentNode;
+
+  return selectionNode ? editor.contains(selectionNode) : false;
+}
+
+function moveSelectionToEditorEnd(editor: HTMLElement) {
+  const selection = window.getSelection();
+  const range = document.createRange();
+  range.selectNodeContents(editor);
+  range.collapse(false);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function focusRichTextEditor(editor: HTMLElement) {
+  editor.focus({ preventScroll: true });
+
+  if (!selectionIsInsideEditor(editor)) {
+    moveSelectionToEditorEnd(editor);
+  }
+}
+
+function createRichTextList(listTag: "ul" | "ol", items: string[]) {
+  const list = document.createElement(listTag);
+  const safeItems = items.length > 0 ? items : [""];
+
+  safeItems.forEach((item) => {
+    const listItem = document.createElement("li");
+
+    if (item.trim()) {
+      listItem.textContent = item;
+    } else {
+      listItem.appendChild(document.createElement("br"));
+    }
+
+    list.appendChild(listItem);
+  });
+
+  return list;
+}
+
+function insertRichTextList(editor: HTMLElement, listTag: "ul" | "ol") {
+  focusRichTextEditor(editor);
+
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0) {
+    moveSelectionToEditorEnd(editor);
+  }
+
+  const range = window.getSelection()?.getRangeAt(0);
+  if (!range) return;
+
+  const selectedItems = range
+    .toString()
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const list = createRichTextList(listTag, selectedItems);
+
+  range.deleteContents();
+  range.insertNode(list);
+
+  const editableListItem = list.querySelector("li:last-child");
+  if (editableListItem) {
+    const nextRange = document.createRange();
+    nextRange.selectNodeContents(editableListItem);
+    nextRange.collapse(false);
+    const nextSelection = window.getSelection();
+    nextSelection?.removeAllRanges();
+    nextSelection?.addRange(nextRange);
+  }
+}
+
+
 function buildPostJobStoreOptions(stores: EmployerStore[]) {
   return stores
     .filter((store) => store.active && store.is_assignable_location !== false)
@@ -556,36 +636,26 @@ export default function PostJobPage() {
   }
 
   function runDescriptionCommand(command: string, value?: string) {
-  const editor = descriptionEditorRef.current;
-  if (!editor) return;
+    const editor = descriptionEditorRef.current;
+    if (!editor) return;
 
-  editor.focus({ preventScroll: true });
+    focusRichTextEditor(editor);
 
-  if (command === "insertUnorderedList") {
-    document.execCommand(
-      "insertHTML",
-      false,
-      "<ul><li>List item</li></ul>"
-    );
+    if (command === "insertUnorderedList") {
+      insertRichTextList(editor, "ul");
+      setDescription(sanitizeRichText(editor.innerHTML));
+      return;
+    }
 
+    if (command === "insertOrderedList") {
+      insertRichTextList(editor, "ol");
+      setDescription(sanitizeRichText(editor.innerHTML));
+      return;
+    }
+
+    document.execCommand(command, false, value);
     setDescription(sanitizeRichText(editor.innerHTML));
-    return;
   }
-
-  if (command === "insertOrderedList") {
-    document.execCommand(
-      "insertHTML",
-      false,
-      "<ol><li>List item</li></ol>"
-    );
-
-    setDescription(sanitizeRichText(editor.innerHTML));
-    return;
-  }
-
-  document.execCommand(command, false, value);
-  setDescription(sanitizeRichText(editor.innerHTML));
-}
   function updateDescriptionFromEditor() {
     setDescription(sanitizeRichText(descriptionEditorRef.current?.innerHTML ?? ""));
   }
@@ -2174,7 +2244,7 @@ export default function PostJobPage() {
                           fontFamily: "var(--font-body)",
                         }}
                       >
-                        <span dangerouslySetInnerHTML={{ __html: sanitizeRichText(description) || "Description preview" }} />
+                        <div className="rn-rich-text-content" dangerouslySetInnerHTML={{ __html: sanitizeRichText(description) || "Description preview" }} />
                       </div>
                     </div>
                   </div>
@@ -2476,6 +2546,39 @@ export default function PostJobPage() {
             .rn-rich-text-editor:focus {
               border-color: rgba(53,128,110,.55);
               box-shadow: 0 0 0 3px rgba(53,128,110,.12);
+            }
+
+            .rn-rich-text-editor ul,
+            .rn-rich-text-editor ol,
+            .rn-rich-text-content ul,
+            .rn-rich-text-content ol {
+              color: inherit;
+              margin: 8px 0;
+              padding-left: 26px;
+            }
+
+            .rn-rich-text-editor ul,
+            .rn-rich-text-content ul {
+              list-style: disc outside;
+            }
+
+            .rn-rich-text-editor ol,
+            .rn-rich-text-content ol {
+              list-style: decimal outside;
+            }
+
+            .rn-rich-text-editor li,
+            .rn-rich-text-content li {
+              color: inherit;
+              display: list-item;
+              margin: 4px 0;
+            }
+
+            .rn-rich-text-editor li > ul,
+            .rn-rich-text-editor li > ol,
+            .rn-rich-text-content li > ul,
+            .rn-rich-text-content li > ol {
+              margin: 4px 0;
             }
 
             @media (max-width: 980px) {
