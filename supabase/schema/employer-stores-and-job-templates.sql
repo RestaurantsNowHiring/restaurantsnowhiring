@@ -17,6 +17,7 @@ create table if not exists public.employer_stores (
   pay_range text,
   default_application_url text,
   active boolean not null default true,
+  is_assignable_location boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint employer_stores_location_name_not_blank check (length(btrim(location_name)) > 0),
@@ -44,12 +45,27 @@ create table if not exists public.employer_job_templates (
   constraint employer_job_templates_job_title_not_blank check (length(btrim(job_title)) > 0)
 );
 
+alter table public.employer_stores
+  add column if not exists is_assignable_location boolean not null default true;
+
+update public.employer_stores
+set is_assignable_location = case
+  when nullif(btrim(coalesce(address, '')), '') is null
+    or nullif(btrim(coalesce(city, '')), '') is null
+    or nullif(btrim(coalesce(state, '')), '') is null
+    then false
+  else true
+end;
+
 alter table public.jobs
   add column if not exists employer_store_id uuid references public.employer_stores(id) on delete set null,
   add column if not exists employer_job_template_id uuid references public.employer_job_templates(id) on delete set null;
 
 create index if not exists employer_stores_account_state_active_idx
 on public.employer_stores (employer_account_id, state, active);
+
+create index if not exists employer_stores_account_assignable_active_idx
+on public.employer_stores (employer_account_id, active, is_assignable_location);
 
 create index if not exists employer_stores_account_location_idx
 on public.employer_stores (employer_account_id, location_name);

@@ -24,6 +24,7 @@ type EmployerStore = {
   pay_range: string | null;
   default_application_url: string | null;
   active: boolean;
+  is_assignable_location: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -156,6 +157,8 @@ export default function TeamAccessPage() {
   const [assignedStoreIds, setAssignedStoreIds] = useState<string[]>([]);
   const [storeSearch, setStoreSearch] = useState("");
   const [editStoreSearch, setEditStoreSearch] = useState("");
+  const [showSingleStorePicker, setShowSingleStorePicker] = useState(false);
+  const [showEditSingleStorePicker, setShowEditSingleStorePicker] = useState(false);
   const [canRouteNotifications, setCanRouteNotifications] = useState(false);
   const [detailsSelection, setDetailsSelection] = useState<{ member: TeamMember; store: EmployerStore | null } | null>(null);
   const [editingSelection, setEditingSelection] = useState<{ member: TeamMember; store: EmployerStore | null } | null>(null);
@@ -240,6 +243,7 @@ export default function TeamAccessPage() {
     setAccessScope("single_location");
     setAssignedStoreIds([]);
     setStoreSearch("");
+    setShowSingleStorePicker(false);
     setCanRouteNotifications(false);
     setMessage(payload?.inviteEmailWarning || "Team access saved and invitation email sent.");
     setBusy(false);
@@ -304,7 +308,7 @@ export default function TeamAccessPage() {
   const activeStoreOptions = useMemo(() => {
     const byId = new Map<string, EmployerStore>();
     stores.forEach((store) => {
-      if (store.active && store.id) byId.set(store.id, store);
+      if (store.active && store.is_assignable_location !== false && store.id) byId.set(store.id, store);
     });
     return Array.from(byId.values()).sort((left, right) => left.location_name.localeCompare(right.location_name, undefined, { sensitivity: "base" }));
   }, [stores]);
@@ -314,6 +318,8 @@ export default function TeamAccessPage() {
     if (!normalizedSearch) return activeStoreOptions;
     return activeStoreOptions.filter((store) => [store.location_name, store.city, store.state].filter(Boolean).some((value) => String(value).toLowerCase().includes(normalizedSearch)));
   }, [activeStoreOptions, storeSearch]);
+
+  const selectedAssignedStore = useMemo(() => activeStoreOptions.find((store) => assignedStoreIds.includes(store.id)) ?? null, [activeStoreOptions, assignedStoreIds]);
 
   const filteredEditStoreOptions = useMemo(() => {
     const normalizedSearch = editStoreSearch.trim().toLowerCase();
@@ -333,7 +339,7 @@ export default function TeamAccessPage() {
   }, [normalizeEmail]);
 
   const findStoreForMember = useCallback((member: TeamMember) => {
-    const activeStores = stores.filter((store) => store.active);
+    const activeStores = stores.filter((store) => store.active && store.is_assignable_location !== false);
     const assignedStoreIds = member.assigned_store_ids ?? [];
     if (assignedStoreIds.length === 1) return activeStores.find((store) => store.id === assignedStoreIds[0]) ?? null;
 
@@ -407,6 +413,7 @@ export default function TeamAccessPage() {
     setEditingSelection({ member: { ...member }, store });
     setEditForm(buildEditForm(member, store));
     setEditStoreSearch("");
+    setShowEditSingleStorePicker(false);
     setMessage(null);
   }
 
@@ -414,6 +421,7 @@ export default function TeamAccessPage() {
     setEditingSelection(null);
     setEditForm(null);
     setEditStoreSearch("");
+    setShowEditSingleStorePicker(false);
   }
 
   function toggleEditAssignedStore(storeId: string) {
@@ -578,6 +586,7 @@ export default function TeamAccessPage() {
   const detailsStore = detailsSelection?.store ?? null;
   const editingMember = editingSelection?.member ?? null;
   const detailsAssignedStores = activeStoreOptions.filter((store) => detailsMember?.assigned_store_ids?.includes(store.id));
+  const editLinkedStore = editForm ? activeStoreOptions.find((store) => editForm.assigned_store_ids.includes(store.id)) ?? null : null;
   const detailsRows = detailsMember?.user_type === "multi_location"
     ? [
         ["Name/location", detailsMember.location_name ?? detailsMember.email],
@@ -689,7 +698,11 @@ export default function TeamAccessPage() {
                       const nextScope = event.target.value as EmployerAccessScope;
                       setAccessScope(nextScope);
                       if (nextScope === "full_account_access") setAssignedStoreIds([]);
-                      if (nextScope === "single_location") setAssignedStoreIds((current) => current.slice(0, 1));
+                      if (nextScope === "single_location") {
+                        setAssignedStoreIds((current) => current.slice(0, 1));
+                        setShowSingleStorePicker(false);
+                      }
+                      if (nextScope === "multi_location") setShowSingleStorePicker(true);
                     }}
                     className="rn-team-select"
                     style={{ ...homeInputStyle, marginTop: 6, minHeight: 50, appearance: "none" }}
@@ -700,18 +713,39 @@ export default function TeamAccessPage() {
                   </select>
                   <span style={{ display: "block", marginTop: 6, color: homeTheme.muted, fontSize: 13 }}>{ACCESS_SCOPE_HELP[accessScope]}</span>
                 </label>
-                {accessScope === "multi_location" || accessScope === "single_location" ? (
+                {accessScope === "single_location" ? (
                   <div style={{ display: "grid", gap: 8, fontWeight: 900, color: homeTheme.text }}>
-                    <span>{accessScope === "single_location" ? "Assigned active store" : "Assigned active stores"}</span>
+                    <span>Linked store: {selectedAssignedStore ? [selectedAssignedStore.location_name, selectedAssignedStore.city, selectedAssignedStore.state].filter(Boolean).join(" — ") : "Auto-match by location name or routing email"}</span>
+                    <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, justifySelf: "start" }} onClick={() => setShowSingleStorePicker((current) => !current)}>
+                      {showSingleStorePicker ? "Hide linked store picker" : "Change linked store"}
+                    </button>
+                    {showSingleStorePicker ? (
+                      <>
+                        <input value={storeSearch} onChange={(event) => setStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
+                        <div style={{ display: "grid", gap: 8, maxHeight: 220, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
+                          {filteredStoreOptions.map((store) => (
+                            <label key={store.id} className="rn-team-checkbox-row" style={{ color: homeTheme.text }}>
+                              <input className="rn-team-checkbox" type="radio" name="assigned-store" checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
+                              <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
+                            </label>
+                          ))}
+                          {filteredStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No assignable active stores found.</span> : null}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                ) : accessScope === "multi_location" ? (
+                  <div style={{ display: "grid", gap: 8, fontWeight: 900, color: homeTheme.text }}>
+                    <span>Assigned active stores</span>
                     <input value={storeSearch} onChange={(event) => setStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
                     <div style={{ display: "grid", gap: 8, maxHeight: 220, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
                       {filteredStoreOptions.map((store) => (
                         <label key={store.id} className="rn-team-checkbox-row" style={{ color: homeTheme.text }}>
-                          <input className="rn-team-checkbox" type={accessScope === "single_location" ? "radio" : "checkbox"} name={accessScope === "single_location" ? "assigned-store" : undefined} checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
+                          <input className="rn-team-checkbox" type="checkbox" checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
                           <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
                         </label>
                       ))}
-                      {filteredStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No active stores found.</span> : null}
+                      {filteredStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No assignable active stores found.</span> : null}
                     </div>
                   </div>
                 ) : null}
@@ -884,19 +918,40 @@ export default function TeamAccessPage() {
                       assigned_store_ids: nextScope === "full_account_access" ? [] : nextScope === "single_location" ? current.assigned_store_ids.slice(0, 1) : current.assigned_store_ids,
                     };
                   });
+                  if (nextScope === "single_location") setShowEditSingleStorePicker(false);
+                  if (nextScope === "multi_location") setShowEditSingleStorePicker(true);
                 }}>{(Object.keys(ACCESS_SCOPE_LABELS) as EmployerAccessScope[]).map((option) => <option key={option} value={option}>{ACCESS_SCOPE_LABELS[option]}</option>)}</select></label>
-                {editForm.user_type === "multi_location" || editForm.user_type === "single_location" ? (
+                {editForm.user_type === "single_location" ? (
                   <div style={{ display: "grid", gap: 8 }}>
-                    <strong>{editForm.user_type === "single_location" ? "Assigned active store" : "Assigned active stores"}</strong>
+                    <strong>Linked store: {editLinkedStore ? [editLinkedStore.location_name, editLinkedStore.city, editLinkedStore.state].filter(Boolean).join(" — ") : "Auto-match by location name or routing email"}</strong>
+                    <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, justifySelf: "start" }} onClick={() => setShowEditSingleStorePicker((current) => !current)}>{showEditSingleStorePicker ? "Hide linked store picker" : "Change linked store"}</button>
+                    {showEditSingleStorePicker ? (
+                      <>
+                        <input value={editStoreSearch} onChange={(event) => setEditStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
+                        <div style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
+                          {filteredEditStoreOptions.map((store) => (
+                            <label key={store.id} className="rn-team-checkbox-row">
+                              <input className="rn-team-checkbox" type="radio" name="edit-assigned-store" checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
+                              <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
+                            </label>
+                          ))}
+                          {filteredEditStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No assignable active stores found.</span> : null}
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                ) : editForm.user_type === "multi_location" ? (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    <strong>Assigned active stores</strong>
                     <input value={editStoreSearch} onChange={(event) => setEditStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
                     <div style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
                       {filteredEditStoreOptions.map((store) => (
                         <label key={store.id} className="rn-team-checkbox-row">
-                          <input className="rn-team-checkbox" type={editForm.user_type === "single_location" ? "radio" : "checkbox"} name={editForm.user_type === "single_location" ? "edit-assigned-store" : undefined} checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
+                          <input className="rn-team-checkbox" type="checkbox" checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
                           <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
                         </label>
                       ))}
-                      {filteredEditStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No active stores found.</span> : null}
+                      {filteredEditStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No assignable active stores found.</span> : null}
                     </div>
                   </div>
                 ) : null}
