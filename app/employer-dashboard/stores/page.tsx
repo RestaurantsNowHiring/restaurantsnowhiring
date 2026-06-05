@@ -286,9 +286,9 @@ export default function StoreDirectoryPage() {
         </section>
 
         <div className="rn-store-directory-grid">
-          <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+          <section className="rn-store-list-card" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
             <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Store list</h2>
-            <div style={{ display: "grid", gap: 10 }}>
+            <div className="rn-store-list-scroll" style={{ display: "grid", gap: 10 }}>
               {filteredStores.length === 0 ? <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No stores match these filters.</p> : null}
               {filteredStores.map((store) => (
                 <button
@@ -316,7 +316,7 @@ export default function StoreDirectoryPage() {
             </div>
           </section>
 
-          <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+          <section className="rn-store-detail-card" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
             {isEditing ? (
               <form onSubmit={saveStore} style={{ display: "grid", gap: 12 }}>
                 <h2 style={{ margin: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>{selectedStore ? "Edit store" : "Add store"}</h2>
@@ -403,6 +403,22 @@ export default function StoreDirectoryPage() {
           gap: 16px;
           align-items: start;
         }
+        .rn-store-list-card,
+        .rn-store-detail-card {
+          align-self: start;
+        }
+        .rn-store-list-scroll {
+          max-height: min(600px, calc(100vh - 280px));
+          min-height: 240px;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+          padding-right: 4px;
+          scrollbar-gutter: stable;
+        }
+        .rn-store-detail-card {
+          position: sticky;
+          top: 92px;
+        }
         .rn-store-detail-grid {
           margin: 18px 0 0;
         }
@@ -431,6 +447,12 @@ export default function StoreDirectoryPage() {
           .rn-store-detail-grid,
           .rn-store-directory-grid {
             grid-template-columns: 1fr;
+          }
+          .rn-store-list-scroll {
+            max-height: min(520px, 65vh);
+          }
+          .rn-store-detail-card {
+            position: static;
           }
         }
       `}</style>
