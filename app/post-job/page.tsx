@@ -536,17 +536,43 @@ export default function PostJobPage() {
     }
   }
 
-  useEffect(() => {
-    if (!descriptionEditorRef.current) return;
-    if (descriptionEditorRef.current.innerHTML !== description) {
-      descriptionEditorRef.current.innerHTML = description;
+  function syncDescriptionEditor(nextDescription: string) {
+    const editor = descriptionEditorRef.current;
+    if (!editor) return;
+
+    if (editor.innerHTML !== nextDescription) {
+      editor.innerHTML = nextDescription;
     }
-  }, [description]);
+  }
+
+  useEffect(() => {
+    syncDescriptionEditor(description);
+  }, [description, step]);
+
+  function setDescriptionFromRichText(nextDescription: string) {
+    const safeDescription = sanitizeRichText(nextDescription);
+    setDescription(safeDescription);
+    syncDescriptionEditor(safeDescription);
+  }
 
   function runDescriptionCommand(command: string, value?: string) {
-    descriptionEditorRef.current?.focus();
+    const editor = descriptionEditorRef.current;
+    if (!editor) return;
+
+    editor.focus({ preventScroll: true });
+
+    if (!editor.innerHTML.trim() && (command === "insertUnorderedList" || command === "insertOrderedList")) {
+      editor.innerHTML = "<p><br></p>";
+      const selection = window.getSelection();
+      const range = document.createRange();
+      range.selectNodeContents(editor);
+      range.collapse(false);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+
     document.execCommand(command, false, value);
-    setDescription(sanitizeRichText(descriptionEditorRef.current?.innerHTML ?? ""));
+    setDescription(sanitizeRichText(editor.innerHTML));
   }
 
   function updateDescriptionFromEditor() {
@@ -661,7 +687,7 @@ export default function PostJobPage() {
     if (template.employment_type) setEmploymentType(template.employment_type);
     setScheduleTags(splitTemplateValues(template.schedule));
     applyPayDefaults(template.pay_defaults);
-    setDescription(normalizeRichTextForEditing(template.job_description));
+    setDescriptionFromRichText(normalizeRichTextForEditing(template.job_description));
     setBenefits(splitTemplateValues(template.benefits));
   }
 
@@ -1828,13 +1854,13 @@ export default function PostJobPage() {
               <div style={{ marginTop: 16 }}>
                 <label htmlFor="job-description" style={labelStyle}>Job description *</label>
                 <div className="rn-rich-text-toolbar" aria-label="Job description formatting">
-                  <button type="button" onClick={() => runDescriptionCommand("bold")}><strong>B</strong></button>
-                  <button type="button" onClick={() => runDescriptionCommand("italic")}><em>I</em></button>
-                  <button type="button" onClick={() => runDescriptionCommand("insertUnorderedList")}>• List</button>
-                  <button type="button" onClick={() => runDescriptionCommand("insertOrderedList")}>1. List</button>
-                  <button type="button" onClick={() => runDescriptionCommand("formatBlock", "h3")}>Heading</button>
-                  <button type="button" onClick={() => runDescriptionCommand("undo")}>Undo</button>
-                  <button type="button" onClick={() => runDescriptionCommand("redo")}>Redo</button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("bold")}><strong>B</strong></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("italic")}><em>I</em></button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("insertUnorderedList")}>• List</button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("insertOrderedList")}>1. List</button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("formatBlock", "h3")}>Heading</button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("undo")}>Undo</button>
+                  <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => runDescriptionCommand("redo")}>Redo</button>
                 </div>
                 <div
                   id="job-description"
