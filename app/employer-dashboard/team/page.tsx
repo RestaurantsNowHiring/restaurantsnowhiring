@@ -140,6 +140,19 @@ function formatCandidateRoutingEmails(store: EmployerStore | null) {
   return emails.length > 0 ? emails.join(", ") : "—";
 }
 
+function formatLocationCityState(store: Pick<EmployerStore, "city" | "state">) {
+  return [store.city, store.state].map((value) => value?.trim()).filter(Boolean).join(", ");
+}
+
+function formatAssignedLocationLabel(store: Pick<EmployerStore, "location_name" | "city" | "state">) {
+  const cityState = formatLocationCityState(store);
+  return cityState ? `${store.location_name} — ${cityState}` : store.location_name;
+}
+
+function formatAssignedLocationCount(count: number) {
+  return `${count} ${count === 1 ? "location" : "locations"} assigned`;
+}
+
 function employerAccountHeaders(token: string, contentType?: string) {
   const selectedEmployerAccountId = typeof window === "undefined" ? null : window.localStorage.getItem("rn-selected-employer-account-id");
   return {
@@ -594,6 +607,8 @@ export default function TeamAccessPage() {
   const detailsStore = detailsSelection?.store ?? null;
   const editingMember = editingSelection?.member ?? null;
   const detailsAssignedStores = activeStoreOptions.filter((store) => detailsMember?.assigned_store_ids?.includes(store.id));
+  const visibleDetailsAssignedStores = detailsAssignedStores.slice(0, 10);
+  const hiddenDetailsAssignedStoreCount = Math.max(0, detailsAssignedStores.length - visibleDetailsAssignedStores.length);
   const editLinkedStore = editForm ? activeStoreOptions.find((store) => editForm.assigned_store_ids.includes(store.id)) ?? null : null;
   const detailsRows = detailsMember?.user_type === "multi_location"
     ? [
@@ -601,7 +616,6 @@ export default function TeamAccessPage() {
         ["Email", detailsMember.email],
         ["Access scope", ACCESS_SCOPE_LABELS.multi_location],
         ["Access level", ROLE_LABELS[detailsMember.role]],
-        ["Assigned locations", detailsAssignedStores.length > 0 ? detailsAssignedStores.map((store) => [store.location_name, store.city, store.state].filter(Boolean).join(" — ")).join(", ") : "—"],
         ["Account status", getAccountStatus(detailsMember)],
         ["Candidate routing", detailsMember.can_manage_notification_routing ? "Enabled" : "Disabled"],
         ["Joined date", getJoinedDisplay(detailsMember)],
@@ -744,16 +758,25 @@ export default function TeamAccessPage() {
                   </div>
                 ) : accessScope === "multi_location" ? (
                   <div style={{ display: "grid", gap: 8, fontWeight: 900, color: homeTheme.text }}>
-                    <span>Assigned active stores</span>
-                    <input value={storeSearch} onChange={(event) => setStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
-                    <div style={{ display: "grid", gap: 8, maxHeight: 220, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
-                      {filteredStoreOptions.map((store) => (
-                        <label key={store.id} className="rn-team-checkbox-row" style={{ color: homeTheme.text }}>
-                          <input className="rn-team-checkbox" type="checkbox" checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
-                          <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
-                        </label>
-                      ))}
-                      {filteredStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No assignable active stores found.</span> : null}
+                    <span>Assigned locations</span>
+                    <div className="rn-team-assigned-locations__header">
+                      <input value={storeSearch} onChange={(event) => setStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
+                      <span>{formatAssignedLocationCount(assignedStoreIds.length)}</span>
+                    </div>
+                    <div className="rn-team-location-row-list">
+                      {filteredStoreOptions.map((store) => {
+                        const cityState = formatLocationCityState(store);
+                        return (
+                          <label key={store.id} className="rn-team-location-row" style={{ color: homeTheme.text }}>
+                            <input className="rn-team-checkbox rn-team-location-row__checkbox" type="checkbox" checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
+                            <span className="rn-team-location-row__content">
+                              <strong>{store.location_name}</strong>
+                              {cityState ? <span>{cityState}</span> : null}
+                            </span>
+                          </label>
+                        );
+                      })}
+                      {filteredStoreOptions.length === 0 ? <span className="rn-team-location-row-list__empty">No assignable active stores found.</span> : null}
                     </div>
                   </div>
                 ) : null}
@@ -895,6 +918,24 @@ export default function TeamAccessPage() {
                     <strong>{value}</strong>
                   </div>
                 ))}
+                {detailsMember.user_type === "multi_location" ? (
+                  <div className="rn-team-detail-item rn-team-detail-item--full rn-team-assigned-detail-card">
+                    <span>Assigned locations</span>
+                    <strong>{formatAssignedLocationCount(detailsAssignedStores.length)}</strong>
+                    {visibleDetailsAssignedStores.length > 0 ? (
+                      <ul className="rn-team-assigned-detail-list">
+                        {visibleDetailsAssignedStores.map((store) => (
+                          <li key={store.id}>{formatAssignedLocationLabel(store)}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="rn-team-assigned-detail-empty">No locations assigned.</p>
+                    )}
+                    {hiddenDetailsAssignedStoreCount > 0 ? (
+                      <p className="rn-team-assigned-detail-more">+ {hiddenDetailsAssignedStoreCount} more {hiddenDetailsAssignedStoreCount === 1 ? "location" : "locations"}</p>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
               {!detailsMember.user_id ? (
                 <div className="rn-team-modal__actions rn-team-modal__actions--secondary">
@@ -929,6 +970,12 @@ export default function TeamAccessPage() {
                   if (nextScope === "single_location") setShowEditSingleStorePicker(false);
                   if (nextScope === "multi_location") setShowEditSingleStorePicker(true);
                 }}>{(Object.keys(ACCESS_SCOPE_LABELS) as EmployerAccessScope[]).map((option) => <option key={option} value={option}>{ACCESS_SCOPE_LABELS[option]}</option>)}</select></label>
+                {editForm.user_type === "multi_location" ? (
+                  <>
+                    <label>Role<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
+                    <label className="rn-team-checkbox-row rn-team-edit-checkbox"><input className="rn-team-checkbox" type="checkbox" checked={editForm.can_manage_notification_routing} onChange={(event) => updateEditField("can_manage_notification_routing", event.target.checked)} disabled={editingMember.role === "account_owner"} /><span>Candidate routing enabled</span></label>
+                  </>
+                ) : null}
                 {editForm.user_type === "single_location" ? (
                   <div style={{ display: "grid", gap: 8 }}>
                     <strong>Linked store: {editLinkedStore ? [editLinkedStore.location_name, editLinkedStore.city, editLinkedStore.state].filter(Boolean).join(" — ") : "Auto-match by location name or routing email"}</strong>
@@ -949,17 +996,26 @@ export default function TeamAccessPage() {
                     ) : null}
                   </div>
                 ) : editForm.user_type === "multi_location" ? (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    <strong>Assigned active stores</strong>
-                    <input value={editStoreSearch} onChange={(event) => setEditStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
-                    <div style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
-                      {filteredEditStoreOptions.map((store) => (
-                        <label key={store.id} className="rn-team-checkbox-row">
-                          <input className="rn-team-checkbox" type="checkbox" checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
-                          <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
-                        </label>
-                      ))}
-                      {filteredEditStoreOptions.length === 0 ? <span style={{ color: homeTheme.muted }}>No assignable active stores found.</span> : null}
+                  <div className="rn-team-edit-assigned-locations" style={{ display: "grid", gap: 8 }}>
+                    <strong>Assigned locations</strong>
+                    <div className="rn-team-assigned-locations__header">
+                      <input value={editStoreSearch} onChange={(event) => setEditStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
+                      <span>{formatAssignedLocationCount(editForm.assigned_store_ids.length)}</span>
+                    </div>
+                    <div className="rn-team-location-row-list">
+                      {filteredEditStoreOptions.map((store) => {
+                        const cityState = formatLocationCityState(store);
+                        return (
+                          <label key={store.id} className="rn-team-location-row">
+                            <input className="rn-team-checkbox rn-team-location-row__checkbox" type="checkbox" checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
+                            <span className="rn-team-location-row__content">
+                              <strong>{store.location_name}</strong>
+                              {cityState ? <span>{cityState}</span> : null}
+                            </span>
+                          </label>
+                        );
+                      })}
+                      {filteredEditStoreOptions.length === 0 ? <span className="rn-team-location-row-list__empty">No assignable active stores found.</span> : null}
                     </div>
                   </div>
                 ) : null}
@@ -980,8 +1036,12 @@ export default function TeamAccessPage() {
                     <label>Default application URL<input className="rn-team-input" style={homeInputStyle} value={editForm.default_application_url} onChange={(event) => updateEditField("default_application_url", event.target.value)} placeholder="https://" /></label>
                   </>
                 ) : null}
-                <label>Role<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
-                <label className="rn-team-checkbox-row rn-team-edit-checkbox"><input className="rn-team-checkbox" type="checkbox" checked={editForm.can_manage_notification_routing} onChange={(event) => updateEditField("can_manage_notification_routing", event.target.checked)} disabled={editingMember.role === "account_owner"} /><span>Candidate routing enabled</span></label>
+                {editForm.user_type !== "multi_location" ? (
+                  <>
+                    <label>Role<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.role} onChange={(event) => updateEditField("role", event.target.value as EmployerRole)}>{(Object.keys(ROLE_LABELS) as EmployerRole[]).map((option) => <option key={option} value={option}>{ROLE_LABELS[option]}</option>)}</select></label>
+                    <label className="rn-team-checkbox-row rn-team-edit-checkbox"><input className="rn-team-checkbox" type="checkbox" checked={editForm.can_manage_notification_routing} onChange={(event) => updateEditField("can_manage_notification_routing", event.target.checked)} disabled={editingMember.role === "account_owner"} /><span>Candidate routing enabled</span></label>
+                  </>
+                ) : null}
                 <div className="rn-team-modal__actions">
                   <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeEditModal} disabled={busy}>Cancel</button>
                   <button type="submit" className="rn-btn-primary" style={homePrimaryButton} disabled={busy}>{busy ? "Saving..." : "Save changes"}</button>

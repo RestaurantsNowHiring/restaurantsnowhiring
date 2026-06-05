@@ -1425,3 +1425,132 @@ iframe {
     grid-template-columns: 1fr;
   }
 }
+
+.rn-team-assigned-locations__header {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.rn-team-assigned-locations__header > span {
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.rn-team-location-row-list {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  display: grid;
+  gap: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.rn-team-location-row,
+.rn-team-edit-grid .rn-team-location-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  color: rgba(0, 0, 0, 0.84);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  gap: 10px;
+  letter-spacing: normal;
+  line-height: 1.25;
+  padding: 8px 10px;
+  text-transform: none;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease;
+}
+
+.rn-team-location-row:hover {
+  background: rgba(53, 128, 110, 0.06);
+  border-color: rgba(53, 128, 110, 0.14);
+}
+
+.rn-team-location-row__checkbox {
+  height: 20px;
+  min-height: 20px !important;
+  width: 20px;
+}
+
+.rn-team-location-row__checkbox:checked::after {
+  height: 9px;
+  left: 6px;
+  top: 2px;
+  width: 5px;
+}
+
+.rn-team-location-row__content {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  min-width: 0;
+}
+
+.rn-team-location-row__content strong {
+  color: rgba(0, 0, 0, 0.86);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.rn-team-location-row__content span {
+  color: rgba(0, 0, 0, 0.58);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.rn-team-location-row-list__empty {
+  color: rgba(0, 0, 0, 0.58);
+  font-size: 14px;
+  font-weight: 800;
+  padding: 10px;
+}
+
+.rn-team-detail-item--full {
+  grid-column: 1 / -1;
+}
+
+.rn-team-assigned-detail-card strong {
+  margin-bottom: 8px;
+}
+
+.rn-team-assigned-detail-list {
+  color: rgba(0, 0, 0, 0.82);
+  display: grid;
+  font-size: 15px;
+  font-weight: 850;
+  gap: 7px;
+  line-height: 1.35;
+  list-style-position: outside;
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+.rn-team-assigned-detail-more,
+.rn-team-assigned-detail-empty {
+  color: rgba(0, 0, 0, 0.62);
+  font-size: 14px;
+  font-weight: 900;
+  margin: 10px 0 0;
+}
+
+@media (max-width: 700px) {
+  .rn-team-assigned-locations__header {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rn-team-edit-assigned-locations {
+  grid-column: 1 / -1;
+}
