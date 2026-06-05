@@ -88,11 +88,20 @@ export async function GET(request: Request) {
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
 
-    const { data: stores, error } = await supabaseAdmin
+    const url = new URL(request.url);
+    const assignableOnly = url.searchParams.get("assignableOnly") === "true";
+    let storesQuery = supabaseAdmin
       .from("employer_stores")
       .select("id,employer_account_id,location_name,address,city,state,store_email,ta_email,gm_op_email,minimum_wage,pay_range,default_application_url,active,is_assignable_location,created_at,updated_at")
-      .eq("employer_account_id", context.accountId)
-      .order("location_name", { ascending: true });
+      .eq("employer_account_id", context.accountId);
+
+    if (assignableOnly) {
+      storesQuery = storesQuery
+        .eq("active", true)
+        .eq("is_assignable_location", true);
+    }
+
+    const { data: stores, error } = await storesQuery.order("location_name", { ascending: true });
 
     if (error) throw new Error(error.message || "Could not load stores.");
 

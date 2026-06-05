@@ -3,11 +3,14 @@ import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
 
+type EmployerAccessScope = "single_location" | "multi_location" | "full_account_access";
+
 type HiringManagerRow = {
   id: string;
   email: string;
   location_name: string | null;
   status: string;
+  user_type: EmployerAccessScope;
 };
 
 export async function GET(request: Request) {
@@ -23,9 +26,10 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("employer_team_members")
-      .select("id,email,location_name,status")
+      .select("id,email,location_name,status,user_type")
       .eq("account_id", context.accountId)
-      .eq("status", "active")
+      .in("status", ["active", "invited", "pending"])
+      .neq("user_type", "single_location")
       .order("location_name", { ascending: true, nullsFirst: false })
       .order("email", { ascending: true });
 
