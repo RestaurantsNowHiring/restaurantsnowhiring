@@ -322,7 +322,10 @@ export default function TeamAccessPage() {
   }, [activeStoreOptions, editStoreSearch]);
 
   function toggleAssignedStore(storeId: string) {
-    setAssignedStoreIds((current) => current.includes(storeId) ? current.filter((id) => id !== storeId) : [...current, storeId]);
+    setAssignedStoreIds((current) => {
+      if (accessScope === "single_location") return current.includes(storeId) ? [] : [storeId];
+      return current.includes(storeId) ? current.filter((id) => id !== storeId) : [...current, storeId];
+    });
   }
 
   const getStoreRoutingEmailKeys = useCallback((store: EmployerStore) => {
@@ -330,13 +333,23 @@ export default function TeamAccessPage() {
   }, [normalizeEmail]);
 
   const findStoreForMember = useCallback((member: TeamMember) => {
+    const activeStores = stores.filter((store) => store.active);
+    const assignedStoreIds = member.assigned_store_ids ?? [];
+    if (assignedStoreIds.length === 1) return activeStores.find((store) => store.id === assignedStoreIds[0]) ?? null;
+
     const linkedStoreId = typeof member.employer_store_id === "string" ? member.employer_store_id.trim() : "";
-    if (linkedStoreId) return stores.find((store) => store.id === linkedStoreId) ?? null;
+    if (linkedStoreId) return activeStores.find((store) => store.id === linkedStoreId) ?? null;
+
+    const memberLocationName = member.location_name?.trim().toLowerCase() ?? "";
+    if (memberLocationName) {
+      const locationMatches = activeStores.filter((store) => store.location_name.trim().toLowerCase() === memberLocationName);
+      if (locationMatches.length === 1) return locationMatches[0];
+    }
 
     const memberEmail = normalizeEmail(member.email);
     if (!memberEmail) return null;
 
-    const emailMatches = stores.filter((store) => getStoreRoutingEmailKeys(store).has(memberEmail));
+    const emailMatches = activeStores.filter((store) => getStoreRoutingEmailKeys(store).has(memberEmail));
     return emailMatches.length === 1 ? emailMatches[0] : null;
   }, [getStoreRoutingEmailKeys, normalizeEmail, stores]);
 
@@ -376,7 +389,7 @@ export default function TeamAccessPage() {
       can_manage_notification_routing: member.can_manage_notification_routing,
       role: member.role,
       user_type: member.user_type ?? "single_location",
-      assigned_store_ids: member.assigned_store_ids ?? [],
+      assigned_store_ids: member.assigned_store_ids?.length ? member.assigned_store_ids : store?.id ? [store.id] : [],
     };
   }
 
@@ -406,9 +419,11 @@ export default function TeamAccessPage() {
   function toggleEditAssignedStore(storeId: string) {
     setEditForm((current) => {
       if (!current) return current;
-      const assigned = current.assigned_store_ids.includes(storeId)
-        ? current.assigned_store_ids.filter((id) => id !== storeId)
-        : [...current.assigned_store_ids, storeId];
+      const assigned = current.user_type === "single_location"
+        ? current.assigned_store_ids.includes(storeId) ? [] : [storeId]
+        : current.assigned_store_ids.includes(storeId)
+          ? current.assigned_store_ids.filter((id) => id !== storeId)
+          : [...current.assigned_store_ids, storeId];
       return { ...current, assigned_store_ids: assigned };
     });
   }
@@ -445,7 +460,7 @@ export default function TeamAccessPage() {
         location_name: locationName || null,
       }),
     });
-    const teamPayload = (await teamResponse.json().catch(() => null)) as { error?: string } | null;
+    const teamPayload = (await teamResponse.json().catch(() => null)) as { error?: string; member?: TeamMember } | null;
 
     if (!teamResponse.ok) {
       setBusy(false);
@@ -453,7 +468,8 @@ export default function TeamAccessPage() {
       return;
     }
 
-    const store = selection.store;
+    const assignedStoreId = teamPayload?.member?.assigned_store_ids?.[0] ?? editForm.assigned_store_ids[0] ?? null;
+    const store = selection.store ?? activeStoreOptions.find((option) => option.id === assignedStoreId) ?? null;
     const previousLocationName = member.location_name;
     const hasStoreDetails = Boolean(
       locationName ||
@@ -469,18 +485,19 @@ export default function TeamAccessPage() {
     );
 
     if (editForm.user_type === "single_location" && hasStoreDetails) {
+      const preserveAutoDetectedStoreValues = Boolean(store?.id && !selection.store);
       const storePayload = {
         ...(store?.id ? { id: store.id } : {}),
-        location_name: locationName || member.location_name || member.email,
-        address: editForm.address,
-        city: editForm.city,
-        state: editForm.state,
-        store_email: editForm.store_email,
-        ta_email: editForm.ta_email,
-        gm_op_email: editForm.gm_op_email,
-        minimum_wage: editForm.minimum_wage,
-        pay_range: editForm.pay_range,
-        default_application_url: editForm.default_application_url,
+        location_name: locationName || store?.location_name || member.location_name || member.email,
+        address: preserveAutoDetectedStoreValues && !editForm.address.trim() ? store?.address ?? "" : editForm.address,
+        city: preserveAutoDetectedStoreValues && !editForm.city.trim() ? store?.city ?? "" : editForm.city,
+        state: preserveAutoDetectedStoreValues && !editForm.state.trim() ? store?.state ?? "" : editForm.state,
+        store_email: preserveAutoDetectedStoreValues && !editForm.store_email.trim() ? store?.store_email ?? "" : editForm.store_email,
+        ta_email: preserveAutoDetectedStoreValues && !editForm.ta_email.trim() ? store?.ta_email ?? "" : editForm.ta_email,
+        gm_op_email: preserveAutoDetectedStoreValues && !editForm.gm_op_email.trim() ? store?.gm_op_email ?? "" : editForm.gm_op_email,
+        minimum_wage: preserveAutoDetectedStoreValues && !editForm.minimum_wage.trim() ? store?.minimum_wage ?? "" : editForm.minimum_wage,
+        pay_range: preserveAutoDetectedStoreValues && !editForm.pay_range.trim() ? store?.pay_range ?? "" : editForm.pay_range,
+        default_application_url: preserveAutoDetectedStoreValues && !editForm.default_application_url.trim() ? store?.default_application_url ?? "" : editForm.default_application_url,
         active: true,
       };
       const storeResponse = await fetch("/api/employer/stores", {
@@ -497,6 +514,8 @@ export default function TeamAccessPage() {
             body: JSON.stringify({
               id: member.id,
               role: member.role,
+              user_type: member.user_type,
+              assigned_store_ids: member.user_type === "full_account_access" ? [] : member.assigned_store_ids ?? [],
               can_manage_notification_routing: member.can_manage_notification_routing,
               location_name: previousLocationName,
             }),
@@ -670,6 +689,7 @@ export default function TeamAccessPage() {
                       const nextScope = event.target.value as EmployerAccessScope;
                       setAccessScope(nextScope);
                       if (nextScope === "full_account_access") setAssignedStoreIds([]);
+                      if (nextScope === "single_location") setAssignedStoreIds((current) => current.slice(0, 1));
                     }}
                     className="rn-team-select"
                     style={{ ...homeInputStyle, marginTop: 6, minHeight: 50, appearance: "none" }}
@@ -680,14 +700,14 @@ export default function TeamAccessPage() {
                   </select>
                   <span style={{ display: "block", marginTop: 6, color: homeTheme.muted, fontSize: 13 }}>{ACCESS_SCOPE_HELP[accessScope]}</span>
                 </label>
-                {accessScope === "multi_location" ? (
+                {accessScope === "multi_location" || accessScope === "single_location" ? (
                   <div style={{ display: "grid", gap: 8, fontWeight: 900, color: homeTheme.text }}>
-                    <span>Assigned active stores</span>
+                    <span>{accessScope === "single_location" ? "Assigned active store" : "Assigned active stores"}</span>
                     <input value={storeSearch} onChange={(event) => setStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
                     <div style={{ display: "grid", gap: 8, maxHeight: 220, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
                       {filteredStoreOptions.map((store) => (
                         <label key={store.id} className="rn-team-checkbox-row" style={{ color: homeTheme.text }}>
-                          <input className="rn-team-checkbox" type="checkbox" checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
+                          <input className="rn-team-checkbox" type={accessScope === "single_location" ? "radio" : "checkbox"} name={accessScope === "single_location" ? "assigned-store" : undefined} checked={assignedStoreIds.includes(store.id)} onChange={() => toggleAssignedStore(store.id)} />
                           <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
                         </label>
                       ))}
@@ -854,15 +874,25 @@ export default function TeamAccessPage() {
                 <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={closeEditModal} disabled={busy}>Close</button>
               </div>
               <form className="rn-team-edit-grid" onSubmit={saveEditModal}>
-                <label>Access scope / user type<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.user_type} onChange={(event) => updateEditField("user_type", event.target.value as EmployerAccessScope)}>{(Object.keys(ACCESS_SCOPE_LABELS) as EmployerAccessScope[]).map((option) => <option key={option} value={option}>{ACCESS_SCOPE_LABELS[option]}</option>)}</select></label>
-                {editForm.user_type === "multi_location" ? (
+                <label>Access scope / user type<select className="rn-team-select" style={{ ...homeInputStyle, appearance: "none" }} value={editForm.user_type} onChange={(event) => {
+                  const nextScope = event.target.value as EmployerAccessScope;
+                  setEditForm((current) => {
+                    if (!current) return current;
+                    return {
+                      ...current,
+                      user_type: nextScope,
+                      assigned_store_ids: nextScope === "full_account_access" ? [] : nextScope === "single_location" ? current.assigned_store_ids.slice(0, 1) : current.assigned_store_ids,
+                    };
+                  });
+                }}>{(Object.keys(ACCESS_SCOPE_LABELS) as EmployerAccessScope[]).map((option) => <option key={option} value={option}>{ACCESS_SCOPE_LABELS[option]}</option>)}</select></label>
+                {editForm.user_type === "multi_location" || editForm.user_type === "single_location" ? (
                   <div style={{ display: "grid", gap: 8 }}>
-                    <strong>Assigned active stores</strong>
+                    <strong>{editForm.user_type === "single_location" ? "Assigned active store" : "Assigned active stores"}</strong>
                     <input value={editStoreSearch} onChange={(event) => setEditStoreSearch(event.target.value)} placeholder="Search locations" className="rn-team-input" style={homeInputStyle} />
                     <div style={{ display: "grid", gap: 8, maxHeight: 240, overflow: "auto", padding: 10, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#fff" }}>
                       {filteredEditStoreOptions.map((store) => (
                         <label key={store.id} className="rn-team-checkbox-row">
-                          <input className="rn-team-checkbox" type="checkbox" checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
+                          <input className="rn-team-checkbox" type={editForm.user_type === "single_location" ? "radio" : "checkbox"} name={editForm.user_type === "single_location" ? "edit-assigned-store" : undefined} checked={editForm.assigned_store_ids.includes(store.id)} onChange={() => toggleEditAssignedStore(store.id)} />
                           <span>{[store.location_name, store.city, store.state].filter(Boolean).join(" — ")}</span>
                         </label>
                       ))}
