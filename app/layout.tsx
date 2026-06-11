@@ -1,10 +1,12 @@
 // src/app/layout.tsx
 import "./globals.css";
 import Link from "next/link";
+import { Suspense } from "react";
 import localFont from "next/font/local";
 import { Inter, Sora } from "next/font/google";
 import type { Metadata, Viewport } from "next";
 import TopBanner from "./components/TopBanner";
+import GoogleAnalytics from "./components/GoogleAnalytics";
 import {
   buildOrganizationSchema,
   buildWebSiteSchema,
@@ -14,6 +16,8 @@ import {
   serializeJsonLd,
 } from "../lib/seo";
 import { Analytics } from "@vercel/analytics/next";
+
+const googleAnalyticsMeasurementId = process.env.NEXT_PUBLIC_GA_ID;
 
 const inter = Inter({
   subsets: ["latin"],
@@ -150,6 +154,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
           © {new Date().getFullYear()} RestaurantsNowHiring.com
         </footer>
+        <Suspense fallback={null}>
+          <GoogleAnalytics measurementId={googleAnalyticsMeasurementId} />
+        </Suspense>
         <Analytics />
       </body>
     </html>
