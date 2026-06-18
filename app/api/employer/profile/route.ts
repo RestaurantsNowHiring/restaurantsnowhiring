@@ -25,6 +25,7 @@ type EmployerProfileRow = {
   company_description?: string | null;
   company_website?: string | null;
   company_logo_url?: string | null;
+  company_cover_image_url?: string | null;
   headquarters?: string | null;
   location_count?: number | null;
   benefits_summary?: string | null;
@@ -59,6 +60,7 @@ const SAFE_ACCOUNT_FIELDS = [
   "company_description",
   "company_website",
   "company_logo_url",
+  "company_cover_image_url",
   "headquarters",
   "location_count",
   "benefits_summary",
@@ -69,7 +71,7 @@ type SafeProfileField = (typeof SAFE_PROFILE_FIELDS)[number];
 type SafeAccountField = (typeof SAFE_ACCOUNT_FIELDS)[number];
 
 const ACCOUNT_PROFILE_SELECT =
-  "company_short_description,company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary,benefits_list";
+"company_short_description,company_description,company_website,company_logo_url,company_cover_image_url,headquarters,location_count,benefits_summary,benefits_list";
 
 function cleanString(value: unknown, maxLength: number) {
   if (typeof value !== "string") return null;
