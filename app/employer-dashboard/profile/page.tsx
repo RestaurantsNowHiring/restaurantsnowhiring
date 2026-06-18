@@ -141,6 +141,7 @@ export default function EmployerProfilePage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
 
   async function getAccessToken() {
     const { data } = await supabase.auth.getSession();
@@ -465,10 +466,29 @@ export default function EmployerProfilePage() {
 
         <div className="rn-profile-stack">
           <section style={homeCardStyle}>
-            <h2 className="rn-profile-section-title">Edit Profile</h2>
-            <p className="rn-profile-section-copy">
-              Update the employer contact details and public company profile information shown on your company page.
-            </p>
+            <div className="rn-profile-edit-header">
+  <div>
+    <h2 className="rn-profile-section-title">
+      {isEditing ? "Editing Profile" : "My Profile"}
+    </h2>
+    <p className="rn-profile-section-copy">
+      {isEditing
+        ? "Make changes to your employer and public company page information."
+        : "Review the employer contact details and public company page information shown to job seekers."}
+    </p>
+  </div>
+
+  {!isEditing ? (
+    <button
+      type="button"
+      style={homePrimaryButton}
+      className="rn-btn-primary"
+      onClick={() => setIsEditing(true)}
+    >
+      Edit Profile
+    </button>
+  ) : null}
+</div>
 
             <form onSubmit={handleSave} className="rn-profile-form">
               <div>
@@ -479,6 +499,7 @@ export default function EmployerProfilePage() {
                   id="company-name"
                   value={form.company_name}
                   onChange={(event) => updateField("company_name", event.target.value)}
+                  disabled={!isEditing}
                   style={inputStyle}
                 />
               </div>
@@ -491,6 +512,7 @@ export default function EmployerProfilePage() {
                   id="contact-name"
                   value={form.contact_name}
                   onChange={(event) => updateField("contact_name", event.target.value)}
+                  disabled={!isEditing}
                   style={inputStyle}
                 />
               </div>
@@ -1019,6 +1041,13 @@ Leadership development`}
           .rn-profile-form {
             grid-template-columns: 1fr;
           }
+          .rn-profile-edit-header {
+            align-items: flex-start;
+            display: flex;
+            gap: 16px;
+            justify-content: space-between;
+            flex-wrap: wrap;
+}
         }
       `}</style>
     </main>
