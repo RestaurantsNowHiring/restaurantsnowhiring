@@ -26,8 +26,6 @@ type EmployerProfileRow = {
   company_website?: string | null;
   company_logo_url?: string | null;
   company_cover_image_url?: string | null;
-  cover_image_position_x?: number | null;
-cover_image_position_y?: number | null;
   headquarters?: string | null;
   location_count?: number | null;
   benefits_summary?: string | null;
@@ -63,8 +61,6 @@ const SAFE_ACCOUNT_FIELDS = [
   "company_website",
   "company_logo_url",
   "company_cover_image_url",
-  "cover_image_position_x",
-"cover_image_position_y",
   "headquarters",
   "location_count",
   "benefits_summary",
@@ -75,7 +71,7 @@ type SafeProfileField = (typeof SAFE_PROFILE_FIELDS)[number];
 type SafeAccountField = (typeof SAFE_ACCOUNT_FIELDS)[number];
 
 const ACCOUNT_PROFILE_SELECT =
-"company_short_description,company_description,company_website,company_logo_url,company_cover_image_url,headquarters,location_count,benefits_summary,benefits_list,cover_image_position_x,cover_image_position_y";
+"company_short_description,company_description,company_website,company_logo_url,company_cover_image_url,headquarters,location_count,benefits_summary,benefits_list";
 
 function cleanString(value: unknown, maxLength: number) {
   if (typeof value !== "string") return null;
@@ -330,8 +326,6 @@ export async function PUT(request: Request) {
     >((acc, field) => {
       if (
   field === "location_count" ||
-  field === "cover_image_position_x" ||
-  field === "cover_image_position_y"
 ) {
   acc[field] = cleanNumber(payload[field]);
   return acc;
