@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getAuthUserFromRequest } from "../../../../lib/billing";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
-import { getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../lib/employerAccounts";
+import {
+  getEmployerAccountContext,
+  getSelectedEmployerAccountIdFromRequest,
+} from "../../../../lib/employerAccounts";
 
 type EmployerProfileRow = {
   user_id: string;
@@ -18,6 +21,12 @@ type EmployerProfileRow = {
   last_name: string | null;
   job_title: string | null;
   jobs_open: string | null;
+  company_description?: string | null;
+  company_website?: string | null;
+  company_logo_url?: string | null;
+  headquarters?: string | null;
+  location_count?: number | null;
+  benefits_summary?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -43,13 +52,30 @@ const SAFE_PROFILE_FIELDS = [
   "support_email",
 ] as const;
 
+const SAFE_ACCOUNT_FIELDS = [
+  "company_description",
+  "company_website",
+  "company_logo_url",
+  "headquarters",
+  "location_count",
+  "benefits_summary",
+] as const;
+
 type SafeProfileField = (typeof SAFE_PROFILE_FIELDS)[number];
+type SafeAccountField = (typeof SAFE_ACCOUNT_FIELDS)[number];
 
 function cleanString(value: unknown, maxLength: number) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   if (!trimmed) return null;
   return trimmed.slice(0, maxLength);
+}
+
+function cleanNumber(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.round(parsed));
 }
 
 function fullName(firstName?: string | null, lastName?: string | null) {
@@ -138,6 +164,22 @@ async function getEmployerProfile(userId: string, email: string, metadata: Recor
   return mergeFallbacks(row ? { ...metadataProfile, ...row, login_email: email } : metadataProfile, latestJob);
 }
 
+async function loadEmployerAccountProfile(accountId: string) {
+  const supabaseAdmin = getSupabaseAdminClient();
+  if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
+
+  const { data, error } = await supabaseAdmin
+    .from("employer_accounts")
+    .select(
+      "company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary",
+    )
+    .eq("id", accountId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message || "Could not load company profile fields.");
+  return data ?? {};
+}
+
 export async function GET(request: Request) {
   try {
     const user = await getAuthUserFromRequest(request);
@@ -153,8 +195,12 @@ export async function GET(request: Request) {
     const { data: authUserData, error: authUserError } = await supabaseAdmin.auth.admin.getUserById(profileUserId);
     if (authUserError) throw new Error(authUserError.message || "Could not load auth user metadata.");
 
-    const profile = await getEmployerProfile(profileUserId, profileEmail, authUserData.user?.user_metadata ?? {});
-    return NextResponse.json({ profile });
+    const [profile, accountProfile] = await Promise.all([
+      getEmployerProfile(profileUserId, profileEmail, authUserData.user?.user_metadata ?? {}),
+      loadEmployerAccountProfile(context.accountId),
+    ]);
+
+    return NextResponse.json({ profile: { ...profile, ...accountProfile } });
   } catch (error) {
     console.error("Employer profile load failed", { error });
     return NextResponse.json(
@@ -186,8 +232,37 @@ export async function PUT(request: Request) {
       return acc;
     }, {} as Record<SafeProfileField, string | null>);
 
+    const safeAccountUpdate = SAFE_ACCOUNT_FIELDS.reduce<Record<SafeAccountField, string | number | null>>((acc, field) => {
+      if (field === "location_count") {
+        acc[field] = cleanNumber(payload[field]);
+        return acc;
+      }
+
+      const maxLength =
+        field === "company_description"
+          ? 1800
+          : field === "benefits_summary"
+            ? 1200
+            : field === "company_logo_url" || field === "company_website"
+              ? 500
+              : 180;
+
+      acc[field] = cleanString(payload[field], maxLength);
+      return acc;
+    }, {} as Record<SafeAccountField, string | number | null>);
+
     if (safeUpdate.support_email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(safeUpdate.support_email)) {
       return NextResponse.json({ error: "Enter a valid support/contact email address." }, { status: 400 });
+    }
+
+    const website = safeAccountUpdate.company_website;
+    if (typeof website === "string" && website && !/^https?:\/\/[^\s]+\.[^\s]+/.test(website)) {
+      return NextResponse.json({ error: "Enter a valid company website URL starting with http:// or https://." }, { status: 400 });
+    }
+
+    const logoUrl = safeAccountUpdate.company_logo_url;
+    if (typeof logoUrl === "string" && logoUrl && !/^https?:\/\/[^\s]+\.[^\s]+/.test(logoUrl)) {
+      return NextResponse.json({ error: "Enter a valid logo URL starting with http:// or https://." }, { status: 400 });
     }
 
     const { data, error } = await supabaseAdmin
@@ -208,7 +283,27 @@ export async function PUT(request: Request) {
 
     if (error) throw new Error(error.message || "Could not save employer profile.");
 
-    return NextResponse.json({ profile: { ...data, login_email: context.ownerEmail } });
+    const { data: accountData, error: accountError } = await supabaseAdmin
+      .from("employer_accounts")
+      .update({
+        ...safeAccountUpdate,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", context.accountId)
+      .select(
+        "company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary",
+      )
+      .single();
+
+    if (accountError) throw new Error(accountError.message || "Could not save company profile fields.");
+
+    return NextResponse.json({
+      profile: {
+        ...data,
+        ...accountData,
+        login_email: context.ownerEmail,
+      },
+    });
   } catch (error) {
     console.error("Employer profile save failed", { error });
     return NextResponse.json(
