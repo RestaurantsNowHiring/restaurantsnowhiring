@@ -723,7 +723,7 @@ export default function EmployerProfilePage() {
                       alt="Company cover preview"
                       style={{
                         width: "100%",
-                        height: 260,
+                        height: 320,
                         objectFit: "cover",
                         objectPosition: "center center",
                         display: "block",
