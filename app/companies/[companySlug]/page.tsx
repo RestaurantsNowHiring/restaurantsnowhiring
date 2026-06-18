@@ -138,7 +138,9 @@ export default async function CompanyPage({
               padding: 26,
               boxShadow: "0 18px 40px rgba(0,0,0,.10)",
               display: "grid",
-              gridTemplateColumns: "auto 1fr",
+              gridTemplateColumns: profile?.company_cover_image_url
+                ? "auto 1fr minmax(320px, 420px)"
+                : "auto 1fr",
               gap: 22,
               alignItems: "start",
             }}
@@ -282,6 +284,32 @@ export default async function CompanyPage({
                 </a>
               </div>
             </div>
+
+            {profile?.company_cover_image_url ? (
+              <div
+                style={{
+                  borderRadius: 22,
+                  overflow: "hidden",
+                  height: 320,
+                  alignSelf: "stretch",
+                }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={profile.company_cover_image_url}
+                  alt={`${companyName} cover`}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                    objectPosition: `${profile.cover_image_position_x ?? 50}% ${
+                      profile.cover_image_position_y ?? 50
+                    }%`,
+                    display: "block",
+                  }}
+                />
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
