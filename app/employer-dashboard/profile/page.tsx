@@ -115,6 +115,9 @@ function profileToForm(profile: EmployerProfile | null): ProfileFormState {
 function displayValue(value?: string | null) {
   return value?.trim() || "—";
 }
+function displayMultilineValue(value?: string | null) {
+  return value?.trim() || "Not added yet.";
+}
 
 function employerAccountHeaders(token: string, contentType?: string) {
   const selectedEmployerAccountId =
@@ -398,6 +401,18 @@ export default function EmployerProfilePage() {
     marginBottom: 7,
     textTransform: "uppercase",
   };
+  const readOnlyFieldStyle: CSSProperties = {
+  border: `1px solid ${homeTheme.border}`,
+  borderRadius: 16,
+  background: "#fff",
+  padding: "14px 16px",
+  color: homeTheme.text,
+  fontFamily: "var(--font-body)",
+  fontSize: 15,
+  fontWeight: 800,
+  lineHeight: 1.45,
+  whiteSpace: "pre-wrap",
+};
 
   if (authStatus === "loading") {
     return (
@@ -461,6 +476,49 @@ export default function EmployerProfilePage() {
 
         <div className="rn-profile-stack">
           <form onSubmit={handleSave} className="rn-profile-edit-form">
+            {!isEditing ? (
+  <section style={homeCardStyle}>
+    <div className="rn-profile-edit-header">
+      <div>
+        <h2 className="rn-profile-section-title">My Profile</h2>
+        <p className="rn-profile-section-copy">
+          Review the employer contact details and public company page information shown to job seekers.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        style={homePrimaryButton}
+        className="rn-btn-primary"
+        onClick={() => setIsEditing(true)}
+      >
+        Edit Profile
+      </button>
+    </div>
+
+    <div className="rn-profile-form">
+      <div>
+        <label style={labelStyle}>Company / Restaurant name</label>
+        <div style={readOnlyFieldStyle}>{displayValue(form.company_name)}</div>
+      </div>
+
+      <div>
+        <label style={labelStyle}>Contact name</label>
+        <div style={readOnlyFieldStyle}>{displayValue(form.contact_name)}</div>
+      </div>
+
+      <div>
+        <label style={labelStyle}>Support / contact email</label>
+        <div style={readOnlyFieldStyle}>{displayValue(form.support_email)}</div>
+      </div>
+
+      <div>
+        <label style={labelStyle}>Phone number</label>
+        <div style={readOnlyFieldStyle}>{displayValue(form.phone)}</div>
+      </div>
+    </div>
+  </section>
+) : null}
             <section style={homeCardStyle}>
               <div className="rn-profile-edit-header">
                 <div>
