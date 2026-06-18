@@ -2,7 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getPublicJobs, makeCompanySlug } from "../../../lib/companyPages";
+import {
+  getCompanyName,
+  getPublicJobs,
+  makeCompanySlug,
+} from "../../../lib/companyPages";
 import { buildPageMetadata } from "../../../lib/seo";
 
 export async function generateMetadata({
@@ -14,7 +18,7 @@ export async function generateMetadata({
 
   const companyJobs = jobs.filter(
     (job: any) =>
-      makeCompanySlug(job.restaurant_name || "") === params.companySlug
+      makeCompanySlug(getCompanyName(job.restaurant_name)) === params.companySlug
   );
 
   if (companyJobs.length === 0) {
@@ -25,7 +29,7 @@ export async function generateMetadata({
     });
   }
 
-  const companyName = companyJobs[0].restaurant_name;
+  const companyName = getCompanyName(companyJobs[0].restaurant_name);
 
   return buildPageMetadata({
     title: `${companyName} Jobs | Restaurants Now Hiring`,
@@ -43,7 +47,7 @@ export default async function CompanyPage({
 
   const companyJobs = jobs.filter(
     (job: any) =>
-      makeCompanySlug(job.restaurant_name || "") === params.companySlug
+      makeCompanySlug(getCompanyName(job.restaurant_name)) === params.companySlug
   );
 
   if (companyJobs.length === 0) {
