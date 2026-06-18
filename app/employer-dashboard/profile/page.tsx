@@ -31,6 +31,7 @@ type EmployerProfile = {
   company_description: string | null;
   company_website: string | null;
   company_logo_url: string | null;
+  company_cover_image_url: string | null;
   headquarters: string | null;
   location_count: number | null;
   benefits_summary: string | null;
@@ -52,6 +53,7 @@ type ProfileFormState = {
   company_description: string;
   company_website: string;
   company_logo_url: string;
+  company_cover_image_url: string;
   headquarters: string;
   location_count: string;
   benefits_summary: string;
@@ -71,6 +73,7 @@ const emptyForm: ProfileFormState = {
   company_description: "",
   company_website: "",
   company_logo_url: "",
+  company_cover_image_url: "",
   headquarters: "",
   location_count: "",
   benefits_summary: "",
@@ -101,6 +104,7 @@ function profileToForm(profile: EmployerProfile | null): ProfileFormState {
     company_description: profile.company_description ?? "",
     company_website: profile.company_website ?? "",
     company_logo_url: profile.company_logo_url ?? "",
+    company_cover_image_url: profile.company_cover_image_url ?? "",
     headquarters: profile.headquarters ?? "",
     location_count: profile.location_count?.toString() ?? "",
     benefits_summary: profile.benefits_summary ?? "",
