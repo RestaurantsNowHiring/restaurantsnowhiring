@@ -324,9 +324,7 @@ export async function PUT(request: Request) {
     const safeAccountUpdate = SAFE_ACCOUNT_FIELDS.reduce<
       Record<SafeAccountField, string | number | null>
     >((acc, field) => {
-      if (
-  field === "location_count" ||
-) {
+     if (field === "location_count") {
   acc[field] = cleanNumber(payload[field]);
   return acc;
 }
