@@ -9,23 +9,30 @@ import {
 } from "../../../lib/companyPages";
 import { buildPageMetadata } from "../../../lib/seo";
 
+type CompanyPageParams = {
+  companySlug: string;
+};
+
 export async function generateMetadata({
   params,
 }: {
-  params: { companySlug: string };
+  params: CompanyPageParams | Promise<CompanyPageParams>;
 }): Promise<Metadata> {
+  const resolvedParams = await Promise.resolve(params);
+  const companySlug = resolvedParams.companySlug;
+
   const jobs = await getPublicJobs();
 
   const companyJobs = jobs.filter(
     (job: any) =>
-      makeCompanySlug(getCompanyName(job.restaurant_name)) === params.companySlug
+      makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
   );
 
   if (companyJobs.length === 0) {
     return buildPageMetadata({
       title: "Restaurant Jobs | Restaurants Now Hiring",
       description: "Browse restaurant jobs hiring now.",
-      path: `/companies/${params.companySlug}`,
+      path: `/companies/${companySlug}`,
     });
   }
 
@@ -34,27 +41,30 @@ export async function generateMetadata({
   return buildPageMetadata({
     title: `${companyName} Jobs | Restaurants Now Hiring`,
     description: `Browse restaurant jobs at ${companyName}, including hourly and management positions.`,
-    path: `/companies/${params.companySlug}`,
+    path: `/companies/${companySlug}`,
   });
 }
 
 export default async function CompanyPage({
   params,
 }: {
-  params: { companySlug: string };
+  params: CompanyPageParams | Promise<CompanyPageParams>;
 }) {
+  const resolvedParams = await Promise.resolve(params);
+  const companySlug = resolvedParams.companySlug;
+
   const jobs = await getPublicJobs();
 
   const companyJobs = jobs.filter(
     (job: any) =>
-      makeCompanySlug(getCompanyName(job.restaurant_name)) === params.companySlug
+      makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
   );
 
   if (companyJobs.length === 0) {
     notFound();
   }
 
-  const companyName = companyJobs[0].restaurant_name;
+  const companyName = getCompanyName(companyJobs[0].restaurant_name);
 
   return (
     <main
@@ -95,12 +105,7 @@ export default async function CompanyPage({
         Browse open restaurant jobs at {companyName}.
       </p>
 
-      <div
-        style={{
-          display: "grid",
-          gap: 20,
-        }}
-      >
+      <div style={{ display: "grid", gap: 20 }}>
         {companyJobs.map((job: any) => (
           <Link
             key={job.id}
@@ -114,41 +119,16 @@ export default async function CompanyPage({
               backgroundColor: "#fff",
             }}
           >
-            <h2
-              style={{
-                margin: 0,
-                color: "#222",
-              }}
-            >
-              {job.title}
-            </h2>
+            <h2 style={{ margin: 0, color: "#222" }}>{job.title}</h2>
 
-            <p
-              style={{
-                marginTop: 10,
-                color: "#555",
-              }}
-            >
+            <p style={{ marginTop: 10, color: "#555" }}>
               {job.city}, {job.state}
             </p>
 
-            {job.role_category && (
-              <p
-                style={{
-                  fontWeight: 700,
-                }}
-              >
-                {job.role_category}
-              </p>
-            )}
+            {job.role_category && <p style={{ fontWeight: 700 }}>{job.role_category}</p>}
 
             {job.pay_range && (
-              <p
-                style={{
-                  color: "#35806e",
-                  fontWeight: 800,
-                }}
-              >
+              <p style={{ color: "#35806e", fontWeight: 800 }}>
                 {job.pay_range}
               </p>
             )}
