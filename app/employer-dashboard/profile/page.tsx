@@ -899,26 +899,63 @@ Leadership development`}
             </section>
 
             {isEditing ? (
-              <section style={homeCardStyle}>
-                <div className="rn-profile-save-row">
-                  <button
-                    type="button"
-                    style={homeSecondaryButton}
-                    className="rn-btn-secondary"
-                    onClick={handleCancelEdit}
-                    disabled={isSaving}
-                  >
-                    Cancel
-                  </button>
+              <section
+                style={{
+                  ...homeCardStyle,
+                  padding: "20px 28px",
+                }}
+              >
+                <div
+                  className="rn-profile-save-row"
+                  style={{
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 800,
+                        fontSize: 18,
+                        color: homeTheme.text,
+                        fontFamily: "var(--font-heading)",
+                      }}
+                    >
+                      Unsaved Changes
+                    </div>
 
-                  <button
-                    type="submit"
-                    style={homePrimaryButton}
-                    className="rn-btn-primary"
-                    disabled={isSaving}
-                  >
-                    {isSaving ? "Saving…" : "Save Changes"}
-                  </button>
+                    <div
+                      style={{
+                        color: homeTheme.muted,
+                        fontSize: 14,
+                        marginTop: 4,
+                        fontFamily: "var(--font-body)",
+                      }}
+                    >
+                      Review your edits, then save your company profile.
+                    </div>
+                  </div>
+
+                  <div className="rn-profile-actions">
+                    <button
+                      type="button"
+                      style={homeSecondaryButton}
+                      className="rn-btn-secondary"
+                      onClick={handleCancelEdit}
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </button>
+
+                    <button
+                      type="submit"
+                      style={homePrimaryButton}
+                      className="rn-btn-primary"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? "Saving…" : "Save Changes"}
+                    </button>
+                  </div>
                 </div>
               </section>
             ) : null}
@@ -1091,9 +1128,11 @@ Leadership development`}
           }
 
           .rn-profile-save-row {
-            justify-content: stretch;
+            justify-content: stretch !important;
           }
 
+          .rn-profile-save-row > div,
+          .rn-profile-actions,
           .rn-profile-save-row button {
             width: 100%;
           }
