@@ -3,12 +3,14 @@ import { getSupabaseAdminClient } from "./supabaseAdmin";
 import { isMissingStatusColumnError, isPubliclyVisibleJob } from "./jobStatus";
 
 export type CompanyProfile = {
+  company_short_description: string | null;
   company_description: string | null;
   company_website: string | null;
   company_logo_url: string | null;
   headquarters: string | null;
   location_count: number | null;
   benefits_summary: string | null;
+  benefits_list: string | null;
 };
 
 export function getCompanyName(restaurantName: string | null | undefined) {
@@ -57,7 +59,7 @@ export async function getPublicJobs() {
   );
 }
 
-export async function getCompanyProfile(companyName: string) {
+export async function getCompanyProfile(companyName: string): Promise<CompanyProfile | null> {
   const brandName = getCompanyName(companyName);
   const supabaseAdmin = getSupabaseAdminClient();
 
@@ -66,7 +68,7 @@ export async function getCompanyProfile(companyName: string) {
   const { data, error } = await supabaseAdmin
     .from("employer_accounts")
     .select(
-      "company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary"
+      "company_short_description,company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary,benefits_list"
     )
     .eq("restaurant_brand_name", brandName)
     .not("company_description", "is", null)
@@ -78,5 +80,5 @@ export async function getCompanyProfile(companyName: string) {
     return null;
   }
 
-  return data?.[0] ?? null;
+  return (data?.[0] ?? null) as CompanyProfile | null;
 }
