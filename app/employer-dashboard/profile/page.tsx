@@ -608,29 +608,51 @@ export default function EmployerProfilePage() {
                   </label>
 
                   {form.company_logo_url ? (
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: 800,
-                          color: homeTheme.green,
-                          marginBottom: 4,
-                          fontFamily: "var(--font-body)",
-                        }}
-                      >
-                        Logo Uploaded
-                      </div>
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 16,
+    }}
+  >
+    <img
+      src={form.company_logo_url}
+      alt="Company Logo"
+      style={{
+        width: 72,
+        height: 72,
+        objectFit: "contain",
+        borderRadius: 14,
+        background: "#fff",
+        border: `1px solid ${homeTheme.border}`,
+        padding: 8,
+      }}
+    />
 
-                      <div
-                        style={{
-                          color: homeTheme.muted,
-                          fontSize: 14,
-                          fontFamily: "var(--font-body)",
-                        }}
-                      >
-                        Square PNG recommended
-                      </div>
-                    </div>
-                  ) : (
+    <div>
+      <div
+        style={{
+          fontWeight: 800,
+          color: homeTheme.green,
+          marginBottom: 4,
+          fontFamily: "var(--font-body)",
+        }}
+      >
+        Logo Uploaded
+      </div>
+
+      <div
+        style={{
+          color: homeTheme.muted,
+          fontSize: 14,
+          fontFamily: "var(--font-body)",
+        }}
+      >
+        Click Upload Logo to replace it
+      </div>
+    </div>
+  </div>
+) : (
                     <div>
                       <div
                         style={{
