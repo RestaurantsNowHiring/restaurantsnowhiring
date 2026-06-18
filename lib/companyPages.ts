@@ -12,8 +12,6 @@ export type CompanyProfile = {
   benefits_summary: string | null;
   benefits_list: string | null;
   company_cover_image_url: string | null;
-  cover_image_position_x: number | null;
-  cover_image_position_y: number | null;
 };
 
 export function getCompanyName(restaurantName: string | null | undefined) {
@@ -70,9 +68,8 @@ export async function getCompanyProfile(companyName: string): Promise<CompanyPro
 
   const { data, error } = await supabaseAdmin
     .from("employer_accounts")
-    .select(
-      "company_short_description,company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary,benefits_list,company_cover_image_url,cover_image_position_x,cover_image_position_y"
-    )
+   .select(
+  "company_short_description,company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary,benefits_list,company_cover_image_url")
     .eq("restaurant_brand_name", brandName)
     .not("company_description", "is", null)
     .order("updated_at", { ascending: false })
