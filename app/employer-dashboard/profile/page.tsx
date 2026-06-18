@@ -526,6 +526,7 @@ export default function EmployerProfilePage() {
                   type="tel"
                   value={form.phone}
                   onChange={(event) => updateField("phone", event.target.value)}
+                  disabled={!isEditing}
                   style={inputStyle}
                 />
               </div>
@@ -539,6 +540,7 @@ export default function EmployerProfilePage() {
                   type="email"
                   value={form.support_email}
                   onChange={(event) => updateField("support_email", event.target.value)}
+                  disabled={!isEditing}
                   placeholder={profile?.login_email ?? "jobs@restaurant.com"}
                   style={inputStyle}
                 />
@@ -606,6 +608,7 @@ export default function EmployerProfilePage() {
                     flexWrap: "wrap",
                   }}
                 >
+                  {isEditing ? (
                   <label
                     style={{
                       ...homeSecondaryButton,
@@ -628,6 +631,7 @@ export default function EmployerProfilePage() {
                       style={{ display: "none" }}
                     />
                   </label>
+                  ) : null}
 
                   {form.company_logo_url ? (
   <div
