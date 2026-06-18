@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getPublicJobs, makeCompanySlug } from "../../lib/companyPages";
-import { buildPageMetadata } from "../../lib/seo";
+import {
+  getCompanyName,
+  getPublicJobs,
+  makeCompanySlug,
+} from "../../lib/companyPages";import { buildPageMetadata } from "../../lib/seo";
 
 export const metadata: Metadata = buildPageMetadata({
   title: "Restaurant Companies Hiring Now | Restaurants Now Hiring",
@@ -24,7 +27,7 @@ export default async function CompaniesPage() {
   >();
 
   jobs.forEach((job: any) => {
-    const name = job.restaurant_name?.trim();
+    const name = getCompanyName(job.restaurant_name);
 
     if (!name) return;
 
