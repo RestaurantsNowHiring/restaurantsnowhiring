@@ -196,9 +196,15 @@ export async function GET(request: Request) {
     if (authUserError) throw new Error(authUserError.message || "Could not load auth user metadata.");
 
     const [profile, accountProfile] = await Promise.all([
-      getEmployerProfile(profileUserId, profileEmail, authUserData.user?.user_metadata ?? {}),
-      loadEmployerAccountProfile(context.accountId),
-    ]);
+  getEmployerProfile(
+    profileUserId,
+    profileEmail,
+    authUserData.user?.user_metadata ?? {},
+  ),
+  context.accountId
+    ? loadEmployerAccountProfile(context.accountId)
+    : Promise.resolve({}),
+]);
 
     return NextResponse.json({ profile: { ...profile, ...accountProfile } });
   } catch (error) {
@@ -283,6 +289,12 @@ export async function PUT(request: Request) {
 
     if (error) throw new Error(error.message || "Could not save employer profile.");
 
+    if (!context.accountId) {
+  return NextResponse.json(
+    { error: "No employer account selected." },
+    { status: 400 },
+  );
+}
     const { data: accountData, error: accountError } = await supabaseAdmin
       .from("employer_accounts")
       .update({
