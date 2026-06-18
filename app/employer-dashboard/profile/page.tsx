@@ -492,19 +492,53 @@ export default function EmployerProfilePage() {
               </div>
 
               <div>
-                <label htmlFor="company-logo-url" style={labelStyle}>
-                  Company logo
-                </label>
-                <input
-                  id="company-logo-url"
-                  type="url"
-                  value={form.company_logo_url}
-                  onChange={(event) => updateField("company_logo_url", event.target.value)}
-                  placeholder="Paste logo image URL for now"
-                  style={inputStyle}
-                />
-              </div>
+  <label style={labelStyle}>
+    Company Logo
+  </label>
 
+  <div
+    style={{
+      border: `1px solid ${homeTheme.border}`,
+      borderRadius: 18,
+      padding: 20,
+      background: "#fff",
+      display: "flex",
+      alignItems: "center",
+      gap: 18,
+    }}
+  >
+  <button
+    type="button"
+    style={{
+      ...homeSecondaryButton,
+      cursor: "pointer",
+    }}
+  >
+    Upload Logo
+  </button>
+
+  {form.company_logo_url ? (
+    <span
+      style={{
+        color: homeTheme.green,
+        fontWeight: 800,
+        fontFamily: "var(--font-body)",
+      }}
+    >
+      ✓ Logo uploaded
+    </span>
+  ) : (
+    <span
+      style={{
+        color: homeTheme.muted,
+        fontFamily: "var(--font-body)",
+      }}
+    >
+      No logo uploaded
+    </span>
+  )}
+</div>
+</div>
               <div className="rn-profile-form-full">
                 <label htmlFor="company-cover-image-url" style={labelStyle}>
                   Company cover image
