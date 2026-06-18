@@ -59,42 +59,16 @@ export async function getPublicJobs() {
 export async function getCompanyProfile(companyName: string) {
   const brandName = getCompanyName(companyName);
 
-  const fields =
-    "company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary";
+  console.log("Searching for:", brandName);
 
-  const queries = [
-    supabase
-      .from("employer_accounts")
-      .select(fields)
-      .eq("restaurant_brand_name", brandName)
-      .not("company_description", "is", null)
-      .limit(1)
-      .maybeSingle(),
+  const { data, error } = await supabase
+    .from("employer_accounts")
+    .select("*")
+    .eq("restaurant_brand_name", brandName)
+    .maybeSingle();
 
-    supabase
-      .from("employer_accounts")
-      .select(fields)
-      .eq("company_name", brandName)
-      .not("company_description", "is", null)
-      .limit(1)
-      .maybeSingle(),
+  console.log("PROFILE DATA:", data);
+  console.log("PROFILE ERROR:", error);
 
-    supabase
-      .from("employer_accounts")
-      .select(fields)
-      .eq("account_name", brandName)
-      .not("company_description", "is", null)
-      .limit(1)
-      .maybeSingle(),
-  ];
-
-  for (const query of queries) {
-    const { data, error } = await query;
-
-    if (!error && data) {
-      return data;
-    }
-  }
-
-  return null;
+  return data;
 }
