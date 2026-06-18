@@ -321,10 +321,11 @@ export default function EmployerProfilePage() {
       return;
     }
 
-    setProfile(payload.profile);
-    setForm(profileToForm(payload.profile));
-    setMessage({ type: "success", text: "Profile updated successfully." });
-    setIsSaving(false);
+  setProfile(payload.profile);
+  setForm(profileToForm(payload.profile));
+  setIsEditing(false);
+  setMessage({ type: "success", text: "Profile updated successfully." });
+  setIsSaving(false);
   }
 
   async function handleSendPasswordReset() {
