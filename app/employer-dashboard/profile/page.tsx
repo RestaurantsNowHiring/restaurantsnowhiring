@@ -492,53 +492,80 @@ export default function EmployerProfilePage() {
               </div>
 
               <div>
-  <label style={labelStyle}>
-    Company Logo
-  </label>
+                <label style={labelStyle}>Company Logo</label>
 
-  <div
-    style={{
-      border: `1px solid ${homeTheme.border}`,
-      borderRadius: 18,
-      padding: 20,
-      background: "#fff",
-      display: "flex",
-      alignItems: "center",
-      gap: 18,
-    }}
-  >
-  <button
-    type="button"
-    style={{
-      ...homeSecondaryButton,
-      cursor: "pointer",
-    }}
-  >
-    Upload Logo
-  </button>
+                <div
+                  style={{
+                    border: `1px solid ${homeTheme.border}`,
+                    borderRadius: 18,
+                    padding: 20,
+                    background: "#fff",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 18,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <button
+                    type="button"
+                    style={{
+                      ...homeSecondaryButton,
+                      minWidth: 160,
+                    }}
+                  >
+                    Upload Logo
+                  </button>
 
-  {form.company_logo_url ? (
-    <span
-      style={{
-        color: homeTheme.green,
-        fontWeight: 800,
-        fontFamily: "var(--font-body)",
-      }}
-    >
-      ✓ Logo uploaded
-    </span>
-  ) : (
-    <span
-      style={{
-        color: homeTheme.muted,
-        fontFamily: "var(--font-body)",
-      }}
-    >
-      No logo uploaded
-    </span>
-  )}
-</div>
-</div>
+                  {form.company_logo_url ? (
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 800,
+                          color: homeTheme.green,
+                          marginBottom: 4,
+                          fontFamily: "var(--font-body)",
+                        }}
+                      >
+                        Logo Uploaded
+                      </div>
+
+                      <div
+                        style={{
+                          color: homeTheme.muted,
+                          fontSize: 14,
+                          fontFamily: "var(--font-body)",
+                        }}
+                      >
+                        Square PNG recommended
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div
+                        style={{
+                          fontWeight: 800,
+                          color: homeTheme.text,
+                          marginBottom: 4,
+                          fontFamily: "var(--font-body)",
+                        }}
+                      >
+                        No logo uploaded
+                      </div>
+
+                      <div
+                        style={{
+                          color: homeTheme.muted,
+                          fontSize: 14,
+                          fontFamily: "var(--font-body)",
+                        }}
+                      >
+                        Upload a square logo for best results
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <div className="rn-profile-form-full">
                 <label htmlFor="company-cover-image-url" style={labelStyle}>
                   Company cover image
