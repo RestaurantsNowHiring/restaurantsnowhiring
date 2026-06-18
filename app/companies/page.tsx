@@ -1,7 +1,15 @@
-import Link from "next/link";
-import { getPublicJobs, makeCompanySlug } from "../../lib/companyPages";
 import type { Metadata } from "next";
+import Link from "next/link";
+
+import { getPublicJobs, makeCompanySlug } from "../../lib/companyPages";
 import { buildPageMetadata } from "../../lib/seo";
+
+export const metadata: Metadata = buildPageMetadata({
+  title: "Restaurant Companies Hiring Now | Restaurants Now Hiring",
+  description:
+    "Browse restaurant companies hiring now across the United States.",
+  path: "/companies",
+});
 
 export default async function CompaniesPage() {
   const jobs = await getPublicJobs();
