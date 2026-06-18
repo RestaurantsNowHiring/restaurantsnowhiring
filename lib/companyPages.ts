@@ -59,16 +59,20 @@ export async function getPublicJobs() {
 export async function getCompanyProfile(companyName: string) {
   const brandName = getCompanyName(companyName);
 
-  console.log("Searching for:", brandName);
-
   const { data, error } = await supabase
     .from("employer_accounts")
-    .select("*")
+    .select(
+      "company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary"
+    )
     .eq("restaurant_brand_name", brandName)
-    .maybeSingle();
+    .not("company_description", "is", null)
+    .order("updated_at", { ascending: false })
+    .limit(1);
 
-  console.log("PROFILE DATA:", data);
-  console.log("PROFILE ERROR:", error);
+  if (error) {
+    console.error("Company profile lookup failed", error);
+    return null;
+  }
 
-  return data;
+  return data?.[0] ?? null;
 }
