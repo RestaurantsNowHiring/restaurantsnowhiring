@@ -32,6 +32,8 @@ type EmployerProfile = {
   company_website: string | null;
   company_logo_url: string | null;
   company_cover_image_url: string | null;
+  cover_image_position_x: number | null;
+cover_image_position_y: number | null;
   headquarters: string | null;
   location_count: number | null;
   benefits_summary: string | null;
@@ -54,6 +56,8 @@ type ProfileFormState = {
   company_website: string;
   company_logo_url: string;
   company_cover_image_url: string;
+  cover_image_position_x: number;
+cover_image_position_y: number;
   headquarters: string;
   location_count: string;
   benefits_summary: string;
@@ -74,6 +78,8 @@ const emptyForm: ProfileFormState = {
   company_website: "",
   company_logo_url: "",
   company_cover_image_url: "",
+  cover_image_position_x: 50,
+cover_image_position_y: 50,
   headquarters: "",
   location_count: "",
   benefits_summary: "",
@@ -109,6 +115,11 @@ function profileToForm(profile: EmployerProfile | null): ProfileFormState {
     location_count: profile.location_count?.toString() ?? "",
     benefits_summary: profile.benefits_summary ?? "",
     benefits_list: profile.benefits_list ?? "",
+    cover_image_position_x:
+  profile.cover_image_position_x ?? 50,
+
+cover_image_position_y:
+  profile.cover_image_position_y ?? 50,
   };
 }
 
@@ -199,9 +210,15 @@ export default function EmployerProfilePage() {
     };
   }, [loadProfile, router]);
 
-  function updateField(field: keyof ProfileFormState, value: string) {
-    setForm((current) => ({ ...current, [field]: value }));
-  }
+ function updateField(
+  field: keyof ProfileFormState,
+  value: ProfileFormState[keyof ProfileFormState]
+) {
+  setForm((current) => ({
+    ...current,
+    [field]: value,
+  }));
+}
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -536,11 +553,51 @@ export default function EmployerProfilePage() {
           width: "100%",
           height: 220,
           objectFit: "cover",
+          objectPosition: `${form.cover_image_position_x}% ${form.cover_image_position_y}%`,
           display: "block",
         }}
       />
     </div>
   ) : null}
+</div>
+              <div style={{ marginTop: 20 }}>
+  <label style={labelStyle}>
+    Horizontal Focus ({form.cover_image_position_x}%)
+  </label>
+
+  <input
+    type="range"
+    min="0"
+    max="100"
+    value={form.cover_image_position_x}
+    onChange={(e) =>
+      updateField(
+        "cover_image_position_x",
+        Number(e.target.value)
+      )
+    }
+    style={{ width: "100%" }}
+  />
+</div>
+
+<div style={{ marginTop: 16 }}>
+  <label style={labelStyle}>
+    Vertical Focus ({form.cover_image_position_y}%)
+  </label>
+
+  <input
+    type="range"
+    min="0"
+    max="100"
+    value={form.cover_image_position_y}
+    onChange={(e) =>
+      updateField(
+        "cover_image_position_y",
+        Number(e.target.value)
+      )
+    }
+    style={{ width: "100%" }}
+  />
 </div>
 
               <div>
