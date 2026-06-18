@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { getSupabaseAdminClient } from "./supabaseAdmin";
 import { isMissingStatusColumnError, isPubliclyVisibleJob } from "./jobStatus";
 
 export type CompanyProfile = {
@@ -58,8 +59,11 @@ export async function getPublicJobs() {
 
 export async function getCompanyProfile(companyName: string) {
   const brandName = getCompanyName(companyName);
+  const supabaseAdmin = getSupabaseAdminClient();
 
-  const { data, error } = await supabase
+  if (!supabaseAdmin) return null;
+
+  const { data, error } = await supabaseAdmin
     .from("employer_accounts")
     .select(
       "company_description,company_website,company_logo_url,headquarters,location_count,benefits_summary"
