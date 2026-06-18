@@ -27,6 +27,12 @@ type EmployerProfile = {
   last_name: string | null;
   job_title: string | null;
   jobs_open: string | null;
+  company_description: string | null;
+  company_website: string | null;
+  company_logo_url: string | null;
+  headquarters: string | null;
+  location_count: number | null;
+  benefits_summary: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -40,6 +46,12 @@ type ProfileFormState = {
   state: string;
   postal_code: string;
   support_email: string;
+  company_description: string;
+  company_website: string;
+  company_logo_url: string;
+  headquarters: string;
+  location_count: string;
+  benefits_summary: string;
 };
 
 const emptyForm: ProfileFormState = {
@@ -51,60 +63,20 @@ const emptyForm: ProfileFormState = {
   state: "",
   postal_code: "",
   support_email: "",
+  company_description: "",
+  company_website: "",
+  company_logo_url: "",
+  headquarters: "",
+  location_count: "",
+  benefits_summary: "",
 };
 
 const STATES = [
-  "AL",
-  "AK",
-  "AZ",
-  "AR",
-  "CA",
-  "CO",
-  "CT",
-  "DE",
-  "FL",
-  "GA",
-  "HI",
-  "ID",
-  "IL",
-  "IN",
-  "IA",
-  "KS",
-  "KY",
-  "LA",
-  "ME",
-  "MD",
-  "MA",
-  "MI",
-  "MN",
-  "MS",
-  "MO",
-  "MT",
-  "NE",
-  "NV",
-  "NH",
-  "NJ",
-  "NM",
-  "NY",
-  "NC",
-  "ND",
-  "OH",
-  "OK",
-  "OR",
-  "PA",
-  "RI",
-  "SC",
-  "SD",
-  "TN",
-  "TX",
-  "UT",
-  "VT",
-  "VA",
-  "WA",
-  "WV",
-  "WI",
-  "WY",
-  "DC",
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID",
+  "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS",
+  "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
+  "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV",
+  "WI", "WY", "DC",
 ];
 
 function profileToForm(profile: EmployerProfile | null): ProfileFormState {
@@ -119,6 +91,12 @@ function profileToForm(profile: EmployerProfile | null): ProfileFormState {
     state: profile.state ?? "",
     postal_code: profile.postal_code ?? "",
     support_email: profile.support_email ?? "",
+    company_description: profile.company_description ?? "",
+    company_website: profile.company_website ?? "",
+    company_logo_url: profile.company_logo_url ?? "",
+    headquarters: profile.headquarters ?? "",
+    location_count: profile.location_count?.toString() ?? "",
+    benefits_summary: profile.benefits_summary ?? "",
   };
 }
 
@@ -127,11 +105,17 @@ function displayValue(value?: string | null) {
 }
 
 function employerAccountHeaders(token: string, contentType?: string) {
-  const selectedEmployerAccountId = typeof window === "undefined" ? null : window.localStorage.getItem("rn-selected-employer-account-id");
+  const selectedEmployerAccountId =
+    typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem("rn-selected-employer-account-id");
+
   return {
     Authorization: `Bearer ${token}`,
     ...(contentType ? { "Content-Type": contentType } : {}),
-    ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+    ...(selectedEmployerAccountId
+      ? { "X-Employer-Account-Id": selectedEmployerAccountId }
+      : {}),
   };
 }
 
@@ -161,10 +145,17 @@ export default function EmployerProfilePage() {
     const response = await fetch("/api/employer/profile", {
       headers: employerAccountHeaders(accessToken),
     });
-    const payload = (await response.json().catch(() => null)) as { profile?: EmployerProfile; error?: string } | null;
+
+    const payload = (await response.json().catch(() => null)) as {
+      profile?: EmployerProfile;
+      error?: string;
+    } | null;
 
     if (!response.ok || !payload?.profile) {
-      setMessage({ type: "error", text: payload?.error || "Could not load your employer profile." });
+      setMessage({
+        type: "error",
+        text: payload?.error || "Could not load your employer profile.",
+      });
       setAuthStatus("allowed");
       return;
     }
@@ -206,8 +197,12 @@ export default function EmployerProfilePage() {
     setMessage(null);
 
     const accessToken = await getAccessToken();
+
     if (!accessToken) {
-      setMessage({ type: "error", text: "Please sign in again before saving profile changes." });
+      setMessage({
+        type: "error",
+        text: "Please sign in again before saving profile changes.",
+      });
       setIsSaving(false);
       return;
     }
@@ -217,10 +212,17 @@ export default function EmployerProfilePage() {
       headers: employerAccountHeaders(accessToken, "application/json"),
       body: JSON.stringify(form),
     });
-    const payload = (await response.json().catch(() => null)) as { profile?: EmployerProfile; error?: string } | null;
+
+    const payload = (await response.json().catch(() => null)) as {
+      profile?: EmployerProfile;
+      error?: string;
+    } | null;
 
     if (!response.ok || !payload?.profile) {
-      setMessage({ type: "error", text: payload?.error || "Could not save your employer profile." });
+      setMessage({
+        type: "error",
+        text: payload?.error || "Could not save your employer profile.",
+      });
       setIsSaving(false);
       return;
     }
@@ -236,8 +238,12 @@ export default function EmployerProfilePage() {
     setMessage(null);
 
     const accessToken = await getAccessToken();
+
     if (!accessToken) {
-      setMessage({ type: "error", text: "Please sign in again before requesting a password reset." });
+      setMessage({
+        type: "error",
+        text: "Please sign in again before requesting a password reset.",
+      });
       setIsSendingReset(false);
       return;
     }
@@ -246,15 +252,25 @@ export default function EmployerProfilePage() {
       method: "POST",
       headers: employerAccountHeaders(accessToken),
     });
-    const payload = (await response.json().catch(() => null)) as { message?: string; error?: string } | null;
+
+    const payload = (await response.json().catch(() => null)) as {
+      message?: string;
+      error?: string;
+    } | null;
 
     if (!response.ok) {
-      setMessage({ type: "error", text: payload?.error || "Could not send a password reset email." });
+      setMessage({
+        type: "error",
+        text: payload?.error || "Could not send a password reset email.",
+      });
       setIsSendingReset(false);
       return;
     }
 
-    setMessage({ type: "success", text: payload?.message || "Password reset email sent." });
+    setMessage({
+      type: "success",
+      text: payload?.message || "Password reset email sent.",
+    });
     setIsSendingReset(false);
   }
 
@@ -272,6 +288,15 @@ export default function EmployerProfilePage() {
     fontSize: 15,
     fontWeight: 700,
     boxSizing: "border-box",
+  };
+
+  const textareaStyle: CSSProperties = {
+    ...inputStyle,
+    minHeight: 120,
+    height: "auto",
+    padding: "14px",
+    resize: "vertical",
+    lineHeight: 1.5,
   };
 
   const labelStyle: CSSProperties = {
@@ -306,9 +331,10 @@ export default function EmployerProfilePage() {
               <p className="rn-profile-eyebrow">Employer Account</p>
               <h1 className="rn-profile-title">My Profile</h1>
               <p className="rn-profile-copy">
-                Manage your restaurant profile and account recovery settings for RestaurantsNowHiring.
+                Manage your restaurant profile and public company page settings for RestaurantsNowHiring.
               </p>
             </div>
+
             <div className="rn-profile-actions">
               <Link href="/employer-dashboard" style={homeSecondaryButton} className="rn-btn-secondary">
                 Back to Dashboard
@@ -334,7 +360,11 @@ export default function EmployerProfilePage() {
         {message ? (
           <div
             role={message.type === "error" ? "alert" : "status"}
-            className={message.type === "error" ? "rn-profile-alert rn-profile-alert-error" : "rn-profile-alert rn-profile-alert-success"}
+            className={
+              message.type === "error"
+                ? "rn-profile-alert rn-profile-alert-error"
+                : "rn-profile-alert rn-profile-alert-success"
+            }
           >
             {message.text}
           </div>
@@ -344,8 +374,9 @@ export default function EmployerProfilePage() {
           <section style={homeCardStyle}>
             <h2 className="rn-profile-section-title">Edit Profile</h2>
             <p className="rn-profile-section-copy">
-              Update the employer contact and location details shown around your hiring account. Billing, admin, and Stripe settings are not editable here.
+              Update the employer contact details and public company profile information shown on your company page.
             </p>
+
             <form onSubmit={handleSave} className="rn-profile-form">
               <div>
                 <label htmlFor="company-name" style={labelStyle}>
@@ -358,6 +389,7 @@ export default function EmployerProfilePage() {
                   style={inputStyle}
                 />
               </div>
+
               <div>
                 <label htmlFor="contact-name" style={labelStyle}>
                   Contact name
@@ -369,6 +401,7 @@ export default function EmployerProfilePage() {
                   style={inputStyle}
                 />
               </div>
+
               <div>
                 <label htmlFor="phone" style={labelStyle}>
                   Phone number
@@ -381,6 +414,7 @@ export default function EmployerProfilePage() {
                   style={inputStyle}
                 />
               </div>
+
               <div>
                 <label htmlFor="support-email" style={labelStyle}>
                   Support / contact email
@@ -394,6 +428,103 @@ export default function EmployerProfilePage() {
                   style={inputStyle}
                 />
               </div>
+
+              <div className="rn-profile-form-full rn-profile-divider">
+                <h2 className="rn-profile-section-title">Public Company Page</h2>
+                <p className="rn-profile-section-copy">
+                  These fields will appear on your public company profile page above your available jobs.
+                </p>
+              </div>
+
+              <div className="rn-profile-form-full">
+                <label htmlFor="company-description" style={labelStyle}>
+                  Company description
+                </label>
+                <textarea
+                  id="company-description"
+                  value={form.company_description}
+                  onChange={(event) => updateField("company_description", event.target.value)}
+                  placeholder="Tell candidates about your company, culture, and hiring needs."
+                  style={textareaStyle}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="company-website" style={labelStyle}>
+                  Company website
+                </label>
+                <input
+                  id="company-website"
+                  type="url"
+                  value={form.company_website}
+                  onChange={(event) => updateField("company_website", event.target.value)}
+                  placeholder="https://www.example.com"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="company-logo-url" style={labelStyle}>
+                  Company logo URL
+                </label>
+                <input
+                  id="company-logo-url"
+                  type="url"
+                  value={form.company_logo_url}
+                  onChange={(event) => updateField("company_logo_url", event.target.value)}
+                  placeholder="https://www.example.com/logo.png"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="headquarters" style={labelStyle}>
+                  Headquarters
+                </label>
+                <input
+                  id="headquarters"
+                  value={form.headquarters}
+                  onChange={(event) => updateField("headquarters", event.target.value)}
+                  placeholder="Glen Burnie, MD"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="location-count" style={labelStyle}>
+                  Number of locations
+                </label>
+                <input
+                  id="location-count"
+                  type="number"
+                  min="0"
+                  value={form.location_count}
+                  onChange={(event) => updateField("location_count", event.target.value)}
+                  placeholder="160"
+                  style={inputStyle}
+                />
+              </div>
+
+              <div className="rn-profile-form-full">
+                <label htmlFor="benefits-summary" style={labelStyle}>
+                  Benefits / perks summary
+                </label>
+                <textarea
+                  id="benefits-summary"
+                  value={form.benefits_summary}
+                  onChange={(event) => updateField("benefits_summary", event.target.value)}
+                  placeholder="Example: Flexible scheduling, leadership development, competitive pay, team member meals."
+                  style={textareaStyle}
+                />
+              </div>
+
+              <div className="rn-profile-form-full rn-profile-divider">
+                <h2 className="rn-profile-section-title">Business Location</h2>
+                <p className="rn-profile-section-copy">
+                  These details help organize your hiring account. They are not the same as individual job locations.
+                </p>
+              </div>
+
               <div className="rn-profile-form-full">
                 <label htmlFor="address" style={labelStyle}>
                   Business / location address
@@ -405,17 +536,29 @@ export default function EmployerProfilePage() {
                   style={inputStyle}
                 />
               </div>
+
               <div>
                 <label htmlFor="city" style={labelStyle}>
                   City
                 </label>
-                <input id="city" value={form.city} onChange={(event) => updateField("city", event.target.value)} style={inputStyle} />
+                <input
+                  id="city"
+                  value={form.city}
+                  onChange={(event) => updateField("city", event.target.value)}
+                  style={inputStyle}
+                />
               </div>
+
               <div>
                 <label htmlFor="state" style={labelStyle}>
                   State
                 </label>
-                <select id="state" value={form.state} onChange={(event) => updateField("state", event.target.value)} style={inputStyle}>
+                <select
+                  id="state"
+                  value={form.state}
+                  onChange={(event) => updateField("state", event.target.value)}
+                  style={inputStyle}
+                >
                   <option value="">Select state</option>
                   {STATES.map((state) => (
                     <option key={state} value={state}>
@@ -424,6 +567,7 @@ export default function EmployerProfilePage() {
                   ))}
                 </select>
               </div>
+
               <div>
                 <label htmlFor="postal-code" style={labelStyle}>
                   ZIP / Postal code
@@ -435,6 +579,7 @@ export default function EmployerProfilePage() {
                   style={inputStyle}
                 />
               </div>
+
               <div className="rn-profile-form-actions">
                 <button type="submit" style={homePrimaryButton} className="rn-btn-primary" disabled={isSaving}>
                   {isSaving ? "Saving…" : "Save Profile"}
@@ -589,6 +734,12 @@ export default function EmployerProfilePage() {
         .rn-profile-form-full,
         .rn-profile-form-actions {
           grid-column: 1 / -1;
+        }
+
+        .rn-profile-divider {
+          border-top: 1px solid ${homeTheme.border};
+          margin-top: 10px;
+          padding-top: 20px;
         }
 
         @media (max-width: 680px) {
