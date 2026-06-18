@@ -904,6 +904,18 @@ Leadership development`}
           margin-top: 10px;
           width: 100%;
         }
+        .rn-cover-slider {
+  accent-color: ${homeTheme.green};
+  cursor: pointer;
+  width: 100%;
+}
+
+.rn-cover-controls > div {
+  background: #fff;
+  border: 1px solid ${homeTheme.border};
+  border-radius: 16px;
+  padding: 16px;
+}
 
         @media (max-width: 680px) {
           .rn-profile-summary,
