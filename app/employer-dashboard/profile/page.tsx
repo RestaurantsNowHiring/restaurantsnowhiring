@@ -709,7 +709,7 @@ export default function EmployerProfilePage() {
                 <label htmlFor="company-cover-image-url" style={labelStyle}>
                   Company cover image
                 </label>
-
+                {isEditing ? (
                 <label
                   style={{
                     ...homeSecondaryButton,
@@ -732,6 +732,7 @@ export default function EmployerProfilePage() {
                     style={{ display: "none" }}
                   />
                 </label>
+                ) : null}
 
                 {form.company_cover_image_url ? (
                   <div
