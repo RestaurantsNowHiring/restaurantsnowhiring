@@ -302,9 +302,7 @@ export default async function CompanyPage({
                     width: "100%",
                     height: "100%",
                     objectFit: "cover",
-                    objectPosition: `${profile.cover_image_position_x ?? 50}% ${
-                      profile.cover_image_position_y ?? 50
-                    }%`,
+                   objectPosition: "center center",
                     display: "block",
                   }}
                 />
