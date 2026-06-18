@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { getPublicJobs, makeCompanySlug } from "../../lib/companyPages";
+import type { Metadata } from "next";
+import { buildPageMetadata } from "../../lib/seo";
 
 export default async function CompaniesPage() {
   const jobs = await getPublicJobs();
