@@ -137,9 +137,10 @@ export default function EmployerProfilePage() {
   const [profile, setProfile] = useState<EmployerProfile | null>(null);
   const [form, setForm] = useState<ProfileFormState>(emptyForm);
   const [isSaving, setIsSaving] = useState(false);
-  const [isSendingReset, setIsSendingReset] = useState(false);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
-
+const [isSendingReset, setIsSendingReset] = useState(false);
+const [uploadingLogo, setUploadingLogo] = useState(false);
+const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  
   async function getAccessToken() {
     const { data } = await supabase.auth.getSession();
     return data.session?.access_token ?? null;
@@ -205,7 +206,42 @@ export default function EmployerProfilePage() {
       [field]: value,
     }));
   }
+async function uploadLogo(file: File) {
+  try {
+    setUploadingLogo(true);
+    setMessage(null);
 
+    const fileExt = file.name.split(".").pop();
+    const fileName = `logos/${Date.now()}.${fileExt}`;
+
+    const { error } = await supabase.storage
+      .from("company-assets")
+      .upload(fileName, file, {
+        upsert: true,
+      });
+
+    if (error) throw error;
+
+    const { data } = supabase.storage
+      .from("company-assets")
+      .getPublicUrl(fileName);
+
+    updateField("company_logo_url", data.publicUrl);
+
+    setMessage({
+      type: "success",
+      text: "Logo uploaded. Click Save Profile to keep this change.",
+    });
+  } catch (error) {
+    console.error(error);
+    setMessage({
+      type: "error",
+      text: "Could not upload logo.",
+    });
+  } finally {
+    setUploadingLogo(false);
+  }
+}
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setIsSaving(true);
@@ -506,15 +542,28 @@ export default function EmployerProfilePage() {
                     flexWrap: "wrap",
                   }}
                 >
-                  <button
-                    type="button"
-                    style={{
-                      ...homeSecondaryButton,
-                      minWidth: 160,
-                    }}
-                  >
-                    Upload Logo
-                  </button>
+                  <label
+  style={{
+    ...homeSecondaryButton,
+    minWidth: 160,
+    cursor: uploadingLogo ? "not-allowed" : "pointer",
+    opacity: uploadingLogo ? 0.7 : 1,
+    textAlign: "center",
+  }}
+>
+  {uploadingLogo ? "Uploading…" : "Upload Logo"}
+
+  <input
+    type="file"
+    accept="image/png,image/jpeg,image/webp"
+    disabled={uploadingLogo}
+    onChange={(event) => {
+      const file = event.target.files?.[0];
+      if (file) void uploadLogo(file);
+    }}
+    style={{ display: "none" }}
+  />
+</label>
 
                   {form.company_logo_url ? (
                     <div>
