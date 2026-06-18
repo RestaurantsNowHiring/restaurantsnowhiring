@@ -1,6 +1,38 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+
 import { getPublicJobs, makeCompanySlug } from "../../../lib/companyPages";
+import { buildPageMetadata } from "../../../lib/seo";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: { companySlug: string };
+}): Promise<Metadata> {
+  const jobs = await getPublicJobs();
+
+  const companyJobs = jobs.filter(
+    (job: any) =>
+      makeCompanySlug(job.restaurant_name || "") === params.companySlug
+  );
+
+  if (companyJobs.length === 0) {
+    return buildPageMetadata({
+      title: "Restaurant Jobs | Restaurants Now Hiring",
+      description: "Browse restaurant jobs hiring now.",
+      path: `/companies/${params.companySlug}`,
+    });
+  }
+
+  const companyName = companyJobs[0].restaurant_name;
+
+  return buildPageMetadata({
+    title: `${companyName} Jobs | Restaurants Now Hiring`,
+    description: `Browse restaurant jobs at ${companyName}, including hourly and management positions.`,
+    path: `/companies/${params.companySlug}`,
+  });
+}
 
 export default async function CompanyPage({
   params,
