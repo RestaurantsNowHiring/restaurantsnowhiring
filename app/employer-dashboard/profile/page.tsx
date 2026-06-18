@@ -502,6 +502,47 @@ export default function EmployerProfilePage() {
                 />
               </div>
 
+              <div className="rn-profile-form-full">
+  <label htmlFor="company-cover-image-url" style={labelStyle}>
+    Company Cover Image URL
+  </label>
+
+  <input
+    id="company-cover-image-url"
+    type="url"
+    value={form.company_cover_image_url}
+    onChange={(event) =>
+      updateField("company_cover_image_url", event.target.value)
+    }
+    placeholder="https://www.example.com/cover-image.jpg"
+    style={inputStyle}
+  />
+
+  {form.company_cover_image_url ? (
+    <div
+      style={{
+        marginTop: 14,
+        borderRadius: 18,
+        overflow: "hidden",
+        border: `1px solid ${homeTheme.border}`,
+        backgroundColor: "#fff",
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={form.company_cover_image_url}
+        alt="Company cover preview"
+        style={{
+          width: "100%",
+          height: 220,
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+    </div>
+  ) : null}
+</div>
+
               <div>
                 <label htmlFor="headquarters" style={labelStyle}>
                   Headquarters
