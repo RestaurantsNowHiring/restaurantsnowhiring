@@ -562,6 +562,7 @@ export default function EmployerProfilePage() {
                   id="company-short-description"
                   value={form.company_short_description}
                   onChange={(event) => updateField("company_short_description", event.target.value)}
+                  disabled={!isEditing}
                   placeholder="Short summary shown at the top of your company page. Aim for 1–3 sentences."
                   style={textareaStyle}
                 />
@@ -575,6 +576,7 @@ export default function EmployerProfilePage() {
                   id="company-description"
                   value={form.company_description}
                   onChange={(event) => updateField("company_description", event.target.value)}
+                  disabled={!isEditing}
                   placeholder="Tell candidates about your company, culture, story, and hiring needs."
                   style={textareaStyle}
                 />
@@ -589,6 +591,7 @@ export default function EmployerProfilePage() {
                   type="url"
                   value={form.company_website}
                   onChange={(event) => updateField("company_website", event.target.value)}
+                  disabled={!isEditing}
                   placeholder="https://www.example.com"
                   style={inputStyle}
                 />
@@ -769,6 +772,7 @@ export default function EmployerProfilePage() {
                   id="headquarters"
                   value={form.headquarters}
                   onChange={(event) => updateField("headquarters", event.target.value)}
+                  disabled={!isEditing}
                   placeholder="Glen Burnie, MD"
                   style={inputStyle}
                 />
@@ -784,6 +788,7 @@ export default function EmployerProfilePage() {
                   min="0"
                   value={form.location_count}
                   onChange={(event) => updateField("location_count", event.target.value)}
+                  disabled={!isEditing}
                   placeholder="160"
                   style={inputStyle}
                 />
@@ -797,6 +802,7 @@ export default function EmployerProfilePage() {
                   id="benefits-summary"
                   value={form.benefits_summary}
                   onChange={(event) => updateField("benefits_summary", event.target.value)}
+                  disabled={!isEditing}
                   placeholder="Short intro to your benefits and teammate experience."
                   style={textareaStyle}
                 />
@@ -810,6 +816,7 @@ export default function EmployerProfilePage() {
                   id="benefits-list"
                   value={form.benefits_list}
                   onChange={(event) => updateField("benefits_list", event.target.value)}
+                  disabled={!isEditing}
                   placeholder={`Competitive pay
 Flexible scheduling
 Growth opportunities
@@ -833,6 +840,7 @@ Leadership development`}
                   id="address"
                   value={form.address}
                   onChange={(event) => updateField("address", event.target.value)}
+                  disabled={!isEditing}
                   style={inputStyle}
                 />
               </div>
@@ -845,6 +853,7 @@ Leadership development`}
                   id="city"
                   value={form.city}
                   onChange={(event) => updateField("city", event.target.value)}
+                  disabled={!isEditing}
                   style={inputStyle}
                 />
               </div>
@@ -857,6 +866,7 @@ Leadership development`}
                   id="state"
                   value={form.state}
                   onChange={(event) => updateField("state", event.target.value)}
+                  disabled={!isEditing}
                   style={inputStyle}
                 >
                   <option value="">Select state</option>
@@ -876,6 +886,7 @@ Leadership development`}
                   id="postal-code"
                   value={form.postal_code}
                   onChange={(event) => updateField("postal_code", event.target.value)}
+                  disabled={!isEditing}
                   style={inputStyle}
                 />
               </div>
