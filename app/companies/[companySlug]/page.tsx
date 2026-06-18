@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import JobsFilterPanel from "../../components/JobsFilterPanel";
 import {
   getCompanyName,
+  getCompanyProfile,
   getPublicJobs,
   makeCompanySlug,
 } from "../../../lib/companyPages";
@@ -40,10 +41,13 @@ export async function generateMetadata({
   }
 
   const companyName = getCompanyName(companyJobs[0].restaurant_name);
+  const profile = await getCompanyProfile(companyName);
 
   return buildPageMetadata({
     title: `${companyName} Jobs | Restaurants Now Hiring`,
-    description: `Browse restaurant jobs at ${companyName}, including hourly and management positions.`,
+    description:
+      profile?.company_description ||
+      `Browse restaurant jobs at ${companyName}, including hourly and management positions.`,
     path: `/companies/${companySlug}`,
   });
 }
@@ -68,6 +72,7 @@ export default async function CompanyPage({
   }
 
   const companyName = getCompanyName(companyJobs[0].restaurant_name);
+  const profile = await getCompanyProfile(companyName);
 
   const slugById = buildUniqueJobSlugMap(companyJobs);
 
@@ -75,6 +80,22 @@ export default async function CompanyPage({
     ...job,
     slug: slugById.get(job.id) ?? job.id,
   }));
+
+  const uniqueLocations = new Set(
+    companyJobs
+      .map((job: any) => [job.city, job.state].filter(Boolean).join(", "))
+      .filter(Boolean)
+  );
+
+  const logoInitials = companyName
+    .split(/\s+/)
+    .map((word) => word[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  const locationCount = profile?.location_count ?? uniqueLocations.size;
 
   return (
     <main
@@ -99,46 +120,158 @@ export default async function CompanyPage({
             ← All Companies
           </Link>
 
-          <p
+          <div
             style={{
-              color: homeTheme.green,
-              fontWeight: 900,
-              letterSpacing: 0.8,
-              textTransform: "uppercase",
-              marginTop: 28,
-              marginBottom: 8,
+              marginTop: 24,
+              backgroundColor: "#f6f5f3",
+              border: "1px solid rgba(0,0,0,.10)",
+              borderRadius: 22,
+              padding: 26,
+              boxShadow: "0 18px 40px rgba(0,0,0,.10)",
+              display: "grid",
+              gridTemplateColumns: "auto 1fr",
+              gap: 22,
+              alignItems: "start",
             }}
           >
-            Company Profile
-          </p>
+            <div
+              style={{
+                width: 92,
+                height: 92,
+                borderRadius: 22,
+                backgroundColor: "#ffffff",
+                border: "1px solid rgba(0,0,0,.10)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                color: homeTheme.green,
+                fontFamily: "var(--font-heading)",
+                fontSize: 34,
+                fontWeight: 900,
+                boxShadow: "0 10px 24px rgba(0,0,0,.08)",
+              }}
+            >
+              {profile?.company_logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.company_logo_url}
+                  alt={`${companyName} logo`}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    padding: 12,
+                    boxSizing: "border-box",
+                  }}
+                />
+              ) : (
+                logoInitials
+              )}
+            </div>
 
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 54,
-              fontWeight: 700,
-              color: homeTheme.green,
-              lineHeight: 1.05,
-              fontFamily: "var(--font-heading)",
-            }}
-          >
-            {companyName}
-          </h1>
+            <div>
+              <p
+                style={{
+                  color: homeTheme.green,
+                  fontWeight: 900,
+                  letterSpacing: 0.8,
+                  textTransform: "uppercase",
+                  margin: 0,
+                }}
+              >
+                Company Profile
+              </p>
 
-          <p
-            style={{
-              marginTop: 12,
-              maxWidth: 760,
-              color: "rgba(0,0,0,.72)",
-              lineHeight: 1.6,
-              fontSize: 17,
-              fontFamily: "var(--font-body)",
-              fontWeight: 650,
-            }}
-          >
-            {companyName} is hiring restaurant teammates across multiple
-            locations. Browse open hourly and leadership roles below.
-          </p>
+              <h1
+                style={{
+                  margin: "8px 0 0",
+                  fontSize: 54,
+                  fontWeight: 700,
+                  color: homeTheme.green,
+                  lineHeight: 1.05,
+                  fontFamily: "var(--font-heading)",
+                }}
+              >
+                {companyName}
+              </h1>
+
+              <p
+                style={{
+                  marginTop: 12,
+                  maxWidth: 760,
+                  color: "rgba(0,0,0,.72)",
+                  lineHeight: 1.6,
+                  fontSize: 17,
+                  fontFamily: "var(--font-body)",
+                  fontWeight: 650,
+                }}
+              >
+                {profile?.company_description ||
+                  `${companyName} is hiring restaurant teammates across multiple locations. Browse open hourly and leadership roles below.`}
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  marginTop: 18,
+                }}
+              >
+                <ProfileStat label="Open jobs" value={companyJobs.length} />
+                <ProfileStat label="Locations" value={locationCount || "—"} />
+                <ProfileStat
+                  label="Headquarters"
+                  value={profile?.headquarters || "Not listed"}
+                />
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  marginTop: 18,
+                }}
+              >
+                {profile?.company_website ? (
+                  <a
+                    href={profile.company_website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{
+                      backgroundColor: homeTheme.green,
+                      color: "#ffffff",
+                      padding: "11px 16px",
+                      borderRadius: 14,
+                      textDecoration: "none",
+                      fontWeight: 900,
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    Company website ↗
+                  </a>
+                ) : null}
+
+                <a
+                  href="#available-jobs"
+                  style={{
+                    backgroundColor: "#ffffff",
+                    color: homeTheme.green,
+                    padding: "11px 16px",
+                    borderRadius: 14,
+                    textDecoration: "none",
+                    fontWeight: 900,
+                    fontFamily: "var(--font-body)",
+                    border: "1px solid rgba(0,0,0,.12)",
+                  }}
+                >
+                  View available jobs ↓
+                </a>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -172,18 +305,45 @@ export default async function CompanyPage({
                 fontSize: 16,
                 fontFamily: "var(--font-body)",
                 fontWeight: 650,
+                whiteSpace: "pre-wrap",
               }}
             >
-              Explore current restaurant job openings from {companyName} on
-              Restaurants Now Hiring. Open roles may include front-of-house,
-              back-of-house, catering, hourly leadership, and management
-              opportunities depending on location.
+              {profile?.company_description ||
+                `Explore current restaurant job openings from ${companyName} on Restaurants Now Hiring. Open roles may include front-of-house, back-of-house, catering, hourly leadership, and management opportunities depending on location.`}
             </p>
+
+            {profile?.benefits_summary ? (
+              <div style={{ marginTop: 22 }}>
+                <h3
+                  style={{
+                    margin: 0,
+                    color: homeTheme.green,
+                    fontFamily: "var(--font-heading)",
+                    fontSize: 26,
+                  }}
+                >
+                  Benefits & Perks
+                </h3>
+                <p
+                  style={{
+                    margin: "10px 0 0",
+                    color: "rgba(0,0,0,.72)",
+                    lineHeight: 1.7,
+                    fontSize: 16,
+                    fontFamily: "var(--font-body)",
+                    fontWeight: 650,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {profile.benefits_summary}
+                </p>
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
 
-      <section style={{ width: "100%", padding: "28px 0 0" }}>
+      <section id="available-jobs" style={{ width: "100%", padding: "28px 0 0" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
           <h2
             style={{
@@ -213,5 +373,49 @@ export default async function CompanyPage({
         </div>
       </section>
     </main>
+  );
+}
+
+function ProfileStat({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  return (
+    <div
+      style={{
+        backgroundColor: "#ffffff",
+        border: "1px solid rgba(0,0,0,.10)",
+        borderRadius: 14,
+        padding: "10px 13px",
+        minWidth: 130,
+      }}
+    >
+      <div
+        style={{
+          color: "rgba(0,0,0,.54)",
+          fontFamily: "var(--font-body)",
+          fontSize: 11,
+          fontWeight: 900,
+          letterSpacing: 0.45,
+          textTransform: "uppercase",
+        }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          color: homeTheme.green,
+          fontFamily: "var(--font-body)",
+          fontSize: 16,
+          fontWeight: 900,
+          marginTop: 4,
+        }}
+      >
+        {value}
+      </div>
+    </div>
   );
 }
