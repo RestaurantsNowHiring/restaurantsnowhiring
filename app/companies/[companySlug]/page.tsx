@@ -17,6 +17,13 @@ type CompanyPageParams = {
   companySlug: string;
 };
 
+function getBenefitsList(value?: string | null) {
+  return (value ?? "")
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 export async function generateMetadata({
   params,
 }: {
@@ -46,6 +53,7 @@ export async function generateMetadata({
   return buildPageMetadata({
     title: `${companyName} Jobs | Restaurants Now Hiring`,
     description:
+      profile?.company_short_description ||
       profile?.company_description ||
       `Browse restaurant jobs at ${companyName}, including hourly and management positions.`,
     path: `/companies/${companySlug}`,
@@ -73,6 +81,7 @@ export default async function CompanyPage({
 
   const companyName = getCompanyName(companyJobs[0].restaurant_name);
   const profile = await getCompanyProfile(companyName);
+  const benefits = getBenefitsList(profile?.benefits_list);
 
   const slugById = buildUniqueJobSlugMap(companyJobs);
 
@@ -196,20 +205,22 @@ export default async function CompanyPage({
                 {companyName}
               </h1>
 
-              <p
-                style={{
-                  marginTop: 12,
-                  maxWidth: 760,
-                  color: "rgba(0,0,0,.72)",
-                  lineHeight: 1.6,
-                  fontSize: 17,
-                  fontFamily: "var(--font-body)",
-                  fontWeight: 650,
-                }}
-              >
-                {profile?.company_description ||
-                  `${companyName} is hiring restaurant teammates across multiple locations. Browse open hourly and leadership roles below.`}
-              </p>
+              {profile?.company_short_description ? (
+                <p
+                  style={{
+                    marginTop: 12,
+                    maxWidth: 760,
+                    color: "rgba(0,0,0,.72)",
+                    lineHeight: 1.6,
+                    fontSize: 17,
+                    fontFamily: "var(--font-body)",
+                    fontWeight: 650,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {profile.company_short_description}
+                </p>
+              ) : null}
 
               <div
                 style={{
@@ -275,73 +286,110 @@ export default async function CompanyPage({
         </div>
       </section>
 
-      <section style={{ width: "100%", padding: "22px 0 0" }}>
-        <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
-          <div
-            style={{
-              backgroundColor: "#f6f5f3",
-              border: "1px solid rgba(0,0,0,.10)",
-              borderRadius: 18,
-              padding: 24,
-              boxShadow: "0 18px 40px rgba(0,0,0,.10)",
-            }}
-          >
-            <h2
+      {profile?.company_description || profile?.benefits_summary || benefits.length > 0 ? (
+        <section style={{ width: "100%", padding: "22px 0 0" }}>
+          <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
+            <div
               style={{
-                margin: 0,
-                color: homeTheme.green,
-                fontFamily: "var(--font-heading)",
-                fontSize: 34,
+                backgroundColor: "#f6f5f3",
+                border: "1px solid rgba(0,0,0,.10)",
+                borderRadius: 18,
+                padding: 24,
+                boxShadow: "0 18px 40px rgba(0,0,0,.10)",
               }}
             >
-              About {companyName}
-            </h2>
+              {profile?.company_description ? (
+                <>
+                  <h2
+                    style={{
+                      margin: 0,
+                      color: homeTheme.green,
+                      fontFamily: "var(--font-heading)",
+                      fontSize: 34,
+                    }}
+                  >
+                    About {companyName}
+                  </h2>
 
-            <p
-              style={{
-                margin: "12px 0 0",
-                color: "rgba(0,0,0,.72)",
-                lineHeight: 1.7,
-                fontSize: 16,
-                fontFamily: "var(--font-body)",
-                fontWeight: 650,
-                whiteSpace: "pre-wrap",
-              }}
-            >
-              {profile?.company_description ||
-                `Explore current restaurant job openings from ${companyName} on Restaurants Now Hiring. Open roles may include front-of-house, back-of-house, catering, hourly leadership, and management opportunities depending on location.`}
-            </p>
+                  <p
+                    style={{
+                      margin: "12px 0 0",
+                      color: "rgba(0,0,0,.72)",
+                      lineHeight: 1.7,
+                      fontSize: 16,
+                      fontFamily: "var(--font-body)",
+                      fontWeight: 650,
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {profile.company_description}
+                  </p>
+                </>
+              ) : null}
 
-            {profile?.benefits_summary ? (
-              <div style={{ marginTop: 22 }}>
-                <h3
-                  style={{
-                    margin: 0,
-                    color: homeTheme.green,
-                    fontFamily: "var(--font-heading)",
-                    fontSize: 26,
-                  }}
-                >
-                  Benefits & Perks
-                </h3>
-                <p
-                  style={{
-                    margin: "10px 0 0",
-                    color: "rgba(0,0,0,.72)",
-                    lineHeight: 1.7,
-                    fontSize: 16,
-                    fontFamily: "var(--font-body)",
-                    fontWeight: 650,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {profile.benefits_summary}
-                </p>
-              </div>
-            ) : null}
+              {profile?.benefits_summary || benefits.length > 0 ? (
+                <div style={{ marginTop: profile?.company_description ? 26 : 0 }}>
+                  <h3
+                    style={{
+                      margin: 0,
+                      color: homeTheme.green,
+                      fontFamily: "var(--font-heading)",
+                      fontSize: 28,
+                    }}
+                  >
+                    Benefits & Perks
+                  </h3>
+
+                  {profile?.benefits_summary ? (
+                    <p
+                      style={{
+                        margin: "10px 0 0",
+                        color: "rgba(0,0,0,.72)",
+                        lineHeight: 1.7,
+                        fontSize: 16,
+                        fontFamily: "var(--font-body)",
+                        fontWeight: 650,
+                        whiteSpace: "pre-wrap",
+                      }}
+                    >
+                      {profile.benefits_summary}
+                    </p>
+                  ) : null}
+
+                  {benefits.length > 0 ? (
+                    <div
+                      style={{
+                        display: "grid",
+                        gap: 10,
+                        gridTemplateColumns:
+                          "repeat(auto-fit, minmax(220px, 1fr))",
+                        marginTop: 16,
+                      }}
+                    >
+                      {benefits.map((benefit) => (
+                        <div
+                          key={benefit}
+                          style={{
+                            backgroundColor: "#ffffff",
+                            border: "1px solid rgba(0,0,0,.10)",
+                            borderRadius: 14,
+                            padding: "12px 14px",
+                            color: "rgba(0,0,0,.76)",
+                            fontFamily: "var(--font-body)",
+                            fontWeight: 850,
+                          }}
+                        >
+                          ✓ {benefit}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <section id="available-jobs" style={{ width: "100%", padding: "28px 0 0" }}>
         <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 18px" }}>
