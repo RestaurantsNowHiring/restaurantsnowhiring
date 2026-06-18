@@ -1,8 +1,18 @@
 import { supabase } from "./supabase";
 import { isMissingStatusColumnError, isPubliclyVisibleJob } from "./jobStatus";
 
+export function getCompanyName(restaurantName: string | null | undefined) {
+  const name = restaurantName?.trim() ?? "";
+
+  if (name.toLowerCase().startsWith("mission bbq")) {
+    return "MISSION BBQ";
+  }
+
+  return name;
+}
+
 export function makeCompanySlug(name: string) {
-  return name
+  return getCompanyName(name)
     .trim()
     .toLowerCase()
     .replace(/[’']/g, "")
