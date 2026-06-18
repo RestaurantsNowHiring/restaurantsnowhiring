@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import JobsFilterPanel from "../../components/JobsFilterPanel";
 import {
   getCompanyName,
   getPublicJobs,
   makeCompanySlug,
 } from "../../../lib/companyPages";
+import { buildUniqueJobSlugMap } from "../../../lib/jobSlugs";
 import { buildPageMetadata } from "../../../lib/seo";
 import { homeTheme } from "../../styles/homepageDesignSystem";
 
@@ -66,6 +68,13 @@ export default async function CompanyPage({
   }
 
   const companyName = getCompanyName(companyJobs[0].restaurant_name);
+
+  const slugById = buildUniqueJobSlugMap(companyJobs);
+
+  const jobsWithSlugs = companyJobs.map((job: any) => ({
+    ...job,
+    slug: slugById.get(job.id) ?? job.id,
+  }));
 
   return (
     <main
@@ -196,94 +205,11 @@ export default async function CompanyPage({
               fontFamily: "var(--font-body)",
             }}
           >
-            {companyJobs.length} open job
-            {companyJobs.length === 1 ? "" : "s"}
+            Filter and search {companyJobs.length} open job
+            {companyJobs.length === 1 ? "" : "s"} at {companyName}.
           </p>
 
-          <div
-            style={{
-              display: "grid",
-              gap: 16,
-              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            }}
-          >
-            {companyJobs.map((job: any) => (
-              <Link
-                key={job.id}
-                href={`/jobs/${job.id}`}
-                style={{
-                  display: "block",
-                  padding: 22,
-                  border: "1px solid rgba(0,0,0,.10)",
-                  borderRadius: 18,
-                  textDecoration: "none",
-                  color: "inherit",
-                  backgroundColor: "#ffffff",
-                  boxShadow: "0 12px 28px rgba(0,0,0,.08)",
-                }}
-              >
-                <h3
-                  style={{
-                    margin: 0,
-                    color: "rgba(0,0,0,.84)",
-                    fontFamily: "var(--font-body)",
-                    fontSize: 20,
-                    fontWeight: 900,
-                  }}
-                >
-                  {job.title}
-                </h3>
-
-                <p
-                  style={{
-                    margin: "10px 0 0",
-                    color: "rgba(0,0,0,.62)",
-                    fontWeight: 800,
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  {[job.city, job.state].filter(Boolean).join(", ")}
-                </p>
-
-                {job.role_category && (
-                  <p
-                    style={{
-                      margin: "10px 0 0",
-                      color: "rgba(0,0,0,.60)",
-                      fontWeight: 750,
-                      fontFamily: "var(--font-body)",
-                    }}
-                  >
-                    {job.role_category}
-                  </p>
-                )}
-
-                {job.pay_range && (
-                  <p
-                    style={{
-                      margin: "14px 0 0",
-                      color: homeTheme.green,
-                      fontWeight: 900,
-                      fontFamily: "var(--font-body)",
-                    }}
-                  >
-                    {job.pay_range}
-                  </p>
-                )}
-
-                <p
-                  style={{
-                    margin: "16px 0 0",
-                    color: homeTheme.green,
-                    fontWeight: 900,
-                    fontFamily: "var(--font-body)",
-                  }}
-                >
-                  View job →
-                </p>
-              </Link>
-            ))}
-          </div>
+          <JobsFilterPanel jobs={jobsWithSlugs} />
         </div>
       </section>
     </main>
