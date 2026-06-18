@@ -32,8 +32,6 @@ type EmployerProfile = {
   company_website: string | null;
   company_logo_url: string | null;
   company_cover_image_url: string | null;
-  cover_image_position_x: number | null;
-  cover_image_position_y: number | null;
   headquarters: string | null;
   location_count: number | null;
   benefits_summary: string | null;
@@ -56,8 +54,6 @@ type ProfileFormState = {
   company_website: string;
   company_logo_url: string;
   company_cover_image_url: string;
-  cover_image_position_x: number;
-  cover_image_position_y: number;
   headquarters: string;
   location_count: string;
   benefits_summary: string;
@@ -78,8 +74,6 @@ const emptyForm: ProfileFormState = {
   company_website: "",
   company_logo_url: "",
   company_cover_image_url: "",
-  cover_image_position_x: 50,
-  cover_image_position_y: 50,
   headquarters: "",
   location_count: "",
   benefits_summary: "",
@@ -111,8 +105,6 @@ function profileToForm(profile: EmployerProfile | null): ProfileFormState {
     company_website: profile.company_website ?? "",
     company_logo_url: profile.company_logo_url ?? "",
     company_cover_image_url: profile.company_cover_image_url ?? "",
-    cover_image_position_x: profile.cover_image_position_x ?? 50,
-    cover_image_position_y: profile.cover_image_position_y ?? 50,
     headquarters: profile.headquarters ?? "",
     location_count: profile.location_count?.toString() ?? "",
     benefits_summary: profile.benefits_summary ?? "",
@@ -207,10 +199,7 @@ export default function EmployerProfilePage() {
     };
   }, [loadProfile, router]);
 
-  function updateField(
-    field: keyof ProfileFormState,
-    value: ProfileFormState[keyof ProfileFormState],
-  ) {
+  function updateField(field: keyof ProfileFormState, value: string) {
     setForm((current) => ({
       ...current,
       [field]: value,
@@ -504,21 +493,21 @@ export default function EmployerProfilePage() {
 
               <div>
                 <label htmlFor="company-logo-url" style={labelStyle}>
-                  Company logo URL
+                  Company logo
                 </label>
                 <input
                   id="company-logo-url"
                   type="url"
                   value={form.company_logo_url}
                   onChange={(event) => updateField("company_logo_url", event.target.value)}
-                  placeholder="https://www.example.com/logo.png"
+                  placeholder="Paste logo image URL for now"
                   style={inputStyle}
                 />
               </div>
 
               <div className="rn-profile-form-full">
                 <label htmlFor="company-cover-image-url" style={labelStyle}>
-                  Company Cover Image URL
+                  Company cover image
                 </label>
 
                 <input
@@ -528,7 +517,7 @@ export default function EmployerProfilePage() {
                   onChange={(event) =>
                     updateField("company_cover_image_url", event.target.value)
                   }
-                  placeholder="https://www.example.com/cover-image.jpg"
+                  placeholder="Paste cover image URL for now"
                   style={inputStyle}
                 />
 
@@ -548,55 +537,15 @@ export default function EmployerProfilePage() {
                       alt="Company cover preview"
                       style={{
                         width: "100%",
-                        height: 220,
+                        height: 260,
                         objectFit: "cover",
-                        objectPosition: `${form.cover_image_position_x}% ${form.cover_image_position_y}%`,
+                        objectPosition: "center center",
                         display: "block",
                       }}
                     />
                   </div>
                 ) : null}
               </div>
-
-              {form.company_cover_image_url ? (
-                <div className="rn-profile-form-full rn-cover-controls">
-                  <div>
-                    <label style={labelStyle} className="rn-cover-label">
-                      <span>Horizontal Focus</span>
-                      <strong>{form.cover_image_position_x}%</strong>
-                    </label>
-
-                    <input
-                      className="rn-cover-slider"
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={form.cover_image_position_x}
-                      onChange={(e) =>
-                        updateField("cover_image_position_x", Number(e.target.value))
-                      }
-                    />
-                  </div>
-
-                  <div>
-                    <label style={labelStyle} className="rn-cover-label">
-                      <span>Vertical Focus</span>
-                      <strong>{form.cover_image_position_y}%</strong>
-                    </label>
-
-                    <input
-                      className="rn-cover-slider"
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={form.cover_image_position_y}
-                      onChange={(e) =>
-                        updateField("cover_image_position_y", Number(e.target.value))
-                      }
-                    />
-                  </div>
-                </div>
-              ) : null}
 
               <div>
                 <label htmlFor="headquarters" style={labelStyle}>
@@ -879,48 +828,9 @@ Leadership development`}
           padding-top: 20px;
         }
 
-        .rn-cover-controls {
-          display: grid;
-          gap: 18px;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          margin-top: 18px;
-        }
-
-        .rn-cover-label {
-          align-items: center;
-          display: flex !important;
-          justify-content: space-between;
-        }
-
-        .rn-cover-label strong {
-          color: ${homeTheme.green};
-          font-size: 15px;
-          font-weight: 900;
-        }
-
-        .rn-cover-slider {
-          accent-color: ${homeTheme.green};
-          cursor: pointer;
-          margin-top: 10px;
-          width: 100%;
-        }
-        .rn-cover-slider {
-  accent-color: ${homeTheme.green};
-  cursor: pointer;
-  width: 100%;
-}
-
-.rn-cover-controls > div {
-  background: #fff;
-  border: 1px solid ${homeTheme.border};
-  border-radius: 16px;
-  padding: 16px;
-}
-
         @media (max-width: 680px) {
           .rn-profile-summary,
-          .rn-profile-form,
-          .rn-cover-controls {
+          .rn-profile-form {
             grid-template-columns: 1fr;
           }
         }
