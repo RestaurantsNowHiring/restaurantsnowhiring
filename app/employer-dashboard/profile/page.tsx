@@ -27,12 +27,14 @@ type EmployerProfile = {
   last_name: string | null;
   job_title: string | null;
   jobs_open: string | null;
+  company_short_description: string | null;
   company_description: string | null;
   company_website: string | null;
   company_logo_url: string | null;
   headquarters: string | null;
   location_count: number | null;
   benefits_summary: string | null;
+  benefits_list: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -46,12 +48,14 @@ type ProfileFormState = {
   state: string;
   postal_code: string;
   support_email: string;
+  company_short_description: string;
   company_description: string;
   company_website: string;
   company_logo_url: string;
   headquarters: string;
   location_count: string;
   benefits_summary: string;
+  benefits_list: string;
 };
 
 const emptyForm: ProfileFormState = {
@@ -63,12 +67,14 @@ const emptyForm: ProfileFormState = {
   state: "",
   postal_code: "",
   support_email: "",
+  company_short_description: "",
   company_description: "",
   company_website: "",
   company_logo_url: "",
   headquarters: "",
   location_count: "",
   benefits_summary: "",
+  benefits_list: "",
 };
 
 const STATES = [
@@ -91,12 +97,14 @@ function profileToForm(profile: EmployerProfile | null): ProfileFormState {
     state: profile.state ?? "",
     postal_code: profile.postal_code ?? "",
     support_email: profile.support_email ?? "",
+    company_short_description: profile.company_short_description ?? "",
     company_description: profile.company_description ?? "",
     company_website: profile.company_website ?? "",
     company_logo_url: profile.company_logo_url ?? "",
     headquarters: profile.headquarters ?? "",
     location_count: profile.location_count?.toString() ?? "",
     benefits_summary: profile.benefits_summary ?? "",
+    benefits_list: profile.benefits_list ?? "",
   };
 }
 
@@ -437,14 +445,27 @@ export default function EmployerProfilePage() {
               </div>
 
               <div className="rn-profile-form-full">
+                <label htmlFor="company-short-description" style={labelStyle}>
+                  Short Company Summary
+                </label>
+                <textarea
+                  id="company-short-description"
+                  value={form.company_short_description}
+                  onChange={(event) => updateField("company_short_description", event.target.value)}
+                  placeholder="Short summary shown at the top of your company page. Aim for 1–3 sentences."
+                  style={textareaStyle}
+                />
+              </div>
+
+              <div className="rn-profile-form-full">
                 <label htmlFor="company-description" style={labelStyle}>
-                  Company description
+                  Full About Company
                 </label>
                 <textarea
                   id="company-description"
                   value={form.company_description}
                   onChange={(event) => updateField("company_description", event.target.value)}
-                  placeholder="Tell candidates about your company, culture, and hiring needs."
+                  placeholder="Tell candidates about your company, culture, story, and hiring needs."
                   style={textareaStyle}
                 />
               </div>
@@ -507,13 +528,29 @@ export default function EmployerProfilePage() {
 
               <div className="rn-profile-form-full">
                 <label htmlFor="benefits-summary" style={labelStyle}>
-                  Benefits / perks summary
+                  Benefits / Perks Summary
                 </label>
                 <textarea
                   id="benefits-summary"
                   value={form.benefits_summary}
                   onChange={(event) => updateField("benefits_summary", event.target.value)}
-                  placeholder="Example: Flexible scheduling, leadership development, competitive pay, team member meals."
+                  placeholder="Short intro to your benefits and teammate experience."
+                  style={textareaStyle}
+                />
+              </div>
+
+              <div className="rn-profile-form-full">
+                <label htmlFor="benefits-list" style={labelStyle}>
+                  Benefits & Perks List
+                </label>
+                <textarea
+                  id="benefits-list"
+                  value={form.benefits_list}
+                  onChange={(event) => updateField("benefits_list", event.target.value)}
+                  placeholder={`Competitive pay
+Flexible scheduling
+Growth opportunities
+Leadership development`}
                   style={textareaStyle}
                 />
               </div>
