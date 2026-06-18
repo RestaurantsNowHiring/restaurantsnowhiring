@@ -115,9 +115,6 @@ function profileToForm(profile: EmployerProfile | null): ProfileFormState {
 function displayValue(value?: string | null) {
   return value?.trim() || "—";
 }
-function displayMultilineValue(value?: string | null) {
-  return value?.trim() || "Not added yet.";
-}
 
 function employerAccountHeaders(token: string, contentType?: string) {
   const selectedEmployerAccountId =
@@ -401,18 +398,19 @@ export default function EmployerProfilePage() {
     marginBottom: 7,
     textTransform: "uppercase",
   };
+
   const readOnlyFieldStyle: CSSProperties = {
-  border: `1px solid ${homeTheme.border}`,
-  borderRadius: 16,
-  background: "#fff",
-  padding: "14px 16px",
-  color: homeTheme.text,
-  fontFamily: "var(--font-body)",
-  fontSize: 15,
-  fontWeight: 800,
-  lineHeight: 1.45,
-  whiteSpace: "pre-wrap",
-};
+    border: `1px solid ${homeTheme.border}`,
+    borderRadius: 16,
+    background: "#fff",
+    padding: "14px 16px",
+    color: homeTheme.text,
+    fontFamily: "var(--font-body)",
+    fontSize: 15,
+    fontWeight: 800,
+    lineHeight: 1.45,
+    whiteSpace: "pre-wrap",
+  };
 
   if (authStatus === "loading") {
     return (
@@ -477,62 +475,15 @@ export default function EmployerProfilePage() {
         <div className="rn-profile-stack">
           <form onSubmit={handleSave} className="rn-profile-edit-form">
             {!isEditing ? (
-  <section style={homeCardStyle}>
-    <div className="rn-profile-edit-header">
-      <div>
-        <h2 className="rn-profile-section-title">My Profile</h2>
-        <p className="rn-profile-section-copy">
-          Review the employer contact details and public company page information shown to job seekers.
-        </p>
-      </div>
+              <section style={homeCardStyle}>
+                <div className="rn-profile-edit-header">
+                  <div>
+                    <h2 className="rn-profile-section-title">My Profile</h2>
+                    <p className="rn-profile-section-copy">
+                      Review the employer contact details and public company page information shown to job seekers.
+                    </p>
+                  </div>
 
-      <button
-        type="button"
-        style={homePrimaryButton}
-        className="rn-btn-primary"
-        onClick={() => setIsEditing(true)}
-      >
-        Edit Profile
-      </button>
-    </div>
-
-    <div className="rn-profile-form">
-      <div>
-        <label style={labelStyle}>Company / Restaurant name</label>
-        <div style={readOnlyFieldStyle}>{displayValue(form.company_name)}</div>
-      </div>
-
-      <div>
-        <label style={labelStyle}>Contact name</label>
-        <div style={readOnlyFieldStyle}>{displayValue(form.contact_name)}</div>
-      </div>
-
-      <div>
-        <label style={labelStyle}>Support / contact email</label>
-        <div style={readOnlyFieldStyle}>{displayValue(form.support_email)}</div>
-      </div>
-
-      <div>
-        <label style={labelStyle}>Phone number</label>
-        <div style={readOnlyFieldStyle}>{displayValue(form.phone)}</div>
-      </div>
-    </div>
-  </section>
-) : null}
-            <section style={homeCardStyle}>
-              <div className="rn-profile-edit-header">
-                <div>
-                  <h2 className="rn-profile-section-title">
-                    {isEditing ? "Editing Profile" : "My Profile"}
-                  </h2>
-                  <p className="rn-profile-section-copy">
-                    {isEditing
-                      ? "Make changes to your employer and public company page information."
-                      : "Review the employer contact details and public company page information shown to job seekers."}
-                  </p>
-                </div>
-
-                {!isEditing ? (
                   <button
                     type="button"
                     style={homePrimaryButton}
@@ -541,131 +492,157 @@ export default function EmployerProfilePage() {
                   >
                     Edit Profile
                   </button>
-                ) : null}
-              </div>
-
-              <div className="rn-profile-form">
-                <div>
-                  <label htmlFor="company-name" style={labelStyle}>
-                    Company / Restaurant name
-                  </label>
-                  <input
-                    id="company-name"
-                    value={form.company_name}
-                    onChange={(event) => updateField("company_name", event.target.value)}
-                    disabled={!isEditing}
-                    style={inputStyle}
-                  />
                 </div>
 
-                <div>
-                  <label htmlFor="contact-name" style={labelStyle}>
-                    Contact name
-                  </label>
-                  <input
-                    id="contact-name"
-                    value={form.contact_name}
-                    onChange={(event) => updateField("contact_name", event.target.value)}
-                    disabled={!isEditing}
-                    style={inputStyle}
-                  />
+                <div className="rn-profile-form">
+                  <div>
+                    <label style={labelStyle}>Company / Restaurant name</label>
+                    <div style={readOnlyFieldStyle}>{displayValue(form.company_name)}</div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Contact name</label>
+                    <div style={readOnlyFieldStyle}>{displayValue(form.contact_name)}</div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Support / contact email</label>
+                    <div style={readOnlyFieldStyle}>{displayValue(form.support_email)}</div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Phone number</label>
+                    <div style={readOnlyFieldStyle}>{displayValue(form.phone)}</div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {isEditing ? (
+              <section style={homeCardStyle}>
+                <div className="rn-profile-edit-header">
+                  <div>
+                    <h2 className="rn-profile-section-title">Editing Profile</h2>
+                    <p className="rn-profile-section-copy">
+                      Make changes to your employer and public company page information.
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <label htmlFor="phone" style={labelStyle}>
-                    Phone number
-                  </label>
-                  <input
-                    id="phone"
-                    type="tel"
-                    value={form.phone}
-                    onChange={(event) => updateField("phone", event.target.value)}
-                    disabled={!isEditing}
-                    style={inputStyle}
-                  />
-                </div>
+                <div className="rn-profile-form">
+                  <div>
+                    <label htmlFor="company-name" style={labelStyle}>
+                      Company / Restaurant name
+                    </label>
+                    <input
+                      id="company-name"
+                      value={form.company_name}
+                      onChange={(event) => updateField("company_name", event.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
 
-                <div>
-                  <label htmlFor="support-email" style={labelStyle}>
-                    Support / contact email
-                  </label>
-                  <input
-                    id="support-email"
-                    type="email"
-                    value={form.support_email}
-                    onChange={(event) => updateField("support_email", event.target.value)}
-                    disabled={!isEditing}
-                    placeholder={profile?.login_email ?? "jobs@restaurant.com"}
-                    style={inputStyle}
-                  />
-                </div>
+                  <div>
+                    <label htmlFor="contact-name" style={labelStyle}>
+                      Contact name
+                    </label>
+                    <input
+                      id="contact-name"
+                      value={form.contact_name}
+                      onChange={(event) => updateField("contact_name", event.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
 
-                <div className="rn-profile-form-full rn-profile-divider">
-                  <h2 className="rn-profile-section-title">Public Company Page</h2>
-                  <p className="rn-profile-section-copy">
-                    These fields will appear on your public company profile page above your available jobs.
-                  </p>
-                </div>
+                  <div>
+                    <label htmlFor="phone" style={labelStyle}>
+                      Phone number
+                    </label>
+                    <input
+                      id="phone"
+                      type="tel"
+                      value={form.phone}
+                      onChange={(event) => updateField("phone", event.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
 
-                <div className="rn-profile-form-full">
-                  <label htmlFor="company-short-description" style={labelStyle}>
-                    Short Company Summary
-                  </label>
-                  <textarea
-                    id="company-short-description"
-                    value={form.company_short_description}
-                    onChange={(event) => updateField("company_short_description", event.target.value)}
-                    disabled={!isEditing}
-                    placeholder="Short summary shown at the top of your company page. Aim for 1–3 sentences."
-                    style={textareaStyle}
-                  />
-                </div>
+                  <div>
+                    <label htmlFor="support-email" style={labelStyle}>
+                      Support / contact email
+                    </label>
+                    <input
+                      id="support-email"
+                      type="email"
+                      value={form.support_email}
+                      onChange={(event) => updateField("support_email", event.target.value)}
+                      placeholder={profile?.login_email ?? "jobs@restaurant.com"}
+                      style={inputStyle}
+                    />
+                  </div>
 
-                <div className="rn-profile-form-full">
-                  <label htmlFor="company-description" style={labelStyle}>
-                    Full About Company
-                  </label>
-                  <textarea
-                    id="company-description"
-                    value={form.company_description}
-                    onChange={(event) => updateField("company_description", event.target.value)}
-                    disabled={!isEditing}
-                    placeholder="Tell candidates about your company, culture, story, and hiring needs."
-                    style={textareaStyle}
-                  />
-                </div>
+                  <div className="rn-profile-form-full rn-profile-divider">
+                    <h2 className="rn-profile-section-title">Public Company Page</h2>
+                    <p className="rn-profile-section-copy">
+                      These fields will appear on your public company profile page above your available jobs.
+                    </p>
+                  </div>
 
-                <div>
-                  <label htmlFor="company-website" style={labelStyle}>
-                    Company website
-                  </label>
-                  <input
-                    id="company-website"
-                    type="url"
-                    value={form.company_website}
-                    onChange={(event) => updateField("company_website", event.target.value)}
-                    disabled={!isEditing}
-                    placeholder="https://www.example.com"
-                    style={inputStyle}
-                  />
-                </div>
+                  <div className="rn-profile-form-full">
+                    <label htmlFor="company-short-description" style={labelStyle}>
+                      Short Company Summary
+                    </label>
+                    <textarea
+                      id="company-short-description"
+                      value={form.company_short_description}
+                      onChange={(event) => updateField("company_short_description", event.target.value)}
+                      placeholder="Short summary shown at the top of your company page. Aim for 1–3 sentences."
+                      style={textareaStyle}
+                    />
+                  </div>
 
-                <div>
-                  <label style={labelStyle}>Company Logo</label>
+                  <div className="rn-profile-form-full">
+                    <label htmlFor="company-description" style={labelStyle}>
+                      Full About Company
+                    </label>
+                    <textarea
+                      id="company-description"
+                      value={form.company_description}
+                      onChange={(event) => updateField("company_description", event.target.value)}
+                      placeholder="Tell candidates about your company, culture, story, and hiring needs."
+                      style={textareaStyle}
+                    />
+                  </div>
 
-                  <div
-                    style={{
-                      border: `1px solid ${homeTheme.border}`,
-                      borderRadius: 18,
-                      padding: 20,
-                      background: "#fff",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 18,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {isEditing ? (
+                  <div>
+                    <label htmlFor="company-website" style={labelStyle}>
+                      Company website
+                    </label>
+                    <input
+                      id="company-website"
+                      type="url"
+                      value={form.company_website}
+                      onChange={(event) => updateField("company_website", event.target.value)}
+                      placeholder="https://www.example.com"
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>Company Logo</label>
+
+                    <div
+                      style={{
+                        border: `1px solid ${homeTheme.border}`,
+                        borderRadius: 18,
+                        padding: 20,
+                        background: "#fff",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 18,
+                        flexWrap: "wrap",
+                      }}
+                    >
                       <label
                         style={{
                           ...homeSecondaryButton,
@@ -688,40 +665,63 @@ export default function EmployerProfilePage() {
                           style={{ display: "none" }}
                         />
                       </label>
-                    ) : null}
 
-                    {form.company_logo_url ? (
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 16,
-                        }}
-                      >
-                        <img
-                          src={form.company_logo_url}
-                          alt="Company Logo"
+                      {form.company_logo_url ? (
+                        <div
                           style={{
-                            width: 72,
-                            height: 72,
-                            objectFit: "contain",
-                            borderRadius: 14,
-                            background: "#fff",
-                            border: `1px solid ${homeTheme.border}`,
-                            padding: 8,
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 16,
                           }}
-                        />
+                        >
+                          <img
+                            src={form.company_logo_url}
+                            alt="Company Logo"
+                            style={{
+                              width: 72,
+                              height: 72,
+                              objectFit: "contain",
+                              borderRadius: 14,
+                              background: "#fff",
+                              border: `1px solid ${homeTheme.border}`,
+                              padding: 8,
+                            }}
+                          />
 
+                          <div>
+                            <div
+                              style={{
+                                fontWeight: 800,
+                                color: homeTheme.green,
+                                marginBottom: 4,
+                                fontFamily: "var(--font-body)",
+                              }}
+                            >
+                              Logo Uploaded
+                            </div>
+
+                            <div
+                              style={{
+                                color: homeTheme.muted,
+                                fontSize: 14,
+                                fontFamily: "var(--font-body)",
+                              }}
+                            >
+                              Click Upload Logo to replace it
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
                         <div>
                           <div
                             style={{
                               fontWeight: 800,
-                              color: homeTheme.green,
+                              color: homeTheme.text,
                               marginBottom: 4,
                               fontFamily: "var(--font-body)",
                             }}
                           >
-                            Logo Uploaded
+                            No logo uploaded
                           </div>
 
                           <div
@@ -731,45 +731,18 @@ export default function EmployerProfilePage() {
                               fontFamily: "var(--font-body)",
                             }}
                           >
-                            {isEditing
-                              ? "Click Upload Logo to replace it"
-                              : "Logo shown on your public company page"}
+                            Upload a square logo for best results
                           </div>
                         </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div
-                          style={{
-                            fontWeight: 800,
-                            color: homeTheme.text,
-                            marginBottom: 4,
-                            fontFamily: "var(--font-body)",
-                          }}
-                        >
-                          No logo uploaded
-                        </div>
-
-                        <div
-                          style={{
-                            color: homeTheme.muted,
-                            fontSize: 14,
-                            fontFamily: "var(--font-body)",
-                          }}
-                        >
-                          Upload a square logo for best results
-                        </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                <div className="rn-profile-form-full">
-                  <label htmlFor="company-cover-image-url" style={labelStyle}>
-                    Company cover image
-                  </label>
+                  <div className="rn-profile-form-full">
+                    <label htmlFor="company-cover-image-url" style={labelStyle}>
+                      Company cover image
+                    </label>
 
-                  {isEditing ? (
                     <label
                       style={{
                         ...homeSecondaryButton,
@@ -792,95 +765,91 @@ export default function EmployerProfilePage() {
                         style={{ display: "none" }}
                       />
                     </label>
-                  ) : null}
 
-                  {form.company_cover_image_url ? (
-                    <div
-                      style={{
-                        marginTop: 14,
-                        borderRadius: 18,
-                        overflow: "hidden",
-                        border: `1px solid ${homeTheme.border}`,
-                        backgroundColor: "#fff",
-                      }}
-                    >
-                      <img
-                        src={form.company_cover_image_url}
-                        alt="Company cover preview"
+                    {form.company_cover_image_url ? (
+                      <div
                         style={{
-                          width: "100%",
-                          height: 320,
-                          objectFit: "cover",
-                          objectPosition: "center center",
-                          display: "block",
+                          marginTop: 14,
+                          borderRadius: 18,
+                          overflow: "hidden",
+                          border: `1px solid ${homeTheme.border}`,
+                          backgroundColor: "#fff",
                         }}
-                      />
-                    </div>
-                  ) : null}
-                </div>
+                      >
+                        <img
+                          src={form.company_cover_image_url}
+                          alt="Company cover preview"
+                          style={{
+                            width: "100%",
+                            height: 320,
+                            objectFit: "cover",
+                            objectPosition: "center center",
+                            display: "block",
+                          }}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
 
-                <div>
-                  <label htmlFor="headquarters" style={labelStyle}>
-                    Headquarters
-                  </label>
-                  <input
-                    id="headquarters"
-                    value={form.headquarters}
-                    onChange={(event) => updateField("headquarters", event.target.value)}
-                    disabled={!isEditing}
-                    placeholder="Glen Burnie, MD"
-                    style={inputStyle}
-                  />
-                </div>
+                  <div>
+                    <label htmlFor="headquarters" style={labelStyle}>
+                      Headquarters
+                    </label>
+                    <input
+                      id="headquarters"
+                      value={form.headquarters}
+                      onChange={(event) => updateField("headquarters", event.target.value)}
+                      placeholder="Glen Burnie, MD"
+                      style={inputStyle}
+                    />
+                  </div>
 
-                <div>
-                  <label htmlFor="location-count" style={labelStyle}>
-                    Number of locations
-                  </label>
-                  <input
-                    id="location-count"
-                    type="number"
-                    min="0"
-                    value={form.location_count}
-                    onChange={(event) => updateField("location_count", event.target.value)}
-                    disabled={!isEditing}
-                    placeholder="160"
-                    style={inputStyle}
-                  />
-                </div>
+                  <div>
+                    <label htmlFor="location-count" style={labelStyle}>
+                      Number of locations
+                    </label>
+                    <input
+                      id="location-count"
+                      type="number"
+                      min="0"
+                      value={form.location_count}
+                      onChange={(event) => updateField("location_count", event.target.value)}
+                      placeholder="160"
+                      style={inputStyle}
+                    />
+                  </div>
 
-                <div className="rn-profile-form-full">
-                  <label htmlFor="benefits-summary" style={labelStyle}>
-                    Benefits / Perks Summary
-                  </label>
-                  <textarea
-                    id="benefits-summary"
-                    value={form.benefits_summary}
-                    onChange={(event) => updateField("benefits_summary", event.target.value)}
-                    disabled={!isEditing}
-                    placeholder="Short intro to your benefits and teammate experience."
-                    style={textareaStyle}
-                  />
-                </div>
+                  <div className="rn-profile-form-full">
+                    <label htmlFor="benefits-summary" style={labelStyle}>
+                      Benefits / Perks Summary
+                    </label>
+                    <textarea
+                      id="benefits-summary"
+                      value={form.benefits_summary}
+                      onChange={(event) => updateField("benefits_summary", event.target.value)}
+                      placeholder="Short intro to your benefits and teammate experience."
+                      style={textareaStyle}
+                    />
+                  </div>
 
-                <div className="rn-profile-form-full">
-                  <label htmlFor="benefits-list" style={labelStyle}>
-                    Benefits & Perks List
-                  </label>
-                  <textarea
-                    id="benefits-list"
-                    value={form.benefits_list}
-                    onChange={(event) => updateField("benefits_list", event.target.value)}
-                    disabled={!isEditing}
-                    placeholder={`Competitive pay
+                  <div className="rn-profile-form-full">
+                    <label htmlFor="benefits-list" style={labelStyle}>
+                      Benefits & Perks List
+                    </label>
+                    <textarea
+                      id="benefits-list"
+                      value={form.benefits_list}
+                      onChange={(event) => updateField("benefits_list", event.target.value)}
+                      placeholder={`Competitive pay
 Flexible scheduling
 Growth opportunities
 Leadership development`}
-                    style={textareaStyle}
-                  />
+                      style={textareaStyle}
+                    />
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
+            ) : null}
 
             <section style={homeCardStyle}>
               <h2 className="rn-profile-section-title">Business Location</h2>
@@ -889,71 +858,91 @@ Leadership development`}
                 These details help organize your hiring account. They are not the same as individual job locations.
               </p>
 
-              <div className="rn-profile-form">
-                <div className="rn-profile-form-full">
-                  <label htmlFor="address" style={labelStyle}>
-                    Business / location address
-                  </label>
+              {!isEditing ? (
+                <div className="rn-profile-form">
+                  <div className="rn-profile-form-full">
+                    <label style={labelStyle}>Business / location address</label>
+                    <div style={readOnlyFieldStyle}>{displayValue(form.address)}</div>
+                  </div>
 
-                  <input
-                    id="address"
-                    value={form.address}
-                    onChange={(event) => updateField("address", event.target.value)}
-                    disabled={!isEditing}
-                    style={inputStyle}
-                  />
+                  <div>
+                    <label style={labelStyle}>City</label>
+                    <div style={readOnlyFieldStyle}>{displayValue(form.city)}</div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>State</label>
+                    <div style={readOnlyFieldStyle}>{displayValue(form.state)}</div>
+                  </div>
+
+                  <div>
+                    <label style={labelStyle}>ZIP / Postal code</label>
+                    <div style={readOnlyFieldStyle}>{displayValue(form.postal_code)}</div>
+                  </div>
                 </div>
+              ) : (
+                <div className="rn-profile-form">
+                  <div className="rn-profile-form-full">
+                    <label htmlFor="address" style={labelStyle}>
+                      Business / location address
+                    </label>
 
-                <div>
-                  <label htmlFor="city" style={labelStyle}>
-                    City
-                  </label>
+                    <input
+                      id="address"
+                      value={form.address}
+                      onChange={(event) => updateField("address", event.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
 
-                  <input
-                    id="city"
-                    value={form.city}
-                    onChange={(event) => updateField("city", event.target.value)}
-                    disabled={!isEditing}
-                    style={inputStyle}
-                  />
+                  <div>
+                    <label htmlFor="city" style={labelStyle}>
+                      City
+                    </label>
+
+                    <input
+                      id="city"
+                      value={form.city}
+                      onChange={(event) => updateField("city", event.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="state" style={labelStyle}>
+                      State
+                    </label>
+
+                    <select
+                      id="state"
+                      value={form.state}
+                      onChange={(event) => updateField("state", event.target.value)}
+                      style={inputStyle}
+                    >
+                      <option value="">Select state</option>
+
+                      {STATES.map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="postal-code" style={labelStyle}>
+                      ZIP / Postal code
+                    </label>
+
+                    <input
+                      id="postal-code"
+                      value={form.postal_code}
+                      onChange={(event) => updateField("postal_code", event.target.value)}
+                      style={inputStyle}
+                    />
+                  </div>
                 </div>
-
-                <div>
-                  <label htmlFor="state" style={labelStyle}>
-                    State
-                  </label>
-
-                  <select
-                    id="state"
-                    value={form.state}
-                    onChange={(event) => updateField("state", event.target.value)}
-                    disabled={!isEditing}
-                    style={inputStyle}
-                  >
-                    <option value="">Select state</option>
-
-                    {STATES.map((state) => (
-                      <option key={state} value={state}>
-                        {state}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="postal-code" style={labelStyle}>
-                    ZIP / Postal code
-                  </label>
-
-                  <input
-                    id="postal-code"
-                    value={form.postal_code}
-                    onChange={(event) => updateField("postal_code", event.target.value)}
-                    disabled={!isEditing}
-                    style={inputStyle}
-                  />
-                </div>
-              </div>
+              )}
             </section>
 
             {isEditing ? (
@@ -1080,10 +1069,6 @@ Leadership development`}
           display: flex;
           flex-wrap: wrap;
           gap: 10px;
-        }
-
-        .rn-profile-save-row {
-          justify-content: flex-end;
         }
 
         .rn-profile-alert {
