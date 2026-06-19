@@ -659,8 +659,6 @@ export default function EmployerProfilePage() {
 
                       <div
                         style={{
-                          border: `1px solid ${homeTheme.border}`,
-                          borderRadius: 18,
                           padding: 20,
                           display: "flex",
                           flexDirection: "column",
@@ -695,9 +693,7 @@ export default function EmployerProfilePage() {
   <div
     style={{
       marginTop: 14,
-      borderRadius: 18,
       overflow: "hidden",
-      backgroundColor: "#fff",
       padding: 28,
       display: "flex",
       flexDirection: "column",
