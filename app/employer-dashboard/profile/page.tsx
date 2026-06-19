@@ -531,8 +531,6 @@ export default function EmployerProfilePage() {
         >
           Visit Website →
         </a>
-     
-</div>
               </section>
             ) : null}
 
