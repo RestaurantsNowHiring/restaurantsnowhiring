@@ -516,21 +516,7 @@ export default function EmployerProfilePage() {
                   </div>
                 </div>
                
-      {form.company_website ? (
-        <a
-          href={form.company_website}
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: "inline-block",
-            marginTop: 22,
-            color: homeTheme.green,
-            fontWeight: 900,
-            textDecoration: "none",
-          }}
-        >
-          Visit Website →
-        </a>
+      
               </section>
             ) : null}
 
