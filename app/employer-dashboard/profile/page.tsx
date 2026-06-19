@@ -689,25 +689,29 @@ export default function EmployerProfilePage() {
                           />
                         </label>
 
-                      {form.company_logo_url ? (
+                     {form.company_logo_url ? (
   <div
     style={{
+      borderRadius: 18,
+      overflow: "hidden",
+      border: `1px solid ${homeTheme.border}`,
+      background: "#fff",
+      padding: 32,
       height: 180,
-      marginTop: 14,
+
       display: "flex",
-      flexDirection: "column",
       alignItems: "center",
       justifyContent: "center",
-      gap: 12,
     }}
   >
     <img
       src={form.company_logo_url}
       alt="Company Logo"
       style={{
-        width: 120,
-        height: 120,
+        width: 140,
+        height: 140,
         objectFit: "contain",
+        display: "block",
       }}
     />
   </div>
