@@ -49,8 +49,9 @@ export default function TopBanner() {
   }
 
   const navLinks: BannerLink[] = [
-    { href: "/jobs", label: "AVAILABLE JOBS" },
-    { href: !isLoggedIn ? "/employer-login?next=/post-job" : "/post-job", label: "POST A JOB" },
+  { href: "/jobs", label: "AVAILABLE JOBS" },
+  { href: "/companies", label: "COMPANIES" },
+  { href: !isLoggedIn ? "/employer-login?next=/post-job" : "/post-job", label: "POST A JOB" },
     ...(isLoggedIn ? [{ href: "/employer-dashboard", label: "DASHBOARD" }] : []),
     { href: "/pricing", label: "PRICING" },
     { href: "/about", label: "ABOUT" },

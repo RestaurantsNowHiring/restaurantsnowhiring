@@ -4,6 +4,7 @@ import { isMissingStatusColumnError, isNonExpiredPublicJob } from "../lib/jobSta
 import { absoluteUrl } from "../lib/seo";
 import { buildUniqueJobSlugMap, getJobPath } from "../lib/jobSlugs";
 import { restaurantRolePages } from "../lib/restaurantRolePages";
+import { makeCompanySlug } from "../lib/companyPages";
 import {
   getStateLandingPageByCode,
   MIN_JOBS_FOR_STATE_PAGE,
@@ -12,6 +13,7 @@ import {
 type SitemapJob = {
   id: string;
   title: string;
+  restaurant_name?: string | null;
   city: string;
   state: string;
   active: boolean;
@@ -23,20 +25,30 @@ type SitemapJob = {
 const staticRoutes = [
   "/",
   "/jobs",
+  "/companies",
   "/contact",
   "/about",
   "/pricing",
   "/terms",
   "/privacy",
 ];
+
 const roleRoutes = restaurantRolePages.map((role) => `/${role.slug}`);
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticEntries: MetadataRoute.Sitemap = staticRoutes.map((route) => ({
     url: absoluteUrl(route),
     lastModified: new Date(),
-    changeFrequency: route === "/jobs" || route === "/" ? "daily" : "monthly",
-    priority: route === "/" ? 1 : route === "/jobs" ? 0.9 : 0.6,
+    changeFrequency:
+      route === "/jobs" || route === "/" || route === "/companies"
+        ? "daily"
+        : "monthly",
+    priority:
+      route === "/"
+        ? 1
+        : route === "/jobs" || route === "/companies"
+          ? 0.9
+          : 0.6,
   }));
 
   const roleEntries: MetadataRoute.Sitemap = roleRoutes.map((route) => ({
@@ -48,14 +60,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const initialResult = await supabase
     .from("jobs")
-    .select("id,title,city,state,active,status,created_at,approved_at")
+    .select("id,title,restaurant_name,city,state,active,status,created_at,approved_at")
     .order("created_at", { ascending: false })
     .limit(5000);
 
   const result = isMissingStatusColumnError(initialResult.error)
     ? await supabase
         .from("jobs")
-        .select("id,title,city,state,active,created_at")
+        .select("id,title,restaurant_name,city,state,active,created_at")
         .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(5000)
@@ -64,6 +76,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const visibleJobs = ((result.data ?? []) as SitemapJob[]).filter((job) =>
     isNonExpiredPublicJob(job),
   );
+
   const slugById = buildUniqueJobSlugMap(visibleJobs);
 
   const jobEntries: MetadataRoute.Sitemap = visibleJobs.map((job) => ({
@@ -73,7 +86,26 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
+  const companySlugs = new Set<string>();
+
+  for (const job of visibleJobs) {
+    const companyName = job.restaurant_name?.trim();
+    if (!companyName) continue;
+
+    companySlugs.add(makeCompanySlug(companyName));
+  }
+
+  const companyEntries: MetadataRoute.Sitemap = Array.from(companySlugs)
+    .sort()
+    .map((slug) => ({
+      url: absoluteUrl(`/companies/${slug}`),
+      lastModified: new Date(),
+      changeFrequency: "daily" as const,
+      priority: 0.85,
+    }));
+
   const stateCounts = new Map<string, number>();
+
   for (const job of visibleJobs) {
     const code = job.state?.trim().toUpperCase();
     if (!code || !getStateLandingPageByCode(code)) continue;
@@ -94,5 +126,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       priority: 0.85,
     }));
 
-  return [...staticEntries, ...roleEntries, ...stateEntries, ...jobEntries];
+  return [
+    ...staticEntries,
+    ...roleEntries,
+    ...stateEntries,
+    ...companyEntries,
+    ...jobEntries,
+  ];
 }
