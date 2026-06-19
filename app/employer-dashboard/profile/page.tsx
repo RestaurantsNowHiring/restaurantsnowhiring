@@ -1,4 +1,4 @@
-"use client";
+  "use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -641,18 +641,6 @@ export default function EmployerProfilePage() {
                     </div>
 
                     <div>
-                      <label htmlFor="headquarters" style={labelStyle}>
-                        Headquarters
-                      </label>
-                      <input
-                        id="headquarters"
-                        value={form.headquarters}
-                        onChange={(event) => updateField("headquarters", event.target.value)}
-                        placeholder="Glen Burnie, MD"
-                        style={inputStyle}
-                      />
-                    </div>
-
                     <div>
                       <label htmlFor="location-count" style={labelStyle}>
                         Number of locations
@@ -668,7 +656,7 @@ export default function EmployerProfilePage() {
                       />
                     </div>
 
-                    <div className="rn-profile-form-full">
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}
                       <label style={labelStyle}>Company Logo</label>
 
                       <div
@@ -778,7 +766,7 @@ export default function EmployerProfilePage() {
                       </div>
                     </div>
 
-                    <div className="rn-profile-form-full">
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}
                       <label htmlFor="company-cover-image-url" style={labelStyle}>
                         Company cover image
                       </label>
@@ -821,7 +809,7 @@ export default function EmployerProfilePage() {
                             alt="Company cover preview"
                             style={{
                               width: "100%",
-                              height: 320,
+                              height: 180,
                               objectFit: "cover",
                               objectPosition: "center center",
                               display: "block",
@@ -874,10 +862,12 @@ Leadership development`}
             ) : null}
 
             <section style={homeCardStyle}>
-              <h2 className="rn-profile-section-title">Business Location</h2>
+              <h2 className="rn-profile-section-title">
+              Headquarters
+              </h2>
 
               <p className="rn-profile-section-copy">
-                These details help organize your hiring account. They are not the same as individual job locations.
+                The primary business address shown on your company profile.
               </p>
 
               {!isEditing ? (
@@ -1162,11 +1152,11 @@ Leadership development`}
         }
 
         .rn-profile-section-title {
-          color: ${homeTheme.text};
-          font-family: var(--font-heading);
-          font-size: 26px;
-          line-height: 1.2;
-          margin: 0 0 8px 0;
+        color: ${homeTheme.text};
+        font-family: var(--font-heading);
+        font-size: 22px;
+        line-height: 1.2;
+        margin: 0 0 8px 0;
         }
 
         .rn-profile-form {
