@@ -474,8 +474,9 @@ export default function EmployerProfilePage() {
 
         <div className="rn-profile-stack">
           <form onSubmit={handleSave} className="rn-profile-edit-form">
-            {!isEditing ? (
-              <section style={homeCardStyle}>
+           {isEditing ? (
+  <>
+    <section style={homeCardStyle}>
                 <div className="rn-profile-edit-header">
                   <div>
                     <h2 className="rn-profile-section-title">My Profile</h2>
@@ -620,6 +621,16 @@ export default function EmployerProfilePage() {
                   </div>
 
                   <div>
+                    </div>
+</section>
+
+<section style={homeCardStyle}>
+  <h2 className="rn-profile-section-title">Branding</h2>
+  <p className="rn-profile-section-copy">
+    Manage the branding candidates see across your company page and job listings.
+  </p>
+
+  <div className="rn-profile-form">
                     <label htmlFor="company-website" style={labelStyle}>
                       Company website
                     </label>
@@ -853,8 +864,9 @@ Leadership development`}
                     />
                   </div>
                 </div>
-              </section>
-            ) : null}
+                           </section>
+    </>
+) : null}
 
             <section style={homeCardStyle}>
               <h2 className="rn-profile-section-title">Business Location</h2>
