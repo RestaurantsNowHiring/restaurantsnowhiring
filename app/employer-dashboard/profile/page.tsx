@@ -690,15 +690,15 @@ export default function EmployerProfilePage() {
                           />
                         </label>
 
-                     {form.company_logo_url ? (
+                    {form.company_logo_url ? (
   <div
     style={{
+      marginTop: 14,
       borderRadius: 18,
       overflow: "hidden",
       border: `1px solid ${homeTheme.border}`,
-      background: "#fff",
-      padding: 24,
-      height: 150,
+      backgroundColor: "#fff",
+      height: 180,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -708,8 +708,8 @@ export default function EmployerProfilePage() {
       src={form.company_logo_url}
       alt="Company Logo"
       style={{
-        width: 110,
-        height: 180,
+        width: 120,
+        height: 120,
         objectFit: "contain",
         display: "block",
       }}
@@ -749,10 +749,12 @@ export default function EmployerProfilePage() {
                       <label
                         style={{
                           ...homeSecondaryButton,
-                          display: "inline-block",
                           cursor: uploadingCover ? "not-allowed" : "pointer",
                           opacity: uploadingCover ? 0.7 : 1,
-                          textAlign: "center",
+                          width: "100%",
+                          display: "flex",
+                          justifyContent: "center",
+                          boxSizing: "border-box",
                         }}
                       >
                         {uploadingCover ? "Uploading…" : "Upload Cover Image"}
