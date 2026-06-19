@@ -524,10 +524,10 @@ export default function EmployerProfilePage() {
               <section style={homeCardStyle}>
                 <div className="rn-profile-edit-header">
                   <div>
-                    <h2 className="rn-profile-section-title">Editing Profile</h2>
-                    <p className="rn-profile-section-copy">
-                      Make changes to your employer and public company page information.
-                    </p>
+                  <h2 className="rn-profile-section-title">Employer Details</h2>
+<p className="rn-profile-section-copy">
+  Basic account and contact information for your employer profile.
+</p>
                   </div>
                 </div>
 
@@ -583,13 +583,16 @@ export default function EmployerProfilePage() {
                     />
                   </div>
 
-                  <div className="rn-profile-form-full rn-profile-divider">
-                    <h2 className="rn-profile-section-title">Public Company Page</h2>
-                    <p className="rn-profile-section-copy">
-                      These fields will appear on your public company profile page above your available jobs.
-                    </p>
-                  </div>
+                 </div>
+</section>
 
+<section style={homeCardStyle}>
+  <h2 className="rn-profile-section-title">Public Company Page</h2>
+  <p className="rn-profile-section-copy">
+    These fields will appear on your public company profile page above your available jobs.
+  </p>
+
+  <div className="rn-profile-form">
                   <div className="rn-profile-form-full">
                     <label htmlFor="company-short-description" style={labelStyle}>
                       Short Company Summary
