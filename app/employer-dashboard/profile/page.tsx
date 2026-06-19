@@ -697,7 +697,6 @@ export default function EmployerProfilePage() {
       marginTop: 14,
       borderRadius: 18,
       overflow: "hidden",
-      border: `1px solid ${homeTheme.border}`,
       backgroundColor: "#fff",
       padding: 28,
       display: "flex",
@@ -713,7 +712,6 @@ export default function EmployerProfilePage() {
         width: 120,
         height: 120,
         objectFit: "contain",
-        background: "#fff",
       }}
     />
 
