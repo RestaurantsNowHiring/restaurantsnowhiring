@@ -711,14 +711,7 @@ export default function EmployerProfilePage() {
       }}
     />
 
-    <div
-      style={{
-        fontWeight: 800,
-        color: homeTheme.green,
-        fontFamily: "var(--font-body)",
-      }}
-    >
-      ✓ Logo Uploaded
+   
     </div>
   </div>
 ) : (
