@@ -518,11 +518,12 @@ export default function EmployerProfilePage() {
                 </div>
                
       
-              </section>
+                           </section>
             ) : null}
 
-            {isEditing ? (
-              <section style={homeCardStyle}>
+          {isEditing ? (
+  <>
+    <section style={homeCardStyle}>
                 <div className="rn-profile-edit-header">
                   <div>
                   <h2 className="rn-profile-section-title">Employer Details</h2>
