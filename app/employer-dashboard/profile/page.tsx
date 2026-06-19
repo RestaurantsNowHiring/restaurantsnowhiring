@@ -659,7 +659,6 @@ export default function EmployerProfilePage() {
 
                       <div
                         style={{
-                          padding: 20,
                           display: "flex",
                           flexDirection: "column",
                           alignItems: "center",
@@ -699,9 +698,8 @@ export default function EmployerProfilePage() {
       overflow: "hidden",
       border: `1px solid ${homeTheme.border}`,
       background: "#fff",
-      padding: 32,
-      height: 180,
-
+      padding: 24,
+      height: 150,
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -711,8 +709,8 @@ export default function EmployerProfilePage() {
       src={form.company_logo_url}
       alt="Company Logo"
       style={{
-        width: 140,
-        height: 140,
+        width: 110,
+        height: 110,
         objectFit: "contain",
         display: "block",
       }}
