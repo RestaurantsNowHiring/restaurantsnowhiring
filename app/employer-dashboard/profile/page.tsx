@@ -662,11 +662,10 @@ export default function EmployerProfilePage() {
                           border: `1px solid ${homeTheme.border}`,
                           borderRadius: 18,
                           padding: 20,
-                          background: "#fff",
                           display: "flex",
+                          flexDirection: "column",
                           alignItems: "center",
-                          gap: 18,
-                          flexWrap: "wrap",
+                          gap: 16,
                         }}
                       >
                         <label
