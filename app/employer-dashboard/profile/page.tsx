@@ -639,8 +639,6 @@ export default function EmployerProfilePage() {
                         style={inputStyle}
                       />
                     </div>
-
-                    <div>
                     <div>
                       <label htmlFor="location-count" style={labelStyle}>
                         Number of locations
@@ -819,7 +817,6 @@ export default function EmployerProfilePage() {
                     </div>
                   </div>
                 </section>
-
                 <section style={homeCardStyle}>
                   <h2 className="rn-profile-section-title">Benefits</h2>
                   <p className="rn-profile-section-copy">
