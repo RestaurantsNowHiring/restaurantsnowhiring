@@ -709,7 +709,7 @@ export default function EmployerProfilePage() {
       alt="Company Logo"
       style={{
         width: 110,
-        height: 110,
+        height: 180,
         objectFit: "contain",
         display: "block",
       }}
