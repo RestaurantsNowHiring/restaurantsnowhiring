@@ -515,6 +515,174 @@ export default function EmployerProfilePage() {
                     <div style={readOnlyFieldStyle}>{displayValue(form.phone)}</div>
                   </div>
                 </div>
+                <div className="rn-profile-form-full rn-profile-divider">
+  <h2 className="rn-profile-section-title">
+    Public Company Page
+  </h2>
+
+  <p className="rn-profile-section-copy">
+    This is what candidates see when they visit your company page.
+  </p>
+</div>
+                <div className="rn-profile-form-full">
+  <div
+    style={{
+      border: `1px solid ${homeTheme.border}`,
+      borderRadius: 18,
+      overflow: "hidden",
+      background: "#fff",
+    }}
+  >
+    {form.company_cover_image_url ? (
+      <img
+        src={form.company_cover_image_url}
+        alt="Cover"
+        style={{
+          width: "100%",
+          height: 220,
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+    ) : null}
+
+    <div
+      style={{
+        padding: 24,
+        display: "flex",
+        gap: 20,
+        alignItems: "center",
+        flexWrap: "wrap",
+      }}
+    >
+      {form.company_logo_url ? (
+        <img
+          src={form.company_logo_url}
+          alt="Logo"
+          style={{
+            width: 90,
+            height: 90,
+            objectFit: "contain",
+            borderRadius: 16,
+            border: `1px solid ${homeTheme.border}`,
+            background: "#fff",
+            padding: 10,
+          }}
+        />
+      ) : null}
+
+      <div style={{ flex: 1 }}>
+        <h3
+          style={{
+            margin: 0,
+            fontSize: 28,
+            fontFamily: "var(--font-heading)",
+            color: homeTheme.text,
+          }}
+        >
+          {displayValue(form.company_name)}
+        </h3>
+
+        <div
+          style={{
+            color: homeTheme.muted,
+            marginTop: 8,
+            lineHeight: 1.6,
+          }}
+        >
+          {displayValue(form.company_short_description)}
+          <div
+  style={{
+    display: "flex",
+    gap: 12,
+    marginTop: 20,
+    flexWrap: "wrap",
+  }}
+>
+  <div
+    style={{
+      background: homeTheme.bg,
+      padding: "12px 16px",
+      borderRadius: 14,
+      border: `1px solid ${homeTheme.border}`,
+      minWidth: 140,
+    }}
+  >
+    <div
+      style={{
+        fontSize: 12,
+        color: homeTheme.muted,
+        fontWeight: 800,
+        textTransform: "uppercase",
+      }}
+    >
+      Headquarters
+    </div>
+
+    <div
+      style={{
+        marginTop: 4,
+        fontWeight: 800,
+        color: homeTheme.text,
+      }}
+    >
+      {displayValue(form.headquarters)}
+    </div>
+  </div>
+
+  <div
+    style={{
+      background: homeTheme.bg,
+      padding: "12px 16px",
+      borderRadius: 14,
+      border: `1px solid ${homeTheme.border}`,
+      minWidth: 140,
+    }}
+  >
+    <div
+      style={{
+        fontSize: 12,
+        color: homeTheme.muted,
+        fontWeight: 800,
+        textTransform: "uppercase",
+      }}
+    >
+      Locations
+    </div>
+
+    <div
+      style={{
+        marginTop: 4,
+        fontWeight: 800,
+        color: homeTheme.text,
+      }}
+    >
+      {displayValue(form.location_count)}
+    </div>
+  </div>
+</div>
+        </div>
+
+        {form.company_website ? (
+          <a
+            href={form.company_website}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{
+              display: "inline-block",
+              marginTop: 16,
+              color: homeTheme.green,
+              fontWeight: 800,
+              textDecoration: "none",
+            }}
+          >
+            Visit Website →
+          </a>
+        ) : null}
+      </div>
+    </div>
+  </div>
+</div>
               </section>
             ) : null}
 
