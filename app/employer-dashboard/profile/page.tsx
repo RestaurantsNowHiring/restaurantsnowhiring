@@ -516,13 +516,13 @@ export default function EmployerProfilePage() {
                   </div>
                 </div>
                <div className="rn-profile-form-full rn-profile-divider">
-  <h2 className="rn-profile-section-title">
-    Public Company Page
-  </h2>
+<h2 className="rn-profile-section-title">
+  Public Company Information
+</h2>
 
-  <p className="rn-profile-section-copy">
-    Information currently shown to candidates on your public company page.
-  </p>
+<p className="rn-profile-section-copy">
+  This information appears on your company page and job listings.
+</p>
 </div>
 
 <div
