@@ -656,8 +656,8 @@ export default function EmployerProfilePage() {
                       />
                     </div>
 
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}
-                      <label style={labelStyle}>Company Logo</label>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <label style={labelStyle}>Company Logo</label>
 
                       <div
                         style={{
