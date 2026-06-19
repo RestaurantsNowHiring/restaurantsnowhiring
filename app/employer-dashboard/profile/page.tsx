@@ -1,4 +1,4 @@
-  "use client";
+    "use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
@@ -657,14 +657,13 @@ export default function EmployerProfilePage() {
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                     <label style={labelStyle}>Company Logo</label>
 
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          alignItems: "center",
-                          gap: 16,
-                        }}
-                      >
+                     <div
+                      style={{
+                      display: "flex",
+                      flexDirection: "column",
+    gap: 14,
+  }}
+>
                         <label
                           style={{
                             ...homeSecondaryButton,
