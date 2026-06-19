@@ -669,10 +669,13 @@ export default function EmployerProfilePage() {
                         <label
                           style={{
                             ...homeSecondaryButton,
-                            minWidth: 160,
                             cursor: uploadingLogo ? "not-allowed" : "pointer",
                             opacity: uploadingLogo ? 0.7 : 1,
                             textAlign: "center",
+                             width: "100%",
+                            justifyContent: "center",
+                            display: "flex",
+                            boxSizing: "border-box",
                           }}
                         >
                           {uploadingLogo ? "Uploading…" : "Upload Logo"}
