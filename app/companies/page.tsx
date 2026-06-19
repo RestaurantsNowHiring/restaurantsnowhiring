@@ -1,7 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { getCompanyName, getPublicJobs, makeCompanySlug } from "../../lib/companyPages";
+import {
+  getCompanyName,
+  getCompanyProfile,
+  getPublicJobs,
+  makeCompanySlug,
+} from "../../lib/companyPages";
 import { buildPageMetadata } from "../../lib/seo";
 import { homeTheme } from "../styles/homepageDesignSystem";
 
@@ -31,8 +36,13 @@ export default async function CompaniesPage() {
     companies.get(name)!.count++;
   });
 
-  const list = Array.from(companies.values()).sort((a, b) =>
-    a.name.localeCompare(b.name)
+  const list = await Promise.all(
+    Array.from(companies.values())
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map(async (company) => ({
+        ...company,
+        profile: await getCompanyProfile(company.name),
+      }))
   );
 
   return (
@@ -53,6 +63,7 @@ export default async function CompaniesPage() {
               letterSpacing: 0.8,
               textTransform: "uppercase",
               marginBottom: 8,
+              fontFamily: "var(--font-body)",
             }}
           >
             Restaurant Companies
@@ -94,60 +105,157 @@ export default async function CompaniesPage() {
             margin: "0 auto",
             padding: "0 18px",
             display: "grid",
-            gap: 16,
-            gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+            gap: 18,
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
           }}
         >
-          {list.map((company) => (
-            <Link
-              key={company.slug}
-              href={`/companies/${company.slug}`}
-              style={{
-                display: "block",
-                padding: 22,
-                border: "1px solid rgba(0,0,0,.10)",
-                borderRadius: 18,
-                textDecoration: "none",
-                color: "inherit",
-                backgroundColor: "#f6f5f3",
-                boxShadow: "0 18px 40px rgba(0,0,0,.10)",
-              }}
-            >
-              <h2
-                style={{
-                  margin: 0,
-                  color: homeTheme.green,
-                  fontFamily: "var(--font-heading)",
-                  fontSize: 30,
-                  lineHeight: 1.1,
-                }}
-              >
-                {company.name}
-              </h2>
+          {list.map((company) => {
+            const profile = company.profile;
 
-              <p
+            return (
+              <Link
+                key={company.slug}
+                href={`/companies/${company.slug}`}
                 style={{
-                  margin: "12px 0 0",
-                  color: "rgba(0,0,0,.70)",
-                  fontWeight: 900,
-                  fontFamily: "var(--font-body)",
+                  display: "flex",
+                  gap: 18,
+                  alignItems: "center",
+                  padding: 22,
+                  border: "1px solid rgba(0,0,0,.10)",
+                  borderRadius: 22,
+                  textDecoration: "none",
+                  color: "inherit",
+                  backgroundColor: "#f6f5f3",
+                  boxShadow: "0 18px 40px rgba(0,0,0,.10)",
                 }}
               >
-                {company.count} open job{company.count === 1 ? "" : "s"}
-              </p>
+                {profile?.company_logo_url ? (
+                  <div
+                    style={{
+                      width: 82,
+                      height: 82,
+                      borderRadius: 18,
+                      border: "1px solid rgba(0,0,0,.10)",
+                      backgroundColor: "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                      padding: 12,
+                    }}
+                  >
+                    <img
+                      src={profile.company_logo_url}
+                      alt={`${company.name} logo`}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "contain",
+                        display: "block",
+                      }}
+                    />
+                  </div>
+                ) : null}
 
-              <p
-                style={{
-                  margin: "14px 0 0",
-                  color: homeTheme.green,
-                  fontWeight: 900,
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                View jobs →
-              </p>
-            </Link>
-          ))}
+                <div style={{ minWidth: 0 }}>
+                  <h2
+                    style={{
+                      margin: 0,
+                      color: homeTheme.green,
+                      fontFamily: "var(--font-heading)",
+                      fontSize: 30,
+                      lineHeight: 1.1,
+                    }}
+                  >
+                    {company.name}
+                  </h2>
+
+                  {profile?.company_short_description ? (
+                    <p
+                      style={{
+                        margin: "8px 0 0",
+                        color: "rgba(0,0,0,.68)",
+                        fontWeight: 700,
+                        fontFamily: "var(--font-body)",
+                        lineHeight: 1.45,
+                      }}
+                    >
+                      {profile.company_short_description}
+                    </p>
+                  ) : null}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: 10,
+                      flexWrap: "wrap",
+                      marginTop: 14,
+                    }}
+                  >
+                    <span
+                      style={{
+                        border: "1px solid rgba(0,0,0,.10)",
+                        borderRadius: 999,
+                        padding: "7px 11px",
+                        backgroundColor: "#fff",
+                        color: homeTheme.text,
+                        fontWeight: 900,
+                        fontFamily: "var(--font-body)",
+                        fontSize: 13,
+                      }}
+                    >
+                      {company.count} open job{company.count === 1 ? "" : "s"}
+                    </span>
+
+                    {profile?.location_count ? (
+                      <span
+                        style={{
+                          border: "1px solid rgba(0,0,0,.10)",
+                          borderRadius: 999,
+                          padding: "7px 11px",
+                          backgroundColor: "#fff",
+                          color: homeTheme.text,
+                          fontWeight: 900,
+                          fontFamily: "var(--font-body)",
+                          fontSize: 13,
+                        }}
+                      >
+                        {profile.location_count} locations
+                      </span>
+                    ) : null}
+
+                    {profile?.headquarters ? (
+                      <span
+                        style={{
+                          border: "1px solid rgba(0,0,0,.10)",
+                          borderRadius: 999,
+                          padding: "7px 11px",
+                          backgroundColor: "#fff",
+                          color: homeTheme.text,
+                          fontWeight: 900,
+                          fontFamily: "var(--font-body)",
+                          fontSize: 13,
+                        }}
+                      >
+                        {profile.headquarters}
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <p
+                    style={{
+                      margin: "14px 0 0",
+                      color: homeTheme.green,
+                      fontWeight: 900,
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    View company →
+                  </p>
+                </div>
+              </Link>
+            );
+          })}
         </div>
       </section>
     </main>
