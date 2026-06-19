@@ -765,8 +765,7 @@ export default function EmployerProfilePage() {
                         )}
                       </div>
                     </div>
-
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       <label htmlFor="company-cover-image-url" style={labelStyle}>
                         Company cover image
                       </label>
