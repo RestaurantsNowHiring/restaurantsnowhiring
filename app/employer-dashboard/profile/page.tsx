@@ -692,52 +692,43 @@ export default function EmployerProfilePage() {
                           />
                         </label>
 
-                        {form.company_logo_url ? (
-                          <div
-                            style={{
-                              display: "flex",
-                              alignItems: "center",
-                              gap: 16,
-                            }}
-                          >
-                            <img
-                              src={form.company_logo_url}
-                              alt="Company Logo"
-                              style={{
-                                width: 72,
-                                height: 72,
-                                objectFit: "contain",
-                                borderRadius: 14,
-                                background: "#fff",
-                                border: `1px solid ${homeTheme.border}`,
-                                padding: 8,
-                              }}
-                            />
+                       {form.company_logo_url ? (
+  <div
+    style={{
+      marginTop: 14,
+      borderRadius: 18,
+      overflow: "hidden",
+      border: `1px solid ${homeTheme.border}`,
+      backgroundColor: "#fff",
+      padding: 28,
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      gap: 14,
+    }}
+  >
+    <img
+      src={form.company_logo_url}
+      alt="Company Logo"
+      style={{
+        width: 120,
+        height: 120,
+        objectFit: "contain",
+        background: "#fff",
+      }}
+    />
 
-                            <div>
-                              <div
-                                style={{
-                                  fontWeight: 800,
-                                  color: homeTheme.green,
-                                  marginBottom: 4,
-                                  fontFamily: "var(--font-body)",
-                                }}
-                              >
-                                Logo Uploaded
-                              </div>
-
-                              <div
-                                style={{
-                                  color: homeTheme.muted,
-                                  fontSize: 14,
-                                  fontFamily: "var(--font-body)",
-                                }}
-                              >
-                                Click Upload Logo to replace it
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
+    <div
+      style={{
+        fontWeight: 800,
+        color: homeTheme.green,
+        fontFamily: "var(--font-body)",
+      }}
+    >
+      ✓ Logo Uploaded
+    </div>
+  </div>
+) : (
                           <div>
                             <div
                               style={{
