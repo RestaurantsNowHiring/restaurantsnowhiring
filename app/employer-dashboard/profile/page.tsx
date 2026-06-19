@@ -689,16 +689,16 @@ export default function EmployerProfilePage() {
                           />
                         </label>
 
-                       {form.company_logo_url ? (
+                      {form.company_logo_url ? (
   <div
     style={{
+      height: 180,
       marginTop: 14,
-      overflow: "hidden",
-      padding: 28,
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
-      gap: 14,
+      justifyContent: "center",
+      gap: 12,
     }}
   >
     <img
@@ -710,9 +710,6 @@ export default function EmployerProfilePage() {
         objectFit: "contain",
       }}
     />
-
-   
-    </div>
   </div>
 ) : (
                           <div>
