@@ -1,3 +1,4 @@
+import { EMAIL_PATTERN, normalizeCandidateNotificationEmails } from "./candidateNotificationEmails";
 import { absoluteUrl } from "./seo";
 
 export type ExpirationReminderType = "five_day" | "one_day" | "auto_paused";
@@ -9,6 +10,12 @@ export type ExpirationEmailJob = {
   city: string | null;
   state: string | null;
   employer_email: string | null;
+  employer_account_id?: string | null;
+  posted_by_email?: string | null;
+  apply_email?: string | null;
+  candidate_notification_email?: string | string[] | null;
+  candidate_notification_emails?: string[] | string | null;
+  candidate_notification_routing?: string | null;
   approved_at: string | null;
   created_at?: string | null;
 };
@@ -23,8 +30,21 @@ type SupabaseEmailEventTable = {
   insert: (payload: Record<string, unknown>) => Promise<{ error: { code?: string; message?: string } | null }>;
 };
 
+type SupabaseTeamMemberQuery = {
+  in: (column: string, values: string[]) => SupabaseTeamMemberQuery;
+  eq: (column: string, value: string) => SupabaseTeamMemberQuery;
+  returns: <T>() => Promise<{ data: T | null; error: { message?: string } | null }>;
+};
+
+type SupabaseTeamMemberTable = {
+  select: (fields: string) => SupabaseTeamMemberQuery;
+};
+
 export type SupabaseAdminLike = {
-  from: (table: "job_expiration_email_events") => SupabaseEmailEventTable;
+  from: {
+    (table: "job_expiration_email_events"): SupabaseEmailEventTable;
+    (table: "employer_team_members"): SupabaseTeamMemberTable;
+  };
 };
 
 
@@ -196,16 +216,88 @@ async function recordReminderSent(
   return true;
 }
 
-async function sendResendEmail(type: ExpirationReminderType, job: ExpirationEmailJob) {
+type EmployerTeamMemberEmailRow = {
+  account_id: string | null;
+  email: string | null;
+};
+
+function addValidUniqueEmail(recipients: string[], candidate: string | null | undefined, context: Record<string, unknown>) {
+  const email = candidate?.trim().toLowerCase();
+  if (!email) return;
+
+  if (!EMAIL_PATTERN.test(email)) {
+    console.warn("Skipping invalid expiration reminder recipient", { ...context, email });
+    return;
+  }
+
+  if (!recipients.includes(email)) recipients.push(email);
+}
+
+export async function fetchActiveAccountOwnerEmailsByAccount(
+  supabaseAdmin: SupabaseAdminLike,
+  accountIds: string[],
+) {
+  const uniqueAccountIds = Array.from(new Set(accountIds.map((id) => id.trim()).filter(Boolean)));
+  const emailsByAccount = new Map<string, string[]>();
+  if (uniqueAccountIds.length === 0) return emailsByAccount;
+
+  const { data, error } = await supabaseAdmin
+    .from("employer_team_members")
+    .select("account_id,email")
+    .in("account_id", uniqueAccountIds)
+    .eq("role", "account_owner")
+    .eq("status", "active")
+    .returns<EmployerTeamMemberEmailRow[]>();
+
+  if (error) throw new Error(error.message || "Failed to fetch active account owner emails.");
+
+  for (const row of data ?? []) {
+    if (!row.account_id) continue;
+    const accountEmails = emailsByAccount.get(row.account_id) ?? [];
+    addValidUniqueEmail(accountEmails, row.email, { accountId: row.account_id, source: "account_owner" });
+    emailsByAccount.set(row.account_id, accountEmails);
+  }
+
+  return emailsByAccount;
+}
+
+function resolveCandidateRoutingEmails(job: ExpirationEmailJob, accountOwnerEmails: string[]) {
+  const routing = job.candidate_notification_routing || "job_poster";
+  const customEmails = normalizeCandidateNotificationEmails(
+    normalizeCandidateNotificationEmails(job.candidate_notification_emails).length > 0
+      ? job.candidate_notification_emails
+      : job.candidate_notification_email,
+  );
+
+  if (routing === "custom_job_email" && customEmails.length > 0) return customEmails;
+  if (routing === "account_owner") return [...accountOwnerEmails, job.employer_email, job.apply_email];
+  if (routing === "company_support") return [job.apply_email, job.employer_email];
+  if (routing === "custom_job_email") return [job.apply_email, job.employer_email];
+  return [job.posted_by_email, job.apply_email, job.employer_email];
+}
+
+export function resolveExpirationRecipientEmails(job: ExpirationEmailJob, accountOwnerEmails: string[] = []) {
+  const recipients: string[] = [];
+  const context = { jobId: job.id };
+
+  for (const email of accountOwnerEmails) addValidUniqueEmail(recipients, email, { ...context, source: "account_owner" });
+  for (const email of resolveCandidateRoutingEmails(job, accountOwnerEmails)) {
+    addValidUniqueEmail(recipients, email, { ...context, source: "candidate_notification_routing" });
+  }
+  addValidUniqueEmail(recipients, job.posted_by_email ?? job.employer_email, { ...context, source: "original_poster" });
+
+  return recipients;
+}
+
+async function sendResendEmail(type: ExpirationReminderType, job: ExpirationEmailJob, recipients: string[]) {
   const resendApiKey = process.env.RESEND_API_KEY;
   const fromEmail =
     process.env.EXPIRATION_REMINDER_FROM ??
     process.env.CONTACT_NOTIFICATION_FROM ??
     "Restaurants Now Hiring <notifications@restaurantsnowhiring.com>";
-  const toEmail = job.employer_email?.trim();
 
   if (!resendApiKey) throw new Error("Missing RESEND_API_KEY.");
-  if (!toEmail) throw new Error("Missing employer email.");
+  if (recipients.length === 0) throw new Error("Missing expiration reminder recipients.");
 
   const jobTitle = normalizeText(job.title, "Restaurant job");
   const response = await fetch("https://api.resend.com/emails", {
@@ -216,7 +308,7 @@ async function sendResendEmail(type: ExpirationReminderType, job: ExpirationEmai
     },
     body: JSON.stringify({
       from: fromEmail,
-      to: toEmail,
+      to: recipients,
       subject: getSubject(type, jobTitle),
       text: buildEmailText(type, job),
       html: buildEmailHtml(type, job),
@@ -241,9 +333,19 @@ export async function sendExpirationReminderBatch(
     failed: 0,
   };
 
+  const accountOwnerEmailsByAccount = await fetchActiveAccountOwnerEmailsByAccount(
+    supabaseAdmin,
+    jobs.flatMap((job) => (job.employer_account_id ? [job.employer_account_id] : [])),
+  );
+
   for (const job of jobs) {
     try {
-      if (!job.employer_email?.trim()) {
+      const recipients = resolveExpirationRecipientEmails(
+        job,
+        job.employer_account_id ? accountOwnerEmailsByAccount.get(job.employer_account_id) ?? [] : [],
+      );
+
+      if (recipients.length === 0) {
         result.skipped += 1;
         continue;
       }
@@ -253,7 +355,7 @@ export async function sendExpirationReminderBatch(
         continue;
       }
 
-      await sendResendEmail(reminderType, job);
+      await sendResendEmail(reminderType, job, recipients);
       const recorded = await recordReminderSent(supabaseAdmin, job.id, reminderType);
 
       if (recorded) result.sent += 1;
