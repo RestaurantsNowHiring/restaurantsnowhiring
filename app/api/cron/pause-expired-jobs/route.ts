@@ -18,7 +18,7 @@ type ReminderCounts = {
   failed: number;
 };
 
-const JOB_EMAIL_FIELDS = "id,title,restaurant_name,city,state,employer_email,employer_user_id,approved_at,created_at";
+const JOB_EMAIL_FIELDS = "id,title,restaurant_name,city,state,employer_email,employer_user_id,employer_account_id,posted_by_email,apply_email,candidate_notification_email,candidate_notification_emails,candidate_notification_routing,approved_at,created_at";
 
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
