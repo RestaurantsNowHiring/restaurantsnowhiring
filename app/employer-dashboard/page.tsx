@@ -1238,6 +1238,21 @@ export default function EmployerDashboardPage() {
   const allFilteredJobsSelected = filteredJobs.length > 0 && filteredJobs.every((job) => selectedJobIds.has(job.id));
   const someFilteredJobsSelected = selectedFilteredJobCount > 0 && !allFilteredJobsSelected;
 
+  function isJobSelectionInteractiveTarget(target: EventTarget | null) {
+    return target instanceof HTMLElement && Boolean(target.closest("a, button, input, label, select, textarea"));
+  }
+
+  function handleJobRowClick(jobId: string, checked: boolean, target: EventTarget | null) {
+    if (isJobSelectionInteractiveTarget(target)) return;
+    handleToggleJobSelection(jobId, checked);
+  }
+
+  function handleJobRowKeyDown(event: React.KeyboardEvent<HTMLTableRowElement>, jobId: string, checked: boolean) {
+    if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
+    event.preventDefault();
+    handleToggleJobSelection(jobId, checked);
+  }
+
   useEffect(() => {
     if (selectAllJobsRef.current) {
       selectAllJobsRef.current.indeterminate = someFilteredJobsSelected;
@@ -2117,9 +2132,22 @@ export default function EmployerDashboardPage() {
                       </button>
                     </div>
                   </nav>
-                  {selectedJobs.length > 0 ? (
-                    <div className="rn-job-bulk-toolbar" role="region" aria-label="Bulk job actions">
-                      <strong>{selectedJobs.length} selected</strong>
+                  <div className="rn-job-bulk-toolbar" role="region" aria-label="Bulk job selection and actions">
+                    <label className="rn-job-select-all-control">
+                      <input
+                        ref={selectAllJobsRef}
+                        className="rn-job-select-all-input"
+                        type="checkbox"
+                        checked={allFilteredJobsSelected}
+                        onChange={(event) => handleToggleSelectAllFiltered(event.target.checked)}
+                        aria-label={`Select all ${filteredJobs.length} filtered job listings`}
+                      />
+                      <span className="rn-job-select-all-mark" aria-hidden="true" />
+                      <span>Select all</span>
+                    </label>
+                    <strong>{selectedJobs.length > 0 ? `${selectedJobs.length} selected` : "Select jobs"}</strong>
+                    {selectedJobs.length > 0 ? (
+                      <>
                       <button
                         type="button"
                         style={homeSecondaryButton}
@@ -2150,12 +2178,12 @@ export default function EmployerDashboardPage() {
                       <button type="button" style={homeSecondaryButton} className="rn-btn-secondary" onClick={clearJobSelection} disabled={bulkAction !== null}>
                         Clear Selection
                       </button>
-                    </div>
-                  ) : null}
+                      </>
+                    ) : null}
+                  </div>
                   <div className="rn-dashboard-table-wrap">
                 <table className="rn-dashboard-table">
                   <colgroup>
-                    <col className="rn-dashboard-table__col-select" />
                     <col className="rn-dashboard-table__col-title" />
                     <col className="rn-dashboard-table__col-status" />
                     <col className="rn-dashboard-table__col-location" />
@@ -2165,18 +2193,6 @@ export default function EmployerDashboardPage() {
                   </colgroup>
                   <thead>
                     <tr>
-                      <th className="rn-dashboard-table__select-cell">
-                        <label className="rn-dashboard-checkbox-hitbox">
-                          <input
-                            ref={selectAllJobsRef}
-                            className="rn-dashboard-checkbox"
-                            type="checkbox"
-                            checked={allFilteredJobsSelected}
-                            onChange={(event) => handleToggleSelectAllFiltered(event.target.checked)}
-                            aria-label={`Select all ${filteredJobs.length} filtered job listings`}
-                          />
-                        </label>
-                      </th>
                       <th>Job Title</th>
                       <th>Status</th>
                       <th>Location</th>
@@ -2186,20 +2202,25 @@ export default function EmployerDashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {paginatedJobs.map((job) => (
-                      <tr key={job.id} className={selectedJobIds.has(job.id) ? "rn-dashboard-table__row--selected" : undefined}>
-                        <td className="rn-dashboard-table__select-cell">
-                          <label className="rn-dashboard-checkbox-hitbox">
-                            <input
-                              className="rn-dashboard-checkbox"
-                              type="checkbox"
-                              checked={selectedJobIds.has(job.id)}
-                              onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
-                              aria-label={`Select ${job.title}`}
-                            />
-                          </label>
-                        </td>
-                        <td>{job.title}</td>
+                    {paginatedJobs.map((job) => {
+                      const isSelected = selectedJobIds.has(job.id);
+                      return (
+                        <tr
+                          key={job.id}
+                          className={isSelected ? "rn-dashboard-table__row--selected" : undefined}
+                          role="checkbox"
+                          aria-checked={isSelected}
+                          aria-label={`${isSelected ? "Deselect" : "Select"} ${job.title}`}
+                          tabIndex={0}
+                          onClick={(event) => handleJobRowClick(job.id, !isSelected, event.target)}
+                          onKeyDown={(event) => handleJobRowKeyDown(event, job.id, !isSelected)}
+                        >
+                          <td>
+                            <span className="rn-dashboard-title-with-select">
+                              <span className="rn-dashboard-row-check" aria-hidden="true">✓</span>
+                              <span>{job.title}</span>
+                            </span>
+                          </td>
                         <td>
                           <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
                         </td>
@@ -2249,28 +2270,35 @@ export default function EmployerDashboardPage() {
                             ) : null}
                           </div>
                         </td>
-                      </tr>
-                    ))}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
 
               <div className="rn-dashboard-mobile-list">
-                {paginatedJobs.map((job) => (
-                  <article key={`mobile-${job.id}`} className="rn-dashboard-mobile-card">
+                {paginatedJobs.map((job) => {
+                  const isSelected = selectedJobIds.has(job.id);
+                  return (
+                    <article
+                      key={`mobile-${job.id}`}
+                      className={`rn-dashboard-mobile-card ${isSelected ? "rn-dashboard-mobile-card--selected" : ""}`}
+                      role="checkbox"
+                      aria-checked={isSelected}
+                      aria-label={`${isSelected ? "Deselect" : "Select"} ${job.title}`}
+                      tabIndex={0}
+                      onClick={(event) => handleJobRowClick(job.id, !isSelected, event.target)}
+                      onKeyDown={(event) => {
+                        if (event.target !== event.currentTarget || (event.key !== "Enter" && event.key !== " ")) return;
+                        event.preventDefault();
+                        handleToggleJobSelection(job.id, !isSelected);
+                      }}
+                    >
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                      <label className="rn-dashboard-mobile-select">
-                        <input
-                          className="rn-dashboard-checkbox"
-                          type="checkbox"
-                          checked={selectedJobIds.has(job.id)}
-                          onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
-                          aria-label={`Select ${job.title}`}
-                        />
-                        <span>Select</span>
-                      </label>
-                      <h3 style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
-                        {job.title}
+                      <h3 className="rn-dashboard-mobile-title" style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
+                        <span className="rn-dashboard-row-check" aria-hidden="true">✓</span>
+                        <span>{job.title}</span>
                       </h3>
                       <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
                     </div>
@@ -2321,8 +2349,9 @@ export default function EmployerDashboardPage() {
                         </button>
                       ) : null}
                     </div>
-                  </article>
-                ))}
+                    </article>
+                  );
+                })}
               </div>
 
                 </>
@@ -2636,12 +2665,8 @@ export default function EmployerDashboardPage() {
           margin-right: auto;
         }
 
-        .rn-dashboard-table__col-select {
-          width: 5%;
-        }
-
         .rn-dashboard-table__col-title {
-          width: 25%;
+          width: 30%;
         }
 
         .rn-dashboard-table__col-status {
@@ -2664,133 +2689,148 @@ export default function EmployerDashboardPage() {
           width: 17%;
         }
 
-        .rn-dashboard-table th,
-        .rn-dashboard-table td {
-          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-          color: ${homeTheme.text};
-          font-family: var(--font-body);
-          font-size: 14px;
-          font-weight: 700;
-          overflow-wrap: anywhere;
-          padding: 12px 10px;
-          text-align: left;
-          vertical-align: middle;
-        }
-
-        .rn-dashboard-table th {
-          background: #fff;
-          position: sticky;
-          top: 0;
-          z-index: 2;
-        }
-
-        .rn-dashboard-table__select-cell {
-          text-align: center !important;
-        }
-
-        .rn-dashboard-checkbox-hitbox {
+        .rn-job-select-all-control {
           align-items: center;
-          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.78);
+          border: 1px solid rgba(53, 128, 110, 0.18);
+          border-radius: 999px;
+          color: ${homeTheme.text};
           cursor: pointer;
           display: inline-flex;
-          height: 34px;
-          justify-content: center;
-          margin: -6px;
-          width: 34px;
-        }
-
-        .rn-dashboard-checkbox {
-          appearance: none;
-          background: #fffaf2;
-          border: 2px solid rgba(53, 128, 110, 0.34);
-          border-radius: 6px;
-          color-scheme: light;
-          cursor: pointer;
-          flex: 0 0 auto;
-          height: 22px;
-          margin: 0;
+          font-size: 13px;
+          font-weight: 900;
+          gap: 8px;
+          line-height: 1;
+          padding: 8px 12px;
           position: relative;
-          transition:
-            background-color 170ms ease,
-            border-color 170ms ease,
-            box-shadow 170ms ease,
-            transform 170ms ease;
-          width: 22px;
+          transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+          user-select: none;
         }
 
-        .rn-dashboard-checkbox::after {
-          border: solid #ffffff;
-          border-width: 0 2px 2px 0;
-          content: "";
-          height: 10px;
-          left: 7px;
-          opacity: 0;
-          position: absolute;
-          top: 3px;
-          transform: rotate(45deg) scale(0.65);
-          transition: opacity 140ms ease, transform 170ms ease;
-          width: 5px;
-        }
-
-        .rn-dashboard-checkbox::before {
-          background: #ffffff;
-          border-radius: 999px;
-          content: "";
-          height: 2px;
-          left: 5px;
-          opacity: 0;
-          position: absolute;
-          top: 8px;
-          transform: scaleX(0.35);
-          transition: opacity 140ms ease, transform 170ms ease;
-          width: 8px;
-        }
-
-        .rn-dashboard-checkbox-hitbox:hover .rn-dashboard-checkbox,
-        .rn-dashboard-checkbox:hover {
-          border-color: ${homeTheme.green};
-          box-shadow: 0 0 0 4px rgba(53, 128, 110, 0.1);
+        .rn-job-select-all-control:hover {
+          background: rgba(53, 128, 110, 0.08);
+          border-color: rgba(53, 128, 110, 0.32);
           transform: translateY(-1px);
         }
 
-        .rn-dashboard-checkbox:focus-visible {
-          border-color: ${homeTheme.green};
-          box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px rgba(53, 128, 110, 0.28);
-          outline: none;
+        .rn-job-select-all-input {
+          height: 1px;
+          opacity: 0;
+          pointer-events: none;
+          position: absolute;
+          width: 1px;
         }
 
-        .rn-dashboard-checkbox:checked,
-        .rn-dashboard-checkbox:indeterminate {
+        .rn-job-select-all-mark {
+          align-items: center;
+          border: 1.5px solid rgba(53, 128, 110, 0.42);
+          border-radius: 5px;
+          display: inline-flex;
+          height: 16px;
+          justify-content: center;
+          transition: background-color 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+          width: 16px;
+        }
+
+        .rn-job-select-all-mark::after {
+          color: #ffffff;
+          content: "✓";
+          font-size: 11px;
+          font-weight: 900;
+          line-height: 1;
+          opacity: 0;
+          transform: scale(0.7);
+          transition: opacity 140ms ease, transform 160ms ease;
+        }
+
+        .rn-job-select-all-input:checked + .rn-job-select-all-mark,
+        .rn-job-select-all-input:indeterminate + .rn-job-select-all-mark {
           background: ${homeTheme.green};
           border-color: ${homeTheme.green};
         }
 
-        .rn-dashboard-checkbox:checked::after {
+        .rn-job-select-all-input:checked + .rn-job-select-all-mark::after {
           opacity: 1;
-          transform: rotate(45deg) scale(1);
+          transform: scale(1);
         }
 
-        .rn-dashboard-checkbox:indeterminate::before {
+        .rn-job-select-all-input:indeterminate + .rn-job-select-all-mark::after {
+          content: "–";
           opacity: 1;
-          transform: scaleX(1);
+          transform: scale(1);
+        }
+
+        .rn-job-select-all-input:focus-visible + .rn-job-select-all-mark {
+          box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px rgba(53, 128, 110, 0.28);
+        }
+
+        .rn-dashboard-table tbody tr {
+          cursor: pointer;
+          outline: 0 solid transparent;
+          transition: background-color 150ms ease, box-shadow 150ms ease, outline-color 150ms ease;
+        }
+
+        .rn-dashboard-table tbody tr:hover td {
+          background: rgba(53, 128, 110, 0.035);
+        }
+
+        .rn-dashboard-table tbody tr:focus-visible td {
+          box-shadow: inset 0 0 0 2px rgba(53, 128, 110, 0.32);
+        }
+
+        .rn-dashboard-title-with-select,
+        .rn-dashboard-mobile-title {
+          align-items: center;
+          display: inline-flex;
+        }
+
+        .rn-dashboard-row-check {
+          align-items: center;
+          background: ${homeTheme.green};
+          border-radius: 999px;
+          color: #ffffff;
+          display: inline-flex;
+          flex: 0 0 auto;
+          font-size: 10px;
+          font-weight: 900;
+          height: 16px;
+          justify-content: center;
+          margin-right: 0;
+          opacity: 0;
+          overflow: hidden;
+          transform: scale(0.75);
+          transition: opacity 140ms ease, transform 160ms ease, width 160ms ease, margin-right 160ms ease;
+          width: 0;
         }
 
         .rn-dashboard-table__row--selected td {
-          background: rgba(31, 79, 68, 0.06);
+          background: rgba(53, 128, 110, 0.07);
         }
 
-        .rn-dashboard-table td:nth-child(2) {
+        .rn-dashboard-table__row--selected td:first-child {
+          box-shadow: inset 3px 0 0 ${homeTheme.green};
+        }
+
+        .rn-dashboard-table__row--selected .rn-dashboard-row-check,
+        .rn-dashboard-mobile-card--selected .rn-dashboard-row-check {
+          margin-right: 8px;
+          opacity: 1;
+          transform: scale(1);
+          width: 16px;
+        }
+
+        .rn-dashboard-table td:nth-child(1) {
           line-height: 1.35;
         }
 
+        .rn-dashboard-table td:nth-child(2),
         .rn-dashboard-table td:nth-child(3),
         .rn-dashboard-table td:nth-child(4),
-        .rn-dashboard-table td:nth-child(5),
-        .rn-dashboard-table td:nth-child(6) {
+        .rn-dashboard-table td:nth-child(5) {
           white-space: nowrap;
         }
 
-        .rn-dashboard-table td:nth-child(4) {
+        .rn-dashboard-table td:nth-child(3) {
           overflow: hidden;
           text-overflow: ellipsis;
         }
@@ -2804,16 +2844,6 @@ export default function EmployerDashboardPage() {
           text-transform: uppercase;
           letter-spacing: 0.45px;
           color: ${homeTheme.muted};
-        }
-
-        .rn-dashboard-mobile-select {
-          align-items: center;
-          color: ${homeTheme.green};
-          display: inline-flex;
-          font-family: var(--font-body);
-          font-size: 13px;
-          font-weight: 900;
-          gap: 6px;
         }
 
         .rn-dashboard-actions {
@@ -3325,6 +3355,23 @@ export default function EmployerDashboardPage() {
           border-radius: 14px;
           padding: 14px;
           background: rgba(255, 255, 255, 0.92);
+          cursor: pointer;
+          transition: background-color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+        }
+
+        .rn-dashboard-mobile-card:hover {
+          background: rgba(53, 128, 110, 0.035);
+        }
+
+        .rn-dashboard-mobile-card:focus-visible {
+          box-shadow: 0 0 0 3px rgba(53, 128, 110, 0.22);
+          outline: none;
+        }
+
+        .rn-dashboard-mobile-card--selected {
+          background: rgba(53, 128, 110, 0.07);
+          border-color: rgba(53, 128, 110, 0.28);
+          box-shadow: inset 3px 0 0 ${homeTheme.green};
         }
 
         @media (max-width: 980px) {
