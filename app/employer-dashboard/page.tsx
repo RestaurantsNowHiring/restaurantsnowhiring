@@ -2686,19 +2686,19 @@ export default function EmployerDashboardPage() {
           appearance: none;
           -webkit-appearance: none;
           background: #fff;
-          border: 1px solid rgba(105, 119, 115, 0.32);
-          border-radius: 5px;
+          border: 1.5px solid rgba(105, 119, 115, 0.28);;
+          border-radius: 6px;
           cursor: pointer;
-          height: 18px;
+          height: 22px;
           margin: 0;
-          width: 18px;
+          width: 22px;
           transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
         }
 
         .rn-dashboard-table__select-cell input:hover,
         .rn-dashboard-mobile-select input:hover {
-          background: rgba(46, 125, 91, 0.06);
-          border-color: rgba(31, 79, 68, 0.42);
+          background: rgba(46, 125, 91, 0.08);
+          border-color: rgba(31, 79, 68, 0.55);
         }
 
         .rn-dashboard-table__select-cell input:focus-visible,
@@ -2708,14 +2708,15 @@ export default function EmployerDashboardPage() {
           outline-offset: 2px;
         }
 
-        .rn-dashboard-table__select-cell input:checked,
+       .rn-dashboard-table__select-cell input:checked,
         .rn-dashboard-mobile-select input:checked {
           background-color: ${homeTheme.green};
-          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6.4 11.2 3.2 8l1.1-1.1 2.1 2.1 5.3-5.3L12.8 4.8z' fill='white'/%3E%3C/svg%3E");
+          background-image: url("...");
           background-position: center;
           background-repeat: no-repeat;
-          background-size: 14px 14px;
+          background-size: 16px 16px;
           border-color: ${homeTheme.green};
+          box-shadow: 0 2px 8px rgba(31, 79, 68, 0.18);
         }
 
         .rn-dashboard-table__select-cell input:indeterminate,
