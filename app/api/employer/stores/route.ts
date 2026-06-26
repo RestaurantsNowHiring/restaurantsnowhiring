@@ -77,6 +77,18 @@ function buildStoreRow(payload: StorePayload, employerAccountId: string) {
   };
 }
 
+async function hasActiveJobsForStore(supabaseAdmin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>, storeId: string) {
+  const { count, error } = await supabaseAdmin
+    .from("jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("employer_store_id", storeId)
+    .eq("status", "active")
+    .eq("active", true);
+
+  if (error) throw new Error(error.message || "Could not check active jobs for this store.");
+  return (count ?? 0) > 0;
+}
+
 export async function GET(request: Request) {
   try {
     const user = await getAuthUserFromRequest(request);
@@ -189,6 +201,22 @@ export async function PATCH(request: Request) {
 
     const supabaseAdmin = getSupabaseAdminClient();
     if (!supabaseAdmin) throw new Error("Supabase service role is not configured on the server.");
+
+    const { data: existingStore, error: existingStoreError } = await supabaseAdmin
+      .from("employer_stores")
+      .select("id,active")
+      .eq("id", storeId)
+      .eq("employer_account_id", context.accountId)
+      .single();
+
+    if (existingStoreError) throw new Error(existingStoreError.message || "Could not find store.");
+
+    if (existingStore?.active === true && built.row.active === false && await hasActiveJobsForStore(supabaseAdmin, storeId)) {
+      return NextResponse.json(
+        { error: "This store has active jobs. Please pause, move, or delete those jobs before archiving this store." },
+        { status: 409 },
+      );
+    }
 
     const { data, error } = await supabaseAdmin
       .from("employer_stores")
