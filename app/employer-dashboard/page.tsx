@@ -418,6 +418,8 @@ export default function EmployerDashboardPage() {
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
   const [candidateBusyId, setCandidateBusyId] = useState<string | null>(null);
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
+  const [bulkAction, setBulkAction] = useState<"pause" | "unpause" | "delete" | null>(null);
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set());
   const [deleteJob, setDeleteJob] = useState<DashboardJob | null>(null);
   const [owner, setOwner] = useState<EmployerOwner | null>(null);
   const [billingSummary, setBillingSummary] = useState<BillingSummary | null>(null);
@@ -433,6 +435,7 @@ export default function EmployerDashboardPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
+  const selectAllJobsRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!deleteJob) return;
@@ -1224,6 +1227,131 @@ export default function EmployerDashboardPage() {
   const jobPaginationItems = getJobPaginationItems(safeJobCurrentPage, jobTotalPages);
   const jobShowingStart = filteredJobs.length === 0 ? 0 : (safeJobCurrentPage - 1) * JOB_LISTINGS_PER_PAGE + 1;
   const jobShowingEnd = Math.min(safeJobCurrentPage * JOB_LISTINGS_PER_PAGE, filteredJobs.length);
+  const filteredJobIds = useMemo(() => new Set(filteredJobs.map((job) => job.id)), [filteredJobs]);
+  const selectedJobs = useMemo(() => jobs.filter((job) => selectedJobIds.has(job.id)), [jobs, selectedJobIds]);
+  const selectedFilteredJobCount = useMemo(
+    () => Array.from(selectedJobIds).filter((jobId) => filteredJobIds.has(jobId)).length,
+    [filteredJobIds, selectedJobIds]
+  );
+  const selectedActiveJobs = selectedJobs.filter((job) => job.dashboard_status === "Active" && canEmployerPauseResume(job.status));
+  const selectedPausedJobs = selectedJobs.filter((job) => job.dashboard_status === "Paused" && canEmployerPauseResume(job.status));
+  const allFilteredJobsSelected = filteredJobs.length > 0 && filteredJobs.every((job) => selectedJobIds.has(job.id));
+  const someFilteredJobsSelected = selectedFilteredJobCount > 0 && !allFilteredJobsSelected;
+
+  useEffect(() => {
+    if (selectAllJobsRef.current) {
+      selectAllJobsRef.current.indeterminate = someFilteredJobsSelected;
+    }
+  }, [someFilteredJobsSelected]);
+
+  function handleToggleJobSelection(jobId: string, checked: boolean) {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(jobId);
+      else next.delete(jobId);
+      return next;
+    });
+  }
+
+  function handleToggleSelectAllFiltered(checked: boolean) {
+    setSelectedJobIds((prev) => {
+      const next = new Set(prev);
+      if (checked) filteredJobs.forEach((job) => next.add(job.id));
+      else filteredJobs.forEach((job) => next.delete(job.id));
+      return next;
+    });
+  }
+
+  function clearJobSelection() {
+    setSelectedJobIds(new Set());
+  }
+
+  async function handleBulkAction(action: "pause" | "unpause" | "delete") {
+    if (!canManageJobs || bulkAction || selectedJobs.length === 0) return;
+
+    const eligibleJobs = action === "pause"
+      ? selectedActiveJobs
+      : action === "unpause"
+        ? selectedPausedJobs
+        : selectedJobs;
+    const skippedCount = selectedJobs.length - eligibleJobs.length;
+
+    if (eligibleJobs.length === 0) {
+      setActionError(`No selected jobs are eligible to ${action === "unpause" ? "activate" : action}.`);
+      return;
+    }
+
+    const prompt = action === "pause"
+      ? `Pause ${eligibleJobs.length} selected jobs?`
+      : action === "unpause"
+        ? `Activate ${eligibleJobs.length} selected jobs?`
+        : `Delete ${eligibleJobs.length} selected jobs? This action cannot be undone.`;
+
+    if (!window.confirm(prompt)) return;
+
+    const { data, error: authError } = await supabase.auth.getUser();
+    const authUser = data?.user;
+    const currentOwner = authUser?.id && authUser.email?.trim()
+      ? {
+          userId: authUser.id,
+          email: authUser.email.trim(),
+          accountId: owner?.accountId ?? null,
+          ownerUserId: owner?.ownerUserId ?? authUser.id,
+          ownerEmail: owner?.ownerEmail ?? authUser.email.trim(),
+        }
+      : owner;
+
+    if (authError || !currentOwner) {
+      setActionError("We could not update selected jobs because the employer session is unavailable. Please refresh and try again.");
+      return;
+    }
+
+    setBulkAction(action);
+    setActionError(null);
+    setActionSuccess(null);
+
+    const updatePayload = action === "pause" ? { active: false, status: "paused" } : { active: true, status: "active" };
+    const affectedIds = new Set<string>();
+    let affectedCount = 0;
+    let lastError: SupabaseActionError | null = null;
+
+    for (const ownershipField of ["employer_account_id", "employer_user_id", "employer_email"] as OwnershipMatch[]) {
+      const ownerValue = ownershipField === "employer_account_id" ? currentOwner.accountId : ownershipField === "employer_user_id" ? currentOwner.userId : currentOwner.email;
+      if (!ownerValue) continue;
+
+      const ids = eligibleJobs
+        .filter((job) => getJobOwnershipMatch(job, currentOwner) === ownershipField)
+        .map((job) => job.id);
+      if (ids.length === 0) continue;
+
+      const result = action === "delete"
+        ? await supabase.from("jobs").delete().in("id", ids).eq(ownershipField, ownerValue).select("id")
+        : await supabase.from("jobs").update(updatePayload).in("id", ids).eq(ownershipField, ownerValue).select("id");
+
+      if (result.error) {
+        lastError = result.error;
+      } else {
+        (result.data ?? []).forEach((row) => affectedIds.add(String(row.id)));
+        affectedCount += result.data?.length ?? 0;
+      }
+    }
+
+    if (affectedCount === 0) {
+      setActionError(pauseResumeFailureMessage("We could not update the selected jobs. Please refresh and try again.", lastError));
+      setBulkAction(null);
+      return;
+    }
+
+    setJobs((prev) => action === "delete"
+      ? prev.filter((job) => !affectedIds.has(job.id))
+      : prev.map((job) => affectedIds.has(job.id)
+          ? { ...job, active: updatePayload.active, status: updatePayload.status, dashboard_status: dashboardStatusForJob(updatePayload.status, updatePayload.active) }
+          : job));
+    clearJobSelection();
+    setActionSuccess(`${affectedCount} selected ${affectedCount === 1 ? "job was" : "jobs were"} ${action === "delete" ? "deleted" : action === "pause" ? "paused" : "activated"}.${skippedCount > 0 ? ` ${skippedCount} selected ${skippedCount === 1 ? "job was" : "jobs were"} skipped because ${skippedCount === 1 ? "it is" : "they are"} not eligible.` : ""}`);
+    setBulkAction(null);
+    void syncBillingQuantity().then(refreshBillingSummary);
+  }
 
   const metrics = useMemo(() => {
     const active = jobs.filter((job) => job.dashboard_status === "Active").length;
@@ -1897,6 +2025,7 @@ export default function EmployerDashboardPage() {
                     value={jobSearchQuery}
                     onChange={(event) => {
                       setJobSearchQuery(event.target.value);
+                      setSelectedJobIds(new Set());
                       setJobCurrentPage(1);
                     }}
                     placeholder="Search by title, city, state, or restaurant"
@@ -1910,6 +2039,7 @@ export default function EmployerDashboardPage() {
                     value={jobStatusFilter}
                     onChange={(event) => {
                       setJobStatusFilter(event.target.value as JobStatusFilter);
+                      setSelectedJobIds(new Set());
                       setJobCurrentPage(1);
                     }}
                     aria-label="Filter job listings by status"
@@ -1928,6 +2058,7 @@ export default function EmployerDashboardPage() {
                     value={jobSortOption}
                     onChange={(event) => {
                       setJobSortOption(event.target.value as JobSortOption);
+                      setSelectedJobIds(new Set());
                       setJobCurrentPage(1);
                     }}
                     aria-label="Sort job listings"
@@ -1986,9 +2117,45 @@ export default function EmployerDashboardPage() {
                       </button>
                     </div>
                   </nav>
+                  {selectedJobs.length > 0 ? (
+                    <div className="rn-job-bulk-toolbar" role="region" aria-label="Bulk job actions">
+                      <strong>{selectedJobs.length} selected</strong>
+                      <button
+                        type="button"
+                        style={homeSecondaryButton}
+                        className="rn-btn-secondary"
+                        onClick={() => handleBulkAction("pause")}
+                        disabled={bulkAction !== null || selectedActiveJobs.length === 0}
+                      >
+                        {bulkAction === "pause" ? "Pausing..." : "Pause Selected"}
+                      </button>
+                      <button
+                        type="button"
+                        style={homeSecondaryButton}
+                        className="rn-btn-secondary"
+                        onClick={() => handleBulkAction("unpause")}
+                        disabled={bulkAction !== null || selectedPausedJobs.length === 0}
+                      >
+                        {bulkAction === "unpause" ? "Activating..." : "Unpause Selected"}
+                      </button>
+                      <button
+                        type="button"
+                        style={homeSecondaryButton}
+                        className="rn-btn-secondary rn-btn-delete"
+                        onClick={() => handleBulkAction("delete")}
+                        disabled={bulkAction !== null}
+                      >
+                        {bulkAction === "delete" ? "Deleting..." : "Delete Selected"}
+                      </button>
+                      <button type="button" style={homeSecondaryButton} className="rn-btn-secondary" onClick={clearJobSelection} disabled={bulkAction !== null}>
+                        Clear Selection
+                      </button>
+                    </div>
+                  ) : null}
                   <div className="rn-dashboard-table-wrap">
                 <table className="rn-dashboard-table">
                   <colgroup>
+                    <col className="rn-dashboard-table__col-select" />
                     <col className="rn-dashboard-table__col-title" />
                     <col className="rn-dashboard-table__col-status" />
                     <col className="rn-dashboard-table__col-location" />
@@ -1998,6 +2165,15 @@ export default function EmployerDashboardPage() {
                   </colgroup>
                   <thead>
                     <tr>
+                      <th className="rn-dashboard-table__select-cell">
+                        <input
+                          ref={selectAllJobsRef}
+                          type="checkbox"
+                          checked={allFilteredJobsSelected}
+                          onChange={(event) => handleToggleSelectAllFiltered(event.target.checked)}
+                          aria-label={`Select all ${filteredJobs.length} filtered job listings`}
+                        />
+                      </th>
                       <th>Job Title</th>
                       <th>Status</th>
                       <th>Location</th>
@@ -2008,7 +2184,15 @@ export default function EmployerDashboardPage() {
                   </thead>
                   <tbody>
                     {paginatedJobs.map((job) => (
-                      <tr key={job.id}>
+                      <tr key={job.id} className={selectedJobIds.has(job.id) ? "rn-dashboard-table__row--selected" : undefined}>
+                        <td className="rn-dashboard-table__select-cell">
+                          <input
+                            type="checkbox"
+                            checked={selectedJobIds.has(job.id)}
+                            onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
+                            aria-label={`Select ${job.title}`}
+                          />
+                        </td>
                         <td>{job.title}</td>
                         <td>
                           <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
@@ -2069,6 +2253,15 @@ export default function EmployerDashboardPage() {
                 {paginatedJobs.map((job) => (
                   <article key={`mobile-${job.id}`} className="rn-dashboard-mobile-card">
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <label className="rn-dashboard-mobile-select">
+                        <input
+                          type="checkbox"
+                          checked={selectedJobIds.has(job.id)}
+                          onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
+                          aria-label={`Select ${job.title}`}
+                        />
+                        <span>Select</span>
+                      </label>
                       <h3 style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
                         {job.title}
                       </h3>
@@ -2416,8 +2609,32 @@ export default function EmployerDashboardPage() {
           width: 100%;
         }
 
+        .rn-job-bulk-toolbar {
+          align-items: center;
+          background: rgba(255, 250, 242, 0.92);
+          border: 1px solid rgba(31, 79, 68, 0.16);
+          border-radius: 16px;
+          color: ${homeTheme.text};
+          display: flex;
+          flex-wrap: wrap;
+          font-family: var(--font-body);
+          gap: 10px;
+          margin: -4px 0 14px;
+          padding: 10px 12px;
+        }
+
+        .rn-job-bulk-toolbar strong {
+          color: ${homeTheme.green};
+          font-weight: 900;
+          margin-right: auto;
+        }
+
+        .rn-dashboard-table__col-select {
+          width: 5%;
+        }
+
         .rn-dashboard-table__col-title {
-          width: 28%;
+          width: 25%;
         }
 
         .rn-dashboard-table__col-status {
@@ -2437,7 +2654,7 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table__col-actions {
-          width: 19%;
+          width: 17%;
         }
 
         .rn-dashboard-table th,
@@ -2460,18 +2677,33 @@ export default function EmployerDashboardPage() {
           z-index: 2;
         }
 
-        .rn-dashboard-table td:first-child {
+        .rn-dashboard-table__select-cell {
+          text-align: center !important;
+        }
+
+        .rn-dashboard-table__select-cell input,
+        .rn-dashboard-mobile-select input {
+          accent-color: ${homeTheme.green};
+          height: 18px;
+          width: 18px;
+        }
+
+        .rn-dashboard-table__row--selected td {
+          background: rgba(31, 79, 68, 0.06);
+        }
+
+        .rn-dashboard-table td:nth-child(2) {
           line-height: 1.35;
         }
 
-        .rn-dashboard-table td:nth-child(2),
         .rn-dashboard-table td:nth-child(3),
         .rn-dashboard-table td:nth-child(4),
-        .rn-dashboard-table td:nth-child(5) {
+        .rn-dashboard-table td:nth-child(5),
+        .rn-dashboard-table td:nth-child(6) {
           white-space: nowrap;
         }
 
-        .rn-dashboard-table td:nth-child(3) {
+        .rn-dashboard-table td:nth-child(4) {
           overflow: hidden;
           text-overflow: ellipsis;
         }
@@ -2485,6 +2717,16 @@ export default function EmployerDashboardPage() {
           text-transform: uppercase;
           letter-spacing: 0.45px;
           color: ${homeTheme.muted};
+        }
+
+        .rn-dashboard-mobile-select {
+          align-items: center;
+          color: ${homeTheme.green};
+          display: inline-flex;
+          font-family: var(--font-body);
+          font-size: 13px;
+          font-weight: 900;
+          gap: 6px;
         }
 
         .rn-dashboard-actions {
