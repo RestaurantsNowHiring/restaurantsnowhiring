@@ -2683,9 +2683,49 @@ export default function EmployerDashboardPage() {
 
         .rn-dashboard-table__select-cell input,
         .rn-dashboard-mobile-select input {
-          accent-color: ${homeTheme.green};
+          appearance: none;
+          -webkit-appearance: none;
+          background: #fff;
+          border: 1px solid rgba(105, 119, 115, 0.32);
+          border-radius: 5px;
+          cursor: pointer;
           height: 18px;
+          margin: 0;
           width: 18px;
+          transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .rn-dashboard-table__select-cell input:hover,
+        .rn-dashboard-mobile-select input:hover {
+          background: rgba(46, 125, 91, 0.06);
+          border-color: rgba(31, 79, 68, 0.42);
+        }
+
+        .rn-dashboard-table__select-cell input:focus-visible,
+        .rn-dashboard-mobile-select input:focus-visible {
+          box-shadow: 0 0 0 3px rgba(46, 125, 91, 0.18);
+          outline: 2px solid transparent;
+          outline-offset: 2px;
+        }
+
+        .rn-dashboard-table__select-cell input:checked,
+        .rn-dashboard-mobile-select input:checked {
+          background-color: ${homeTheme.green};
+          background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 16 16' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M6.4 11.2 3.2 8l1.1-1.1 2.1 2.1 5.3-5.3L12.8 4.8z' fill='white'/%3E%3C/svg%3E");
+          background-position: center;
+          background-repeat: no-repeat;
+          background-size: 14px 14px;
+          border-color: ${homeTheme.green};
+        }
+
+        .rn-dashboard-table__select-cell input:indeterminate,
+        .rn-dashboard-mobile-select input:indeterminate {
+          background-color: ${homeTheme.green};
+          background-image: linear-gradient(#fff, #fff);
+          background-position: center;
+          background-repeat: no-repeat;
+          background-size: 10px 2px;
+          border-color: ${homeTheme.green};
         }
 
         .rn-dashboard-table__row--selected td {
