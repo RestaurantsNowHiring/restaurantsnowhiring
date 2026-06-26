@@ -121,7 +121,7 @@ const JOB_STATUS_FILTER_OPTIONS: Array<{ value: JobStatusFilter; label: string }
   { value: "Rejected", label: "Rejected" },
 ];
 
-const JOB_LISTINGS_PER_PAGE = 25;
+const JOB_LISTINGS_PER_PAGE = 10;
 const JOB_PAGINATION_SIBLING_COUNT = 2;
 
 const JOB_SORT_OPTIONS: Array<{ value: JobSortOption; label: string }> = [
