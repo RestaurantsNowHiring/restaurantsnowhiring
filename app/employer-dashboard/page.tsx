@@ -2275,10 +2275,10 @@ export default function EmployerDashboardPage() {
         .rn-job-listing-pagination {
           align-items: center;
           backdrop-filter: blur(14px);
-          background: rgba(255, 250, 242, 0.88);
-          border: 1px solid rgba(31, 79, 68, 0.14);
+          background: #fffaf2;
+          border: 1px solid rgba(31, 79, 68, 0.16);
           border-radius: 18px;
-          box-shadow: 0 14px 34px rgba(31, 79, 68, 0.12);
+          box-shadow: 0 10px 24px rgba(31, 79, 68, 0.10);
           color: rgba(0, 0, 0, 0.68);
           display: flex;
           flex-wrap: wrap;
@@ -2289,9 +2289,8 @@ export default function EmployerDashboardPage() {
           margin: 14px 0;
           padding: 10px 12px;
           position: sticky;
-          top: calc(100vh - 98px);
-          top: calc(100dvh - 98px);
-          z-index: 10;
+          top: 74px;
+          z-index: 30;
         }
 
         .rn-job-listing-pagination__controls {
@@ -2917,8 +2916,7 @@ export default function EmployerDashboardPage() {
 
           .rn-job-listing-pagination {
             align-items: flex-start;
-            top: calc(100vh - 178px);
-            top: calc(100dvh - 178px);
+            top: 106px;
           }
 
           .rn-job-listing-pagination__controls {
@@ -2999,8 +2997,7 @@ export default function EmployerDashboardPage() {
           }
 
           .rn-job-listing-pagination {
-            top: calc(100vh - 218px);
-            top: calc(100dvh - 218px);
+            top: 106px;
           }
 
           .rn-candidate-card,
