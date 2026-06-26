@@ -2686,8 +2686,8 @@ export default function EmployerDashboardPage() {
           appearance: none;
           -webkit-appearance: none;
           background: #fff;
-          border: 1.5px solid rgba(105, 119, 115, 0.28);;
-          border-radius: 6px;
+          border: 1.5px solid rgba(105, 119, 115, 0.28);
+          border-radius: 4px;
           cursor: pointer;
           height: 22px;
           margin: 0;
