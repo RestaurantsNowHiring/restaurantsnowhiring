@@ -1947,7 +1947,46 @@ export default function EmployerDashboardPage() {
                 </div>
               ) : (
                 <>
-              <div className="rn-dashboard-table-wrap">
+                  <nav className="rn-job-listing-pagination" aria-label="Job listings pagination">
+                    <span>Showing {jobShowingStart}-{jobShowingEnd} of {filteredJobs.length}</span>
+                    <div className="rn-job-listing-pagination__controls">
+                      <button
+                        type="button"
+                        className="rn-btn-secondary rn-job-listing-pagination__button"
+                        style={homeSecondaryButton}
+                        onClick={() => setJobCurrentPage((page) => Math.max(1, page - 1))}
+                        disabled={safeJobCurrentPage === 1}
+                      >
+                        Previous
+                      </button>
+                      {jobPaginationItems.map((item) => (
+                        typeof item === "number" ? (
+                          <button
+                            key={item}
+                            type="button"
+                            className={item === safeJobCurrentPage ? "rn-job-listing-pagination__page rn-job-listing-pagination__page--current" : "rn-job-listing-pagination__page"}
+                            onClick={() => setJobCurrentPage(item)}
+                            aria-current={item === safeJobCurrentPage ? "page" : undefined}
+                            aria-label={`Go to job listings page ${item}`}
+                          >
+                            {item}
+                          </button>
+                        ) : (
+                          <span key={item} className="rn-job-listing-pagination__ellipsis" aria-hidden="true">…</span>
+                        )
+                      ))}
+                      <button
+                        type="button"
+                        className="rn-btn-secondary rn-job-listing-pagination__button"
+                        style={homeSecondaryButton}
+                        onClick={() => setJobCurrentPage((page) => Math.min(jobTotalPages, page + 1))}
+                        disabled={safeJobCurrentPage === jobTotalPages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </nav>
+                  <div className="rn-dashboard-table-wrap">
                 <table className="rn-dashboard-table">
                   <thead>
                     <tr>
@@ -2078,45 +2117,6 @@ export default function EmployerDashboardPage() {
                 ))}
               </div>
 
-              <nav className="rn-job-listing-pagination" aria-label="Job listings pagination">
-                <span>Showing {jobShowingStart}-{jobShowingEnd} of {filteredJobs.length}</span>
-                <div className="rn-job-listing-pagination__controls">
-                  <button
-                    type="button"
-                    className="rn-btn-secondary rn-job-listing-pagination__button"
-                    style={homeSecondaryButton}
-                    onClick={() => setJobCurrentPage((page) => Math.max(1, page - 1))}
-                    disabled={safeJobCurrentPage === 1}
-                  >
-                    Previous
-                  </button>
-                  {jobPaginationItems.map((item) => (
-                    typeof item === "number" ? (
-                      <button
-                        key={item}
-                        type="button"
-                        className={item === safeJobCurrentPage ? "rn-job-listing-pagination__page rn-job-listing-pagination__page--current" : "rn-job-listing-pagination__page"}
-                        onClick={() => setJobCurrentPage(item)}
-                        aria-current={item === safeJobCurrentPage ? "page" : undefined}
-                        aria-label={`Go to job listings page ${item}`}
-                      >
-                        {item}
-                      </button>
-                    ) : (
-                      <span key={item} className="rn-job-listing-pagination__ellipsis" aria-hidden="true">…</span>
-                    )
-                  ))}
-                  <button
-                    type="button"
-                    className="rn-btn-secondary rn-job-listing-pagination__button"
-                    style={homeSecondaryButton}
-                    onClick={() => setJobCurrentPage((page) => Math.min(jobTotalPages, page + 1))}
-                    disabled={safeJobCurrentPage === jobTotalPages}
-                  >
-                    Next
-                  </button>
-                </div>
-              </nav>
                 </>
               )}
             </>
@@ -2274,6 +2274,11 @@ export default function EmployerDashboardPage() {
 
         .rn-job-listing-pagination {
           align-items: center;
+          backdrop-filter: blur(14px);
+          background: rgba(255, 250, 242, 0.88);
+          border: 1px solid rgba(31, 79, 68, 0.14);
+          border-radius: 18px;
+          box-shadow: 0 14px 34px rgba(31, 79, 68, 0.12);
           color: rgba(0, 0, 0, 0.68);
           display: flex;
           flex-wrap: wrap;
@@ -2281,7 +2286,12 @@ export default function EmployerDashboardPage() {
           font-weight: 900;
           gap: 12px;
           justify-content: space-between;
-          margin-top: 14px;
+          margin: 14px 0;
+          padding: 10px 12px;
+          position: sticky;
+          top: calc(100vh - 98px);
+          top: calc(100dvh - 98px);
+          z-index: 10;
         }
 
         .rn-job-listing-pagination__controls {
@@ -2905,6 +2915,16 @@ export default function EmployerDashboardPage() {
             grid-template-columns: 1fr;
           }
 
+          .rn-job-listing-pagination {
+            align-items: flex-start;
+            top: calc(100vh - 178px);
+            top: calc(100dvh - 178px);
+          }
+
+          .rn-job-listing-pagination__controls {
+            justify-content: flex-start;
+          }
+
           .rn-dashboard-table-wrap {
             display: none;
           }
@@ -2976,6 +2996,11 @@ export default function EmployerDashboardPage() {
           .rn-candidate-filters,
           .rn-dashboard-actions {
             grid-template-columns: 1fr;
+          }
+
+          .rn-job-listing-pagination {
+            top: calc(100vh - 218px);
+            top: calc(100dvh - 218px);
           }
 
           .rn-candidate-card,
