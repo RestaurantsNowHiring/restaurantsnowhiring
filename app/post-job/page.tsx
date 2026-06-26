@@ -16,7 +16,15 @@ import {
 
 type Step = 1 | 2 | 3 | 4;
 type PayMode = "range" | "minimum" | "maximum" | "rate";
-type EmployerAccess = { accountId: string | null; canManageJobs: boolean; canManageNotificationRouting: boolean; defaultCandidateNotificationRouting: string; supportEmail: string | null; };
+type EmployerAccess = {
+  accountId: string | null;
+  ownerUserId: string;
+  ownerEmail: string;
+  canManageJobs: boolean;
+  canManageNotificationRouting: boolean;
+  defaultCandidateNotificationRouting: string;
+  supportEmail: string | null;
+};
 type SelectionType = "store" | "manager" | null;
 type EmployerAccessScope = "single_location" | "multi_location" | "full_account_access";
 type EmployerStore = {
@@ -162,6 +170,20 @@ function formatHiringManagerOptionDetail(manager: HiringManager) {
 }
 
 const POST_JOB_HIRING_MANAGER_STATUSES = new Set(["active", "invited", "pending"]);
+
+function employerAccountHeaders(token: string) {
+  const selectedEmployerAccountId =
+    typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem("rn-selected-employer-account-id");
+
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(selectedEmployerAccountId
+      ? { "X-Employer-Account-Id": selectedEmployerAccountId }
+      : {}),
+  };
+}
 
 function buildPostJobHiringManagerOptions(managers: HiringManager[]) {
   return managers
@@ -388,10 +410,11 @@ export default function PostJobPage() {
   }, [closeStoreCombobox, closeTemplateCombobox]);
 
   async function loadStoreAndTemplateOptions(accessToken: string) {
+    const headers = employerAccountHeaders(accessToken);
     const [storesResponse, managersResponse, templatesResponse] = await Promise.all([
-      fetch("/api/employer/stores?assignableOnly=true", { headers: { Authorization: `Bearer ${accessToken}` } }),
-      fetch("/api/employer/hiring-managers", { headers: { Authorization: `Bearer ${accessToken}` } }),
-      fetch("/api/employer/job-templates", { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch("/api/employer/stores?assignableOnly=true", { headers }),
+      fetch("/api/employer/hiring-managers", { headers }),
+      fetch("/api/employer/job-templates", { headers }),
     ]);
 
     if (storesResponse.ok) {
@@ -466,7 +489,7 @@ export default function PostJobPage() {
         const accessToken = data.session?.access_token;
         if (accessToken) {
           const accessResponse = await fetch("/api/employer/me", {
-            headers: { Authorization: `Bearer ${accessToken}` },
+            headers: employerAccountHeaders(accessToken),
           });
           const accessPayload = (await accessResponse.json().catch(() => null)) as { employer?: EmployerAccess; error?: string } | null;
           const nextAccess = accessPayload?.employer ?? null;
@@ -480,7 +503,7 @@ export default function PostJobPage() {
           }
 
           const billingResponse = await fetch("/api/billing/status", {
-            headers: { Authorization: `Bearer ${accessToken}` },
+            headers: employerAccountHeaders(accessToken),
           });
           const billingPayload = (await billingResponse.json().catch(() => null)) as
             | { canPostOrActivateJobs?: boolean; billingGateReason?: string; error?: string }
@@ -922,10 +945,12 @@ export default function PostJobPage() {
 
     const { data: userData, error: userError } = await supabase.auth.getUser();
     const currentUser = userData?.user;
-    const employerUserId = currentUser?.id;
-    const employerEmail = currentUser?.email?.trim();
+    const postedByUserId = currentUser?.id;
+    const postedByEmail = currentUser?.email?.trim();
+    const employerUserId = employerAccess?.ownerUserId?.trim();
+    const employerEmail = employerAccess?.ownerEmail?.trim();
 
-    if (userError || !employerUserId || !employerEmail) {
+    if (userError || !postedByUserId || !postedByEmail || !employerUserId || !employerEmail) {
       setIsSubmitting(false);
       setMessage("Please sign in again before posting this job so we can link it to your employer account.");
       return;
@@ -968,8 +993,8 @@ export default function PostJobPage() {
       employer_email: employerEmail,
       employer_user_id: employerUserId,
       employer_account_id: employerAccess?.accountId ?? null,
-      posted_by_user_id: employerUserId,
-      posted_by_email: employerEmail,
+      posted_by_user_id: postedByUserId,
+      posted_by_email: postedByEmail,
       candidate_notification_email: notificationEmail || null,
       candidate_notification_emails: notificationEmails.length > 0 ? notificationEmails : null,
       candidate_notification_routing: notificationEmails.length > 0 ? "custom_job_email" : employerAccess?.defaultCandidateNotificationRouting ?? "job_poster",
