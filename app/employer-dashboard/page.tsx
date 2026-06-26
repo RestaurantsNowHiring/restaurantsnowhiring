@@ -2166,13 +2166,16 @@ export default function EmployerDashboardPage() {
                   <thead>
                     <tr>
                       <th className="rn-dashboard-table__select-cell">
-                        <input
-                          ref={selectAllJobsRef}
-                          type="checkbox"
-                          checked={allFilteredJobsSelected}
-                          onChange={(event) => handleToggleSelectAllFiltered(event.target.checked)}
-                          aria-label={`Select all ${filteredJobs.length} filtered job listings`}
-                        />
+                        <label className="rn-dashboard-checkbox-hitbox">
+                          <input
+                            ref={selectAllJobsRef}
+                            className="rn-dashboard-checkbox"
+                            type="checkbox"
+                            checked={allFilteredJobsSelected}
+                            onChange={(event) => handleToggleSelectAllFiltered(event.target.checked)}
+                            aria-label={`Select all ${filteredJobs.length} filtered job listings`}
+                          />
+                        </label>
                       </th>
                       <th>Job Title</th>
                       <th>Status</th>
@@ -2186,12 +2189,15 @@ export default function EmployerDashboardPage() {
                     {paginatedJobs.map((job) => (
                       <tr key={job.id} className={selectedJobIds.has(job.id) ? "rn-dashboard-table__row--selected" : undefined}>
                         <td className="rn-dashboard-table__select-cell">
-                          <input
-                            type="checkbox"
-                            checked={selectedJobIds.has(job.id)}
-                            onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
-                            aria-label={`Select ${job.title}`}
-                          />
+                          <label className="rn-dashboard-checkbox-hitbox">
+                            <input
+                              className="rn-dashboard-checkbox"
+                              type="checkbox"
+                              checked={selectedJobIds.has(job.id)}
+                              onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
+                              aria-label={`Select ${job.title}`}
+                            />
+                          </label>
                         </td>
                         <td>{job.title}</td>
                         <td>
@@ -2255,6 +2261,7 @@ export default function EmployerDashboardPage() {
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                       <label className="rn-dashboard-mobile-select">
                         <input
+                          className="rn-dashboard-checkbox"
                           type="checkbox"
                           checked={selectedJobIds.has(job.id)}
                           onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
@@ -2681,11 +2688,91 @@ export default function EmployerDashboardPage() {
           text-align: center !important;
         }
 
-        .rn-dashboard-table__select-cell input,
-        .rn-dashboard-mobile-select input {
-          accent-color: ${homeTheme.green};
-          height: 18px;
-          width: 18px;
+        .rn-dashboard-checkbox-hitbox {
+          align-items: center;
+          border-radius: 10px;
+          cursor: pointer;
+          display: inline-flex;
+          height: 34px;
+          justify-content: center;
+          margin: -6px;
+          width: 34px;
+        }
+
+        .rn-dashboard-checkbox {
+          appearance: none;
+          background: #fffaf2;
+          border: 2px solid rgba(53, 128, 110, 0.34);
+          border-radius: 6px;
+          color-scheme: light;
+          cursor: pointer;
+          flex: 0 0 auto;
+          height: 22px;
+          margin: 0;
+          position: relative;
+          transition:
+            background-color 170ms ease,
+            border-color 170ms ease,
+            box-shadow 170ms ease,
+            transform 170ms ease;
+          width: 22px;
+        }
+
+        .rn-dashboard-checkbox::after {
+          border: solid #ffffff;
+          border-width: 0 2px 2px 0;
+          content: "";
+          height: 10px;
+          left: 7px;
+          opacity: 0;
+          position: absolute;
+          top: 3px;
+          transform: rotate(45deg) scale(0.65);
+          transition: opacity 140ms ease, transform 170ms ease;
+          width: 5px;
+        }
+
+        .rn-dashboard-checkbox::before {
+          background: #ffffff;
+          border-radius: 999px;
+          content: "";
+          height: 2px;
+          left: 5px;
+          opacity: 0;
+          position: absolute;
+          top: 8px;
+          transform: scaleX(0.35);
+          transition: opacity 140ms ease, transform 170ms ease;
+          width: 8px;
+        }
+
+        .rn-dashboard-checkbox-hitbox:hover .rn-dashboard-checkbox,
+        .rn-dashboard-checkbox:hover {
+          border-color: ${homeTheme.green};
+          box-shadow: 0 0 0 4px rgba(53, 128, 110, 0.1);
+          transform: translateY(-1px);
+        }
+
+        .rn-dashboard-checkbox:focus-visible {
+          border-color: ${homeTheme.green};
+          box-shadow: 0 0 0 3px #ffffff, 0 0 0 6px rgba(53, 128, 110, 0.28);
+          outline: none;
+        }
+
+        .rn-dashboard-checkbox:checked,
+        .rn-dashboard-checkbox:indeterminate {
+          background: ${homeTheme.green};
+          border-color: ${homeTheme.green};
+        }
+
+        .rn-dashboard-checkbox:checked::after {
+          opacity: 1;
+          transform: rotate(45deg) scale(1);
+        }
+
+        .rn-dashboard-checkbox:indeterminate::before {
+          opacity: 1;
+          transform: scaleX(1);
         }
 
         .rn-dashboard-table__row--selected td {
