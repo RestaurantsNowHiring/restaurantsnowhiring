@@ -1986,7 +1986,8 @@ export default function EmployerDashboardPage() {
                       </button>
                     </div>
                   </nav>
-                  <div className="rn-dashboard-table-wrap">
+                  <div className="rn-job-listing-scroll" aria-label="Scrollable job listings">
+                    <div className="rn-dashboard-table-wrap">
                 <table className="rn-dashboard-table">
                   <thead>
                     <tr>
@@ -2055,7 +2056,7 @@ export default function EmployerDashboardPage() {
                     ))}
                   </tbody>
                 </table>
-              </div>
+                    </div>
 
               <div className="rn-dashboard-mobile-list">
                 {paginatedJobs.map((job) => (
@@ -2116,6 +2117,7 @@ export default function EmployerDashboardPage() {
                   </article>
                 ))}
               </div>
+                  </div>
 
                 </>
               )}
@@ -2286,11 +2288,10 @@ export default function EmployerDashboardPage() {
           font-weight: 900;
           gap: 12px;
           justify-content: space-between;
-          margin: 14px 0;
+          margin: 14px 0 0;
           padding: 10px 12px;
           position: sticky;
-          top: calc(100vh - 98px);
-          top: calc(100dvh - 98px);
+          top: 0;
           z-index: 10;
         }
 
@@ -2376,12 +2377,20 @@ export default function EmployerDashboardPage() {
           font-weight: 900;
         }
 
-        .rn-dashboard-table-wrap {
+        .rn-job-listing-scroll {
+          background: #fff;
           border: 1px solid ${homeTheme.border};
           border-radius: 14px;
+          margin-top: 12px;
+          max-height: min(58vh, 620px);
           overflow-x: auto;
-          overflow-y: hidden;
+          overflow-y: auto;
+          overscroll-behavior: contain;
+        }
+
+        .rn-dashboard-table-wrap {
           background: #fff;
+          min-width: max-content;
         }
 
         .rn-dashboard-table {
@@ -2404,10 +2413,14 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table th {
-          font-size: 12px;
-          text-transform: uppercase;
-          letter-spacing: 0.45px;
+          background: #fff;
           color: ${homeTheme.muted};
+          font-size: 12px;
+          letter-spacing: 0.45px;
+          position: sticky;
+          text-transform: uppercase;
+          top: 0;
+          z-index: 2;
         }
 
         .rn-dashboard-actions {
@@ -2917,8 +2930,11 @@ export default function EmployerDashboardPage() {
 
           .rn-job-listing-pagination {
             align-items: flex-start;
-            top: calc(100vh - 178px);
-            top: calc(100dvh - 178px);
+          }
+
+          .rn-job-listing-scroll {
+            max-height: min(56vh, 520px);
+            overflow-x: hidden;
           }
 
           .rn-job-listing-pagination__controls {
@@ -2998,9 +3014,8 @@ export default function EmployerDashboardPage() {
             grid-template-columns: 1fr;
           }
 
-          .rn-job-listing-pagination {
-            top: calc(100vh - 218px);
-            top: calc(100dvh - 218px);
+          .rn-job-listing-scroll {
+            max-height: min(54vh, 480px);
           }
 
           .rn-candidate-card,
