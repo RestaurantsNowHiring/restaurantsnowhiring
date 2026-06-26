@@ -256,7 +256,7 @@ export async function GET(request: Request) {
         : Promise.resolve({}),
     ]);
 
-    return NextResponse.json({ profile: { ...profile, ...accountProfile } });
+    return NextResponse.json({ profile: { ...profile, ...accountProfile, login_email: user.email } });
   } catch (error) {
     console.error("Employer profile load failed", { error });
     return NextResponse.json(
@@ -417,7 +417,7 @@ export async function PUT(request: Request) {
       profile: {
         ...data,
         ...accountData,
-        login_email: context.ownerEmail,
+        login_email: user.email,
       },
     });
   } catch (error) {
