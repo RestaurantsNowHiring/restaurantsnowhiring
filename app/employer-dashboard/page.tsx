@@ -435,7 +435,6 @@ export default function EmployerDashboardPage() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
-  const selectAllJobsRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!deleteJob) return;
@@ -1236,13 +1235,6 @@ export default function EmployerDashboardPage() {
   const selectedActiveJobs = selectedJobs.filter((job) => job.dashboard_status === "Active" && canEmployerPauseResume(job.status));
   const selectedPausedJobs = selectedJobs.filter((job) => job.dashboard_status === "Paused" && canEmployerPauseResume(job.status));
   const allFilteredJobsSelected = filteredJobs.length > 0 && filteredJobs.every((job) => selectedJobIds.has(job.id));
-  const someFilteredJobsSelected = selectedFilteredJobCount > 0 && !allFilteredJobsSelected;
-
-  useEffect(() => {
-    if (selectAllJobsRef.current) {
-      selectAllJobsRef.current.indeterminate = someFilteredJobsSelected;
-    }
-  }, [someFilteredJobsSelected]);
 
   function handleToggleJobSelection(jobId: string, checked: boolean) {
     setSelectedJobIds((prev) => {
@@ -2120,35 +2112,36 @@ export default function EmployerDashboardPage() {
                   {selectedJobs.length > 0 ? (
                     <div className="rn-job-bulk-toolbar" role="region" aria-label="Bulk job actions">
                       <strong>{selectedJobs.length} selected</strong>
+                      <span aria-hidden="true">|</span>
                       <button
                         type="button"
-                        style={homeSecondaryButton}
-                        className="rn-btn-secondary"
+                        className="rn-job-bulk-toolbar__button"
                         onClick={() => handleBulkAction("pause")}
                         disabled={bulkAction !== null || selectedActiveJobs.length === 0}
                       >
-                        {bulkAction === "pause" ? "Pausing..." : "Pause Selected"}
+                        {bulkAction === "pause" ? "Pausing..." : "Pause"}
                       </button>
+                      <span aria-hidden="true">|</span>
                       <button
                         type="button"
-                        style={homeSecondaryButton}
-                        className="rn-btn-secondary"
+                        className="rn-job-bulk-toolbar__button"
                         onClick={() => handleBulkAction("unpause")}
                         disabled={bulkAction !== null || selectedPausedJobs.length === 0}
                       >
-                        {bulkAction === "unpause" ? "Activating..." : "Unpause Selected"}
+                        {bulkAction === "unpause" ? "Activating..." : "Unpause"}
                       </button>
+                      <span aria-hidden="true">|</span>
                       <button
                         type="button"
-                        style={homeSecondaryButton}
-                        className="rn-btn-secondary rn-btn-delete"
+                        className="rn-job-bulk-toolbar__button rn-job-bulk-toolbar__button--delete"
                         onClick={() => handleBulkAction("delete")}
                         disabled={bulkAction !== null}
                       >
-                        {bulkAction === "delete" ? "Deleting..." : "Delete Selected"}
+                        {bulkAction === "delete" ? "Deleting..." : "Delete"}
                       </button>
-                      <button type="button" style={homeSecondaryButton} className="rn-btn-secondary" onClick={clearJobSelection} disabled={bulkAction !== null}>
-                        Clear Selection
+                      <span aria-hidden="true">|</span>
+                      <button type="button" className="rn-job-bulk-toolbar__button" onClick={clearJobSelection} disabled={bulkAction !== null}>
+                        Clear
                       </button>
                     </div>
                   ) : null}
@@ -2166,13 +2159,15 @@ export default function EmployerDashboardPage() {
                   <thead>
                     <tr>
                       <th className="rn-dashboard-table__select-cell">
-                        <input
-                          ref={selectAllJobsRef}
-                          type="checkbox"
-                          checked={allFilteredJobsSelected}
-                          onChange={(event) => handleToggleSelectAllFiltered(event.target.checked)}
-                          aria-label={`Select all ${filteredJobs.length} filtered job listings`}
-                        />
+                        <button
+                          type="button"
+                          className="rn-dashboard-select-all"
+                          onClick={() => handleToggleSelectAllFiltered(!allFilteredJobsSelected)}
+                          disabled={filteredJobs.length === 0}
+                          aria-pressed={allFilteredJobsSelected}
+                        >
+                          {allFilteredJobsSelected ? "Deselect all" : selectedFilteredJobCount > 0 ? "Select rest" : "Select all"}
+                        </button>
                       </th>
                       <th>Job Title</th>
                       <th>Status</th>
@@ -2187,6 +2182,7 @@ export default function EmployerDashboardPage() {
                       <tr key={job.id} className={selectedJobIds.has(job.id) ? "rn-dashboard-table__row--selected" : undefined}>
                         <td className="rn-dashboard-table__select-cell">
                           <input
+                            className="rn-dashboard-bulk-checkbox"
                             type="checkbox"
                             checked={selectedJobIds.has(job.id)}
                             onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
@@ -2251,10 +2247,11 @@ export default function EmployerDashboardPage() {
 
               <div className="rn-dashboard-mobile-list">
                 {paginatedJobs.map((job) => (
-                  <article key={`mobile-${job.id}`} className="rn-dashboard-mobile-card">
+                  <article key={`mobile-${job.id}`} className={selectedJobIds.has(job.id) ? "rn-dashboard-mobile-card rn-dashboard-mobile-card--selected" : "rn-dashboard-mobile-card"}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                       <label className="rn-dashboard-mobile-select">
                         <input
+                          className="rn-dashboard-bulk-checkbox"
                           type="checkbox"
                           checked={selectedJobIds.has(job.id)}
                           onChange={(event) => handleToggleJobSelection(job.id, event.target.checked)}
@@ -2611,22 +2608,52 @@ export default function EmployerDashboardPage() {
 
         .rn-job-bulk-toolbar {
           align-items: center;
-          background: rgba(255, 250, 242, 0.92);
-          border: 1px solid rgba(31, 79, 68, 0.16);
-          border-radius: 16px;
-          color: ${homeTheme.text};
-          display: flex;
+          background: rgba(255, 255, 255, 0.86);
+          border: 1px solid rgba(31, 79, 68, 0.12);
+          border-radius: 999px;
+          color: ${homeTheme.muted};
+          display: inline-flex;
           flex-wrap: wrap;
           font-family: var(--font-body);
-          gap: 10px;
+          font-size: 13px;
+          font-weight: 800;
+          gap: 7px;
           margin: -4px 0 14px;
-          padding: 10px 12px;
+          padding: 7px 10px;
         }
 
         .rn-job-bulk-toolbar strong {
-          color: ${homeTheme.green};
+          color: ${homeTheme.text};
           font-weight: 900;
-          margin-right: auto;
+        }
+
+        .rn-job-bulk-toolbar__button {
+          appearance: none;
+          background: transparent;
+          border: 0;
+          color: ${homeTheme.green};
+          cursor: pointer;
+          font: inherit;
+          padding: 0;
+        }
+
+        .rn-job-bulk-toolbar__button:hover:not(:disabled) {
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        .rn-job-bulk-toolbar__button:disabled {
+          color: rgba(31, 79, 68, 0.35);
+          cursor: not-allowed;
+          text-decoration: none;
+        }
+
+        .rn-job-bulk-toolbar__button--delete {
+          color: #9c3f36;
+        }
+
+        .rn-job-bulk-toolbar__button--delete:disabled {
+          color: rgba(156, 63, 54, 0.35);
         }
 
         .rn-dashboard-table__col-select {
@@ -2681,15 +2708,42 @@ export default function EmployerDashboardPage() {
           text-align: center !important;
         }
 
-        .rn-dashboard-table__select-cell input,
-        .rn-dashboard-mobile-select input {
+        .rn-dashboard-select-all {
+          appearance: none;
+          background: transparent;
+          border: 0;
+          color: ${homeTheme.green};
+          cursor: pointer;
+          font-family: var(--font-body);
+          font-size: 12px;
+          font-weight: 900;
+          padding: 0;
+          white-space: nowrap;
+        }
+
+        .rn-dashboard-select-all:hover:not(:disabled) {
+          text-decoration: underline;
+          text-underline-offset: 3px;
+        }
+
+        .rn-dashboard-select-all:disabled {
+          color: ${homeTheme.muted};
+          cursor: not-allowed;
+        }
+
+        .rn-dashboard-bulk-checkbox {
           accent-color: ${homeTheme.green};
-          height: 18px;
-          width: 18px;
+          cursor: pointer;
+          height: 17px;
+          width: 17px;
+        }
+
+        .rn-dashboard-table__row--selected {
+          box-shadow: inset 3px 0 0 ${homeTheme.green};
         }
 
         .rn-dashboard-table__row--selected td {
-          background: rgba(31, 79, 68, 0.06);
+          background: rgba(53, 128, 110, 0.045);
         }
 
         .rn-dashboard-table td:nth-child(2) {
@@ -3238,6 +3292,12 @@ export default function EmployerDashboardPage() {
           border-radius: 14px;
           padding: 14px;
           background: rgba(255, 255, 255, 0.92);
+        }
+
+        .rn-dashboard-mobile-card--selected {
+          background: rgba(53, 128, 110, 0.045);
+          border-left: 3px solid ${homeTheme.green};
+          padding-left: 12px;
         }
 
         @media (max-width: 980px) {
