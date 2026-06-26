@@ -2682,18 +2682,25 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table__select-cell input,
-        .rn-dashboard-mobile-select input {
-          appearance: none;
-          -webkit-appearance: none;
-          background: #fff;
-          border: 1.5px solid rgba(105, 119, 115, 0.28);
-          border-radius: 4px;
-          cursor: pointer;
-          height: 22px;
-          margin: 0;
-          width: 22px;
-          transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-        }
+.rn-dashboard-mobile-select input {
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff;
+  border: 1.5px solid rgba(105, 119, 115, 0.28);
+  border-radius: 4px;
+  cursor: pointer;
+
+  width: 22px;
+  height: 22px;
+
+  min-width: 22px;
+  min-height: 22px;   /* <-- ADD */
+  max-width: 22px;
+  max-height: 22px;   /* <-- ADD */
+
+  margin: 0;
+  transition: background-color .15s, border-color .15s, box-shadow .15s;
+}
 
         .rn-dashboard-table__select-cell input:hover,
         .rn-dashboard-mobile-select input:hover {
