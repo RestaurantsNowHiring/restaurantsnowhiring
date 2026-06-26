@@ -124,7 +124,7 @@ export default function StoreDirectoryPage() {
 
     const [meResponse, storesResponse] = await Promise.all([
       fetch("/api/employer/me", { headers: employerAccountHeaders(token) }),
-      fetch("/api/employer/stores?assignableOnly=true", { headers: employerAccountHeaders(token) }),
+      fetch("/api/employer/stores", { headers: employerAccountHeaders(token) }),
     ]);
 
     const mePayload = (await meResponse.json().catch(() => null)) as { employer?: EmployerAccess } | null;
@@ -157,7 +157,7 @@ export default function StoreDirectoryPage() {
   const filteredStores = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return stores.filter((store) => {
-      if (!store.active || store.is_assignable_location !== true) return false;
+      if (store.is_assignable_location !== true) return false;
       const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? store.active : !store.active);
       const matchesState = stateFilter === "all" || store.state === stateFilter;
       const matchesSearch = !normalizedSearch || [store.location_name, store.address, store.city, store.state, store.store_email, store.ta_email, store.gm_op_email]
@@ -224,6 +224,43 @@ export default function StoreDirectoryPage() {
     await loadStores();
   }
 
+  async function archiveStore(store: Store) {
+    if (!store.active) return;
+    const activeJobCount = (activeJobsByStore[store.id] ?? []).length;
+    if (activeJobCount > 0) {
+      setMessage("This store has active jobs. Please pause, move, or delete those jobs before archiving this store.");
+      return;
+    }
+
+    const token = await getAccessToken();
+    if (!token) {
+      setMessage("Please sign in again before managing stores.");
+      return;
+    }
+
+    const confirmed = window.confirm(`Archive ${store.location_name}? Archived stores will be hidden from active store lists and job posting dropdowns.`);
+    if (!confirmed) return;
+
+    setBusy(true);
+    setMessage(null);
+    const response = await fetch("/api/employer/stores", {
+      method: "PATCH",
+      headers: employerAccountHeaders(token, "application/json"),
+      body: JSON.stringify({ id: store.id, ...storeToForm(store), active: false }),
+    });
+    const payload = (await response.json().catch(() => null)) as { store?: Store; error?: string } | null;
+    setBusy(false);
+
+    if (!response.ok) {
+      setMessage(payload?.error || "Could not archive store.");
+      return;
+    }
+
+    setMessage("Store archived.");
+    setIsEditing(false);
+    await loadStores();
+  }
+
   if (authStatus === "loading") {
     return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading store directory…</main>;
   }
@@ -256,7 +293,7 @@ export default function StoreDirectoryPage() {
         </section>
 
         {message ? (
-          <div role="alert" style={{ ...homeCardStyle, marginBottom: 16, color: message.includes("saved") ? homeTheme.green : "#8a2f2f", fontWeight: 900 }}>
+          <div role="alert" style={{ ...homeCardStyle, marginBottom: 16, color: message.includes("saved") || message.includes("archived") ? homeTheme.green : "#8a2f2f", fontWeight: 900 }}>
             {message}
           </div>
         ) : null}
@@ -339,6 +376,11 @@ export default function StoreDirectoryPage() {
                 <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                   <button type="submit" className="rn-btn-primary" style={homePrimaryButton} disabled={busy}>{busy ? "Saving..." : "Save Store"}</button>
                   <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={cancelEditing} disabled={busy}>Cancel</button>
+                  {selectedStore?.active ? (
+                    <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => archiveStore(selectedStore)} disabled={busy}>
+                      {busy ? "Archiving..." : "Archive"}
+                    </button>
+                  ) : null}
                 </div>
               </form>
             ) : selectedStore ? (
@@ -350,7 +392,16 @@ export default function StoreDirectoryPage() {
                     </p>
                     <h2 style={{ margin: "6px 0 0", fontFamily: "var(--font-heading)", color: homeTheme.text }}>{selectedStore.location_name}</h2>
                   </div>
-                  {canManageStores ? <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => startEditingStore(selectedStore)}>Edit</button> : null}
+                  {canManageStores ? (
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                      <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => startEditingStore(selectedStore)} disabled={busy}>Edit</button>
+                      {selectedStore.active ? (
+                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => archiveStore(selectedStore)} disabled={busy}>
+                          {busy ? "Archiving..." : "Archive"}
+                        </button>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </div>
                 <dl className="rn-store-detail-grid">
                   <div><dt>Full address</dt><dd>{formatAddress(selectedStore)}</dd></div>
