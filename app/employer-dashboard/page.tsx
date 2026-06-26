@@ -1988,6 +1988,14 @@ export default function EmployerDashboardPage() {
                   </nav>
                   <div className="rn-dashboard-table-wrap">
                 <table className="rn-dashboard-table">
+                  <colgroup>
+                    <col className="rn-dashboard-table__col-title" />
+                    <col className="rn-dashboard-table__col-status" />
+                    <col className="rn-dashboard-table__col-location" />
+                    <col className="rn-dashboard-table__col-date" />
+                    <col className="rn-dashboard-table__col-views" />
+                    <col className="rn-dashboard-table__col-actions" />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th>Job Title</th>
@@ -2377,30 +2385,99 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table-wrap {
+          background: #fff;
           border: 1px solid ${homeTheme.border};
           border-radius: 14px;
-          overflow-x: auto;
-          overflow-y: hidden;
-          background: #fff;
+          max-height: 440px;
+          overflow-x: hidden;
+          overflow-y: auto;
+          scrollbar-color: rgba(31, 79, 68, 0.28) transparent;
+          scrollbar-gutter: stable;
+          scrollbar-width: thin;
+        }
+
+        .rn-dashboard-table-wrap::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .rn-dashboard-table-wrap::-webkit-scrollbar-thumb {
+          background: rgba(31, 79, 68, 0.24);
+          border: 2px solid #fff;
+          border-radius: 999px;
+        }
+
+        .rn-dashboard-table-wrap::-webkit-scrollbar-track {
+          background: transparent;
         }
 
         .rn-dashboard-table {
-          width: 100%;
           border-collapse: collapse;
-          min-width: 860px;
+          table-layout: fixed;
+          width: 100%;
+        }
+
+        .rn-dashboard-table__col-title {
+          width: 28%;
+        }
+
+        .rn-dashboard-table__col-status {
+          width: 14%;
+        }
+
+        .rn-dashboard-table__col-location {
+          width: 17%;
+        }
+
+        .rn-dashboard-table__col-date {
+          width: 14%;
+        }
+
+        .rn-dashboard-table__col-views {
+          width: 8%;
+        }
+
+        .rn-dashboard-table__col-actions {
+          width: 19%;
         }
 
         .rn-dashboard-table th,
         .rn-dashboard-table td {
-          padding: 12px 14px;
           border-bottom: 1px solid rgba(0, 0, 0, 0.06);
-          text-align: left;
-          vertical-align: middle;
           color: ${homeTheme.text};
           font-family: var(--font-body);
-          font-weight: 700;
           font-size: 14px;
+          font-weight: 700;
+          overflow-wrap: anywhere;
+          padding: 12px 10px;
+          text-align: left;
+          vertical-align: middle;
+        }
+
+        .rn-dashboard-table th {
+          background: #fff;
+          position: sticky;
+          top: 0;
+          z-index: 2;
+        }
+
+        .rn-dashboard-table td:first-child {
+          line-height: 1.35;
+        }
+
+        .rn-dashboard-table td:nth-child(2),
+        .rn-dashboard-table td:nth-child(3),
+        .rn-dashboard-table td:nth-child(4),
+        .rn-dashboard-table td:nth-child(5) {
           white-space: nowrap;
+        }
+
+        .rn-dashboard-table td:nth-child(3) {
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        .rn-dashboard-table td:last-child {
+          padding-right: 12px;
         }
 
         .rn-dashboard-table th {
@@ -2414,6 +2491,24 @@ export default function EmployerDashboardPage() {
           display: flex;
           gap: 8px;
           flex-wrap: wrap;
+        }
+
+        .rn-dashboard-table .rn-dashboard-actions {
+          display: grid;
+          gap: 6px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          width: 100%;
+        }
+
+        .rn-dashboard-table .rn-dashboard-actions > * {
+          box-shadow: none !important;
+          font-size: 12px !important;
+          justify-content: center !important;
+          min-height: 34px;
+          min-width: 0;
+          padding: 7px 8px !important;
+          text-align: center;
+          width: 100%;
         }
 
 
