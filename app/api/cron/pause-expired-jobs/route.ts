@@ -51,11 +51,32 @@ function daysAgo(days: number) {
   return date.toISOString();
 }
 
-async function fetchActiveApprovedJobsInWindow(
+function startOfUtcDate(date: Date) {
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+}
+
+function addUtcDays(date: Date, days: number) {
+  const nextDate = new Date(date);
+  nextDate.setUTCDate(nextDate.getUTCDate() + days);
+  return nextDate;
+}
+
+function approvedAtRangeForExpirationDate(daysUntilExpiration: number, now = new Date()) {
+  const todayStart = startOfUtcDate(now);
+  const expirationDateStart = addUtcDays(todayStart, daysUntilExpiration);
+  const expirationDateEnd = addUtcDays(expirationDateStart, 1);
+
+  return {
+    fromApprovedAt: addUtcDays(expirationDateStart, -30).toISOString(),
+    toApprovedAt: addUtcDays(expirationDateEnd, -30).toISOString(),
+  };
+}
+
+async function fetchActiveApprovedJobsExpiringInDays(
   supabaseAdmin: NonNullable<ReturnType<typeof getSupabaseAdminClient>>,
-  fromApprovedAt: string,
-  toApprovedAt: string,
+  daysUntilExpiration: number,
 ) {
+  const { fromApprovedAt, toApprovedAt } = approvedAtRangeForExpirationDate(daysUntilExpiration);
   const { data, error } = await supabaseAdmin
     .from("jobs")
     .select(JOB_EMAIL_FIELDS)
@@ -101,16 +122,8 @@ async function pauseExpiredJobs(request: Request) {
   }
 
   try {
-    const fiveDayReminderJobs = await fetchActiveApprovedJobsInWindow(
-      supabaseAdmin,
-      daysAgo(26),
-      daysAgo(25),
-    );
-    const oneDayReminderJobs = await fetchActiveApprovedJobsInWindow(
-      supabaseAdmin,
-      daysAgo(30),
-      daysAgo(29),
-    );
+    const fiveDayReminderJobs = await fetchActiveApprovedJobsExpiringInDays(supabaseAdmin, 5);
+    const oneDayReminderJobs = await fetchActiveApprovedJobsExpiringInDays(supabaseAdmin, 1);
     const jobsDueToPause = await fetchExpiredActiveApprovedJobs(supabaseAdmin, daysAgo(30));
 
     const expirationEmailClient = supabaseAdmin as unknown as SupabaseAdminLike;
