@@ -20,6 +20,7 @@ type SitemapJob = {
   status?: string | null;
   created_at?: string | null;
   approved_at?: string | null;
+  expires_at?: string | null;
 };
 
 const staticRoutes = [
@@ -60,7 +61,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const initialResult = await supabase
     .from("jobs")
-    .select("id,title,restaurant_name,city,state,active,status,created_at,approved_at")
+    .select("id,title,restaurant_name,city,state,active,status,created_at,approved_at,expires_at")
     .order("created_at", { ascending: false })
     .limit(5000);
 

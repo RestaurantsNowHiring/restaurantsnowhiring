@@ -16,7 +16,7 @@ export type ExpirationEmailJob = {
   candidate_notification_email?: string | string[] | null;
   candidate_notification_emails?: string[] | string | null;
   candidate_notification_routing?: string | null;
-  approved_at: string | null;
+  expires_at: string | null;
   created_at?: string | null;
 };
 
@@ -82,11 +82,10 @@ function formatLocation(job: ExpirationEmailJob) {
 }
 
 function formatExpirationDate(job: ExpirationEmailJob) {
-  const baseDate = job.approved_at ?? job.created_at;
-  if (!baseDate) return "soon";
+  if (!job.expires_at) return "soon";
 
-  const expiresAt = new Date(baseDate);
-  expiresAt.setUTCDate(expiresAt.getUTCDate() + 30);
+  const expiresAt = new Date(job.expires_at);
+  if (Number.isNaN(expiresAt.getTime())) return "soon";
 
   return new Intl.DateTimeFormat("en-US", {
     month: "long",

@@ -29,6 +29,7 @@ type RoleJob = {
   state: string;
   created_at: string;
   approved_at?: string | null;
+  expires_at?: string | null;
   active: boolean;
   status?: string | null;
   role_category: string | null;
@@ -36,8 +37,8 @@ type RoleJob = {
   employment_type: string | null;
 };
 
-const JOB_SELECT = "id,title,restaurant_name,city,state,created_at,approved_at,active,status,role_category,pay_range,employment_type";
-const JOB_SELECT_WITHOUT_STATUS = "id,title,restaurant_name,city,state,created_at,approved_at,active,role_category,pay_range,employment_type";
+const JOB_SELECT = "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,status,role_category,pay_range,employment_type";
+const JOB_SELECT_WITHOUT_STATUS = "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,role_category,pay_range,employment_type";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;

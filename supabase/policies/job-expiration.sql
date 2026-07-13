@@ -1,8 +1,8 @@
 -- Job ad expiration for Restaurants Now Hiring.
 --
 -- Expiration rule:
--- - Active approved jobs pause after 30 days.
--- - Expiration is based on approved_at.
+-- - Active approved jobs pause at expires_at.
+-- - Expiration is based on jobs.expires_at.
 -- - Do not delete jobs, charge employers, or renew listings.
 -- - Public visibility remains status = 'active' and active = true.
 --
@@ -18,10 +18,16 @@
 --    to run reminders and the existing pause function together.
 
 alter table public.jobs
-add column if not exists approved_at timestamptz;
+add column if not exists approved_at timestamptz,
+add column if not exists expires_at timestamptz;
+
+update public.jobs
+set expires_at = approved_at + interval '30 days'
+where approved_at is not null
+  and expires_at is null;
 
 create index if not exists jobs_expiration_lookup_idx
-on public.jobs (status, active, approved_at, created_at);
+on public.jobs (status, active, expires_at);
 
 create table if not exists public.job_expiration_email_events (
   id uuid primary key default gen_random_uuid(),
@@ -56,8 +62,8 @@ begin
     status = 'paused'
   where status = 'active'
     and active = true
-    and approved_at is not null
-    and approved_at <= now() - interval '30 days';
+    and expires_at is not null
+    and expires_at <= now();
 
   get diagnostics paused_count = row_count;
   return next;

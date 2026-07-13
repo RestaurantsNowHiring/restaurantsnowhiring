@@ -1,6 +1,6 @@
 export type PersistedJobStatus = "active" | "paused" | "pending" | "draft" | "archived" | "rejected";
 
-type DashboardStatus = "Active" | "Pending" | "Draft" | "Paused" | "Rejected";
+type DashboardStatus = "Active" | "Pending" | "Draft" | "Paused" | "Expired" | "Rejected";
 
 export function normalizePersistedStatus(status: string | null | undefined): PersistedJobStatus | null {
   if (!status) return null;
@@ -33,7 +33,7 @@ export function isPubliclyVisibleJob(status: string | null | undefined, active: 
 }
 
 
-const PUBLIC_JOB_LISTING_DAYS = 30;
+
 
 export function addDaysIso(value: string | null | undefined, days: number) {
   const baseDate = value ? new Date(value) : null;
@@ -48,21 +48,23 @@ export function isNonExpiredPublicJob(job: {
   status?: string | null;
   created_at?: string | null;
   approved_at?: string | null;
+  expires_at?: string | null;
 }) {
   if (job.status !== "active" || job.active !== true) return false;
-
-  const validThrough = addDaysIso(
-    job.approved_at ?? job.created_at,
-    PUBLIC_JOB_LISTING_DAYS,
-  );
-
-  if (!validThrough) return false;
-  return Date.now() <= new Date(validThrough).getTime();
+  if (!job.expires_at) return false;
+  return Date.now() < new Date(job.expires_at).getTime();
 }
 
-export function dashboardStatusForJob(status: string | null | undefined, active: boolean): DashboardStatus {
+export function isExpiredJob(expiresAt: string | null | undefined, now = new Date()) {
+  if (!expiresAt) return false;
+  const expiresTime = new Date(expiresAt).getTime();
+  return Number.isFinite(expiresTime) && expiresTime <= now.getTime();
+}
+
+export function dashboardStatusForJob(status: string | null | undefined, active: boolean, expiresAt?: string | null): DashboardStatus {
   const normalized = normalizePersistedStatus(status);
 
+  if ((normalized === "active" || normalized === "paused") && isExpiredJob(expiresAt)) return "Expired";
   if (normalized === "active") return active ? "Active" : "Paused";
   if (normalized === "paused") return "Paused";
   if (normalized === "pending") return "Pending";
@@ -148,4 +150,8 @@ export function isMissingViewsColumnError(error: { code?: string; message?: stri
 
 export function isMissingApprovedAtColumnError(error: { code?: string; message?: string } | null): boolean {
   return isMissingColumnError(error, "approved_at");
+}
+
+export function isMissingExpiresAtColumnError(error: { code?: string; message?: string } | null): boolean {
+  return isMissingColumnError(error, "expires_at");
 }
