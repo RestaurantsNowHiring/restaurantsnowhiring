@@ -784,6 +784,30 @@ export default function EmployerDashboardPage() {
     return Math.ceil(diff / (24 * 60 * 60 * 1000));
   }
 
+  function getExpirationStatusLabel(job: Pick<DashboardJob, "expires_at" | "dashboard_status">) {
+    const remainingDays = getRemainingCalendarDays(job.expires_at);
+    if (!job.expires_at || remainingDays === null) return "No expiration date";
+    if (job.dashboard_status === "Expired") return "Expired";
+    if (remainingDays === 0) return "Expires today";
+    if (remainingDays === 1) return "1 day left";
+    return `${remainingDays} days left`;
+  }
+
+  function renderExpirationCell(job: Pick<DashboardJob, "expires_at" | "dashboard_status">) {
+    const expirationDate = formatExpirationDate(job.expires_at);
+    const statusLabel = getExpirationStatusLabel(job);
+    const isExpired = statusLabel === "Expired";
+
+    return (
+      <div className="rn-dashboard-expiration">
+        <div className="rn-dashboard-expiration__date">{expirationDate ?? "—"}</div>
+        <div className={isExpired ? "rn-dashboard-expiration__meta rn-dashboard-expiration__meta--expired" : "rn-dashboard-expiration__meta"}>
+          {statusLabel}
+        </div>
+      </div>
+    );
+  }
+
   async function handlePauseToggle(job: DashboardJob) {
     if (busyJobId) return;
     if (!canEmployerPauseResume(job.status)) return;
@@ -2108,7 +2132,7 @@ export default function EmployerDashboardPage() {
                   </nav>
                   {selectedJobs.length > 0 ? (
                     <div className="rn-job-bulk-toolbar" role="region" aria-label="Bulk job actions">
-                      <strong>{selectedJobs.length} selected</strong>
+                      <strong>{selectedJobs.length === 1 ? "1 selected" : `${selectedJobs.length} selected`}</strong>
                       <button
                         type="button"
                         style={homeSecondaryButton}
@@ -2125,7 +2149,7 @@ export default function EmployerDashboardPage() {
                         onClick={() => handleBulkAction("unpause")}
                         disabled={bulkAction !== null || selectedPausedJobs.length === 0}
                       >
-                        {bulkAction === "unpause" ? "Activating..." : "Unpause Selected"}
+                        {bulkAction === "unpause" ? "Resuming..." : "Resume Selected"}
                       </button>
                       <button
                         type="button"
@@ -2141,7 +2165,10 @@ export default function EmployerDashboardPage() {
                       </button>
                     </div>
                   ) : null}
-                  <div className="rn-dashboard-table-wrap">
+                  {allFilteredJobsSelected ? (
+                    <p className="rn-job-selection-summary">All {filteredJobs.length} filtered {filteredJobs.length === 1 ? "job is" : "jobs are"} selected.</p>
+                  ) : null}
+                  <div className="rn-dashboard-table-wrap" tabIndex={0} aria-label="Scrollable job listings table">
                 <table className="rn-dashboard-table">
                   <colgroup>
                     <col className="rn-dashboard-table__col-select" />
@@ -2149,6 +2176,7 @@ export default function EmployerDashboardPage() {
                     <col className="rn-dashboard-table__col-status" />
                     <col className="rn-dashboard-table__col-location" />
                     <col className="rn-dashboard-table__col-date" />
+                    <col className="rn-dashboard-table__col-expires" />
                     <col className="rn-dashboard-table__col-views" />
                     <col className="rn-dashboard-table__col-actions" />
                   </colgroup>
@@ -2167,7 +2195,7 @@ export default function EmployerDashboardPage() {
                       <th>Status</th>
                       <th>Location</th>
                       <th>Date Posted</th>
-                      <th>Expiration</th>
+                      <th>Expires</th>
                       <th>Views</th>
                       <th>Actions</th>
                     </tr>
@@ -2189,49 +2217,34 @@ export default function EmployerDashboardPage() {
                         </td>
                         <td>{[job.city, job.state].filter(Boolean).join(", ") || "—"}</td>
                         <td>{formatDate(job.created_at)}</td>
-                        <td>{formatExpirationDate(job.expires_at) ?? "—"}{getRemainingCalendarDays(job.expires_at) !== null && job.dashboard_status !== "Expired" ? ` (${getRemainingCalendarDays(job.expires_at)} days left)` : job.dashboard_status === "Expired" ? " (expired)" : ""}</td>
+                        <td>{renderExpirationCell(job)}</td>
                         <td>{job.views}</td>
                         <td>
                           <div className="rn-dashboard-actions">
-                            <Link
-                              href={`/jobs/${job.id}`}
-                              prefetch={false}
-                              style={homeSecondaryButton}
-                              className="rn-btn-secondary"
-                            >
-                              View
-                            </Link>
-                            {canManageJobs ? (
-                              <Link
-                                href={`/employer-dashboard/jobs/${job.id}/edit`}
-                                style={homeSecondaryButton}
-                                className="rn-btn-secondary"
-                              >
-                                Edit
-                              </Link>
-                            ) : null}
                             {canManageJobs && canEmployerPauseResume(job.status) ? (
                               <button
                                 type="button"
                                 style={homeSecondaryButton}
-                                className="rn-btn-secondary"
+                                className="rn-btn-secondary rn-dashboard-actions__primary"
+                                aria-label={`${getJobAction(job) === "renew" ? "Renew" : getJobAction(job) === "resume" ? "Resume" : "Pause"} ${job.title}`}
                                 onClick={() => (canManageJobs ? handlePauseToggle(job) : setActionError("Contact your account admin to make changes."))}
                                 disabled={busyJobId === job.id}
                               >
-                                {busyJobId === job.id ? "Saving..." : getJobAction(job) === "renew" ? "Renew & Reactivate" : getJobAction(job) === "resume" ? "Resume Job" : "Pause"}
+                                {busyJobId === job.id ? "Saving..." : getJobAction(job) === "renew" ? "Renew" : getJobAction(job) === "resume" ? "Resume" : "Pause"}
                               </button>
                             ) : null}
-                            {canManageJobs ? (
-                              <button
-                                type="button"
-                                style={homeSecondaryButton}
-                                className="rn-btn-secondary rn-btn-delete"
-                                onClick={() => handleDeleteClick(job)}
-                                disabled={busyJobId === job.id}
-                              >
-                                Delete
-                              </button>
-                            ) : null}
+                            <details className="rn-dashboard-actions__menu">
+                              <summary aria-label={`More actions for ${job.title}`}>More</summary>
+                              <div className="rn-dashboard-actions__menu-items">
+                                <Link href={`/jobs/${job.id}`} prefetch={false} className="rn-dashboard-actions__menu-item">View</Link>
+                                {canManageJobs ? <Link href={`/employer-dashboard/jobs/${job.id}/edit`} className="rn-dashboard-actions__menu-item">Edit</Link> : null}
+                                {canManageJobs ? (
+                                  <button type="button" className="rn-dashboard-actions__menu-item rn-dashboard-actions__menu-item--danger" onClick={() => handleDeleteClick(job)} disabled={busyJobId === job.id}>
+                                    Delete
+                                  </button>
+                                ) : null}
+                              </div>
+                            </details>
                           </div>
                         </td>
                       </tr>
@@ -2572,16 +2585,24 @@ export default function EmployerDashboardPage() {
           background: #fff;
           border: 1px solid ${homeTheme.border};
           border-radius: 14px;
-          max-height: 440px;
-          overflow-x: hidden;
-          overflow-y: auto;
+          max-height: 520px;
+          overflow-x: auto;
+          overflow-y: visible;
+          -webkit-overflow-scrolling: touch;
           scrollbar-color: rgba(31, 79, 68, 0.28) transparent;
           scrollbar-gutter: stable;
           scrollbar-width: thin;
+          width: 100%;
+        }
+
+        .rn-dashboard-table-wrap:focus-visible {
+          outline: 3px solid rgba(31, 79, 68, 0.22);
+          outline-offset: 3px;
         }
 
         .rn-dashboard-table-wrap::-webkit-scrollbar {
-          width: 8px;
+          height: 10px;
+          width: 10px;
         }
 
         .rn-dashboard-table-wrap::-webkit-scrollbar-thumb {
@@ -2596,56 +2617,81 @@ export default function EmployerDashboardPage() {
 
         .rn-dashboard-table {
           border-collapse: collapse;
+          min-width: 1180px;
           table-layout: fixed;
           width: 100%;
         }
 
         .rn-job-bulk-toolbar {
           align-items: center;
-          background: rgba(255, 250, 242, 0.92);
-          border: 1px solid rgba(31, 79, 68, 0.16);
-          border-radius: 16px;
+          background: rgba(255, 250, 242, 0.76);
+          border: 1px solid rgba(31, 79, 68, 0.14);
+          border-radius: 14px;
           color: ${homeTheme.text};
           display: flex;
           flex-wrap: wrap;
           font-family: var(--font-body);
-          gap: 10px;
-          margin: -4px 0 14px;
-          padding: 10px 12px;
+          gap: 8px;
+          margin: -4px 0 12px;
+          padding: 8px 10px;
         }
 
         .rn-job-bulk-toolbar strong {
+          background: rgba(31, 79, 68, 0.08);
+          border: 1px solid rgba(31, 79, 68, 0.12);
+          border-radius: 999px;
           color: ${homeTheme.green};
+          font-size: 13px;
           font-weight: 900;
-          margin-right: auto;
+          margin-right: 4px;
+          padding: 6px 10px;
+          white-space: nowrap;
+        }
+
+        .rn-job-bulk-toolbar .rn-btn-secondary {
+          box-shadow: none !important;
+          min-height: 36px;
+          padding: 8px 11px !important;
+        }
+
+        .rn-job-selection-summary {
+          color: ${homeTheme.muted};
+          font-family: var(--font-body);
+          font-size: 13px;
+          font-weight: 800;
+          margin: -2px 0 10px;
         }
 
         .rn-dashboard-table__col-select {
-          width: 5%;
+          width: 56px;
         }
 
         .rn-dashboard-table__col-title {
-          width: 25%;
+          width: 280px;
         }
 
         .rn-dashboard-table__col-status {
-          width: 14%;
+          width: 130px;
         }
 
         .rn-dashboard-table__col-location {
-          width: 17%;
+          width: 190px;
         }
 
         .rn-dashboard-table__col-date {
-          width: 14%;
+          width: 150px;
+        }
+
+        .rn-dashboard-table__col-expires {
+          width: 190px;
         }
 
         .rn-dashboard-table__col-views {
-          width: 8%;
+          width: 90px;
         }
 
         .rn-dashboard-table__col-actions {
-          width: 17%;
+          width: 170px;
         }
 
         .rn-dashboard-table th,
@@ -2655,21 +2701,26 @@ export default function EmployerDashboardPage() {
           font-family: var(--font-body);
           font-size: 14px;
           font-weight: 700;
-          overflow-wrap: anywhere;
-          padding: 12px 10px;
+          padding: 14px 12px;
           text-align: left;
           vertical-align: middle;
         }
 
         .rn-dashboard-table th {
           background: #fff;
+          color: ${homeTheme.muted};
+          font-size: 12px;
+          letter-spacing: 0.45px;
           position: sticky;
+          text-transform: uppercase;
           top: 0;
+          white-space: nowrap;
           z-index: 2;
         }
 
         .rn-dashboard-table__select-cell {
           text-align: center !important;
+          white-space: nowrap;
         }
 
         .rn-dashboard-table__select-cell input,
@@ -2732,13 +2783,17 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table td:nth-child(2) {
+          overflow: hidden;
           line-height: 1.35;
+          text-overflow: ellipsis;
         }
 
         .rn-dashboard-table td:nth-child(3),
         .rn-dashboard-table td:nth-child(4),
         .rn-dashboard-table td:nth-child(5),
-        .rn-dashboard-table td:nth-child(6) {
+        .rn-dashboard-table td:nth-child(6),
+        .rn-dashboard-table td:nth-child(7),
+        .rn-dashboard-table td:nth-child(8) {
           white-space: nowrap;
         }
 
@@ -2747,15 +2802,31 @@ export default function EmployerDashboardPage() {
           text-overflow: ellipsis;
         }
 
-        .rn-dashboard-table td:last-child {
-          padding-right: 12px;
+        .rn-dashboard-expiration {
+          display: inline-grid;
+          gap: 2px;
+          max-width: 100%;
+          white-space: nowrap;
         }
 
-        .rn-dashboard-table th {
-          font-size: 12px;
-          text-transform: uppercase;
-          letter-spacing: 0.45px;
+        .rn-dashboard-expiration__date {
+          font-weight: 800;
+        }
+
+        .rn-dashboard-expiration__meta {
           color: ${homeTheme.muted};
+          font-size: 12px;
+          font-weight: 800;
+        }
+
+        .rn-dashboard-expiration__meta--expired {
+          color: #b42318;
+        }
+
+        .rn-dashboard-table td:last-child,
+        .rn-dashboard-table th:last-child {
+          padding-right: 12px;
+          text-align: right;
         }
 
         .rn-dashboard-mobile-select {
@@ -2769,27 +2840,91 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-actions {
-          display: flex;
+          align-items: center;
+          display: inline-flex;
           gap: 8px;
-          flex-wrap: wrap;
-        }
-
-        .rn-dashboard-table .rn-dashboard-actions {
-          display: grid;
-          gap: 6px;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          justify-content: flex-end;
+          max-width: 100%;
+          position: relative;
           width: 100%;
         }
 
-        .rn-dashboard-table .rn-dashboard-actions > * {
+        .rn-dashboard-actions__primary {
           box-shadow: none !important;
           font-size: 12px !important;
           justify-content: center !important;
           min-height: 34px;
-          min-width: 0;
-          padding: 7px 8px !important;
-          text-align: center;
-          width: 100%;
+          min-width: 78px;
+          padding: 7px 10px !important;
+          white-space: nowrap;
+        }
+
+        .rn-dashboard-actions__menu {
+          position: relative;
+        }
+
+        .rn-dashboard-actions__menu summary {
+          background: #fff;
+          border: 1px solid ${homeTheme.border};
+          border-radius: 12px;
+          box-shadow: none;
+          cursor: pointer;
+          display: inline-flex;
+          font-family: var(--font-body);
+          font-size: 12px;
+          font-weight: 800;
+          min-height: 34px;
+          padding: 7px 10px;
+          user-select: none;
+          white-space: nowrap;
+        }
+
+        .rn-dashboard-actions__menu summary:focus-visible {
+          outline: 3px solid rgba(31, 79, 68, 0.18);
+          outline-offset: 2px;
+        }
+
+        .rn-dashboard-actions__menu-items {
+          background: #fff;
+          border: 1px solid ${homeTheme.border};
+          border-radius: 12px;
+          box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
+          display: grid;
+          min-width: 130px;
+          padding: 6px;
+          position: absolute;
+          right: 0;
+          top: calc(100% + 6px);
+          z-index: 5;
+        }
+
+        .rn-dashboard-actions__menu:not([open]) .rn-dashboard-actions__menu-items {
+          display: none;
+        }
+
+        .rn-dashboard-actions__menu-item {
+          background: transparent;
+          border: 0;
+          border-radius: 8px;
+          color: ${homeTheme.text};
+          cursor: pointer;
+          font-family: var(--font-body);
+          font-size: 13px;
+          font-weight: 800;
+          padding: 8px 10px;
+          text-align: left;
+          text-decoration: none;
+          white-space: nowrap;
+        }
+
+        .rn-dashboard-actions__menu-item:hover,
+        .rn-dashboard-actions__menu-item:focus-visible {
+          background: rgba(31, 79, 68, 0.08);
+          outline: none;
+        }
+
+        .rn-dashboard-actions__menu-item--danger {
+          color: #9f2d20;
         }
 
 
@@ -3302,11 +3437,11 @@ export default function EmployerDashboardPage() {
           }
 
           .rn-dashboard-table-wrap {
-            display: none;
+            display: block;
           }
 
           .rn-dashboard-mobile-list {
-            display: grid;
+            display: none;
           }
 
           .rn-candidate-card-header {
