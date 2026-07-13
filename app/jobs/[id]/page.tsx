@@ -28,9 +28,8 @@ import {
 type JobRouteParams = { id?: string };
 
 const JOB_DETAIL_FIELDS =
-  "id,title,restaurant_name,city,state,description,created_at,approved_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
+  "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
 
-const JOB_LISTING_DAYS = 30;
 const RESTAURANT_INDUSTRY = "Restaurants";
 
 async function fetchPublicJobById(id?: string) {
@@ -180,19 +179,11 @@ function getJobPostedDate(job: Pick<Job, "approved_at" | "created_at">) {
   return parseIsoDate(job.approved_at) ?? parseIsoDate(job.created_at);
 }
 
-function addDaysIso(value: string | null | undefined, days: number) {
-  const baseDate = parseIsoDate(value);
-  if (!baseDate) return undefined;
-
-  baseDate.setUTCDate(baseDate.getUTCDate() + days);
-  return baseDate.toISOString();
+function getValidThroughIso(job: Pick<Job, "approved_at" | "created_at"> & { expires_at?: string | null }) {
+  return job.expires_at ?? undefined;
 }
 
-function getValidThroughIso(job: Pick<Job, "approved_at" | "created_at">) {
-  return addDaysIso(job.approved_at ?? job.created_at, JOB_LISTING_DAYS);
-}
-
-function isExpiredForGoogleJobs(job: Pick<Job, "approved_at" | "created_at">) {
+function isExpiredForGoogleJobs(job: Pick<Job, "approved_at" | "created_at"> & { expires_at?: string | null }) {
   const validThrough = getValidThroughIso(job);
   if (!validThrough) return true;
 
@@ -444,6 +435,7 @@ type Job = {
   description: string | null;
   created_at: string;
   approved_at?: string | null;
+  expires_at?: string | null;
   active: boolean;
   status?: string | null;
   pay_range: string | null;
@@ -483,14 +475,14 @@ export default async function JobDetailsPage({
   }> = [
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,approved_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
       includesStatus: true,
       includesViews: true,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,approved_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
       includesStatus: true,
       includesViews: false,
       includesApprovedAt: true,
@@ -511,14 +503,14 @@ export default async function JobDetailsPage({
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,approved_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
       includesStatus: false,
       includesViews: true,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,approved_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
       includesStatus: false,
       includesViews: false,
       includesApprovedAt: true,

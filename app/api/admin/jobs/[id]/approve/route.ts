@@ -4,6 +4,7 @@ import { ADMIN_SESSION_COOKIE, getAdminUserFromAccessToken } from "../../../../.
 import { isMissingApprovedAtColumnError, isMissingStatusColumnError } from "../../../../../../lib/jobStatus";
 import { getSupabaseAdminClient } from "../../../../../../lib/supabaseAdmin";
 import { evaluateBillingAccess, getBillingRecord, syncSubscriptionQuantityForEmployer } from "../../../../../../lib/billing";
+import { getDefaultJobExpirationIso } from "../../../../../../lib/jobListingDuration";
 
 export async function POST(_: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -60,10 +61,10 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     );
   }
 
-  const approvedAt = new Date().toISOString();
+  const approvedAt = new Date();
   const updateWithStatusAndApprovedAt = await supabaseAdmin
     .from("jobs")
-    .update({ active: true, status: "active", approved_at: approvedAt })
+    .update({ active: true, status: "active", approved_at: approvedAt.toISOString(), expires_at: getDefaultJobExpirationIso(approvedAt) })
     .eq("id", jobId);
 
   let updateResult = updateWithStatusAndApprovedAt;

@@ -14,7 +14,6 @@ import {
 import {
   canEmployerPauseResume,
   dashboardStatusForJob,
-  getEmployerPauseResumeUpdate,
 } from "../../lib/jobStatus";
 import { canUserAccessJob } from "../../lib/employerJobAccess";
 
@@ -42,7 +41,8 @@ type DashboardJob = {
   candidate_notification_emails?: string[] | string | null;
   created_at: string;
   views: number;
-  dashboard_status: "Active" | "Pending" | "Draft" | "Paused" | "Rejected";
+  expires_at: string | null;
+  dashboard_status: "Active" | "Pending" | "Draft" | "Paused" | "Expired" | "Rejected";
 };
 
 
@@ -100,7 +100,6 @@ type SupabaseActionError = {
 
 const isDevelopment = process.env.NODE_ENV !== "production";
 
-const PAUSE_RESUME_RETURN_FIELDS = "id,active,status,employer_user_id,employer_email,employer_account_id";
 const DELETE_EMAIL_RETURN_FIELDS = "id,employer_email";
 const DELETE_USER_ID_RETURN_FIELDS = "id,employer_user_id,employer_email,employer_account_id";
 const DELETE_CONFIRMATION_MESSAGE =
@@ -109,7 +108,7 @@ const CANDIDATE_STATUS_OPTIONS = ["new", "reviewed", "contacted", "archived"] as
 type CandidateStatusOption = (typeof CANDIDATE_STATUS_OPTIONS)[number];
 type CandidateFilter = "all" | CandidateStatusOption;
 type CandidateJobLevelFilter = "all" | "hourly_store" | "salaried_manager" | "general_manager" | "area_director" | "regional_director" | "other";
-type JobStatusFilter = "all" | "Active" | "Paused" | "Pending" | "Rejected";
+type JobStatusFilter = "all" | "Active" | "Paused" | "Expired" | "Pending" | "Rejected";
 type JobSortOption = "newest" | "oldest" | "most_viewed";
 type PaginationItem = number | "ellipsis-start" | "ellipsis-end";
 
@@ -117,6 +116,7 @@ const JOB_STATUS_FILTER_OPTIONS: Array<{ value: JobStatusFilter; label: string }
   { value: "all", label: "All" },
   { value: "Active", label: "Active" },
   { value: "Paused", label: "Paused" },
+  { value: "Expired", label: "Expired" },
   { value: "Pending", label: "Pending Review" },
   { value: "Rejected", label: "Rejected" },
 ];
@@ -328,16 +328,13 @@ function getJobOwnershipMatch(job: Record<string, unknown>, owner: EmployerOwner
   return null;
 }
 
-function hasMissingEmployerOwnership(job: Pick<DashboardJob, "employer_account_id" | "employer_user_id" | "employer_email">) {
-  return !job.employer_account_id && !job.employer_user_id && !job.employer_email;
-}
-
 function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSProperties {
   const statusMap: Record<DashboardJob["dashboard_status"], { bg: string; text: string; border: string }> = {
     Active: { bg: "rgba(53,128,110,0.10)", text: "#1d5b4d", border: "rgba(53,128,110,0.24)" },
     Pending: { bg: "rgba(227,160,8,0.12)", text: "#7a5600", border: "rgba(227,160,8,0.28)" },
     Draft: { bg: "rgba(101,115,126,0.12)", text: "#3f4c56", border: "rgba(101,115,126,0.24)" },
     Paused: { bg: "rgba(173,67,67,0.10)", text: "#8a2f2f", border: "rgba(173,67,67,0.24)" },
+    Expired: { bg: "rgba(90,90,90,0.12)", text: "#555", border: "rgba(90,90,90,0.24)" },
     Rejected: { bg: "rgba(173,67,67,0.10)", text: "#8a2f2f", border: "rgba(173,67,67,0.24)" },
   };
 
@@ -404,6 +401,7 @@ export default function EmployerDashboardPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
+  const [dashboardNowMs] = useState(() => Date.now());
   const [candidates, setCandidates] = useState<CandidateSubmission[]>([]);
   const [candidateFilter, setCandidateFilter] = useState<CandidateFilter>("all");
   const [candidateSearchQuery, setCandidateSearchQuery] = useState("");
@@ -644,6 +642,7 @@ export default function EmployerDashboardPage() {
           employer_email: employerEmail,
           employer_account_id: employerAccountId,
           employer_store_id: typeof job.employer_store_id === "string" && job.employer_store_id.trim() ? job.employer_store_id.trim() : null,
+          expires_at: typeof job.expires_at === "string" ? job.expires_at : null,
           candidate_notification_email: typeof job.candidate_notification_email === "string" ? job.candidate_notification_email : null,
           candidate_notification_emails: Array.isArray(job.candidate_notification_emails)
             ? (job.candidate_notification_emails as string[])
@@ -656,7 +655,7 @@ export default function EmployerDashboardPage() {
             jobsResult.selectedVariant?.includesViews && typeof job.views === "number" && Number.isFinite(job.views)
               ? job.views
               : 0,
-          dashboard_status: dashboardStatusForJob(status, active),
+          dashboard_status: dashboardStatusForJob(status, active, typeof job.expires_at === "string" ? job.expires_at : null),
         };
       });
 
@@ -763,149 +762,90 @@ export default function EmployerDashboardPage() {
     window.location.href = payload.url;
   }
 
+  function getJobAction(job: DashboardJob): "pause" | "resume" | "renew" {
+    if (job.dashboard_status === "Active") return "pause";
+    if (job.expires_at && new Date(job.expires_at).getTime() > dashboardNowMs) return "resume";
+    return "renew";
+  }
+
+  function formatExpirationDate(value: string | null) {
+    if (!value) return null;
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    return new Intl.DateTimeFormat("en-US", { month: "long", day: "numeric", year: "numeric" }).format(date);
+  }
+
+  function getRemainingCalendarDays(value: string | null) {
+    if (!value) return null;
+    const expires = new Date(value).getTime();
+    if (!Number.isFinite(expires)) return null;
+    const diff = expires - dashboardNowMs;
+    if (diff <= 0) return 0;
+    return Math.ceil(diff / (24 * 60 * 60 * 1000));
+  }
+
   async function handlePauseToggle(job: DashboardJob) {
     if (busyJobId) return;
     if (!canEmployerPauseResume(job.status)) return;
 
-    const { nextActive, nextStatus } = getEmployerPauseResumeUpdate(job.status, job.active);
-
-    if (nextActive && !billingSummary?.canPostOrActivateJobs) {
-      setActionError("Start or reactivate billing before resuming this job ad.");
+    const action = getJobAction(job);
+    if ((action === "resume" || action === "renew") && !billingSummary?.canPostOrActivateJobs) {
+      setActionError("Start or reactivate billing before reactivating this job ad.");
       return;
+    }
+
+    if (action === "pause") {
+      const expirationDate = formatExpirationDate(job.expires_at);
+      const remainingDays = getRemainingCalendarDays(job.expires_at);
+      const body = job.expires_at && expirationDate
+        ? remainingDays !== null && remainingDays < 1
+          ? `This job expires today.\n\nPausing will remove it from public search results and future billing, but the expiration date will continue to count down. Remaining days are not saved or extended.`
+          : `This job has ${remainingDays} ${remainingDays === 1 ? "day" : "days"} remaining in its current 30-day listing period and expires on ${expirationDate}.\n\nPausing will remove it from public search results and future billing, but the expiration date will continue to count down. Remaining days are not saved or extended.`
+        : "Pausing will remove this job from public search results and future billing.";
+      if (!window.confirm(`Pause this job?\n\n${body}`)) return;
     }
 
     setBusyJobId(job.id);
     setActionError(null);
     setActionSuccess(null);
 
-    const { data, error: authError } = await supabase.auth.getUser();
-    const authUser = data?.user;
-    const sessionOwner = authUser?.id && authUser.email?.trim()
-      ? {
-          userId: authUser.id,
-          email: authUser.email.trim(),
-          accountId: owner?.accountId ?? null,
-          ownerUserId: owner?.ownerUserId ?? authUser.id,
-          ownerEmail: owner?.ownerEmail ?? authUser.email.trim(),
-        }
-      : null;
-    const currentOwner = sessionOwner ?? owner;
-
-    if (authError || !currentOwner) {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+    if (!accessToken) {
       setActionError("We could not update this job because the employer session is unavailable. Please refresh and try again.");
       setBusyJobId(null);
       return;
     }
 
-    if (hasMissingEmployerOwnership(job)) {
-      setActionError(
-        "This job is missing employer ownership details (employer_user_id and employer_email), so it cannot be paused or resumed until it is reassigned to your employer account."
-      );
+    const response = await fetch(`/api/employer/jobs/${job.id}/${action}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+      },
+    });
+    const payload = (await response.json().catch(() => null)) as { job?: Partial<DashboardJob>; error?: string; billing?: { warning?: string | null } } | null;
+
+    if (!response.ok || !payload?.job) {
+      setActionError(payload?.error || "We could not update this job status. Please refresh and try again.");
       setBusyJobId(null);
       return;
     }
 
-    const matchedOwnership = getJobOwnershipMatch(job, currentOwner);
+    const updated = payload.job;
+    setJobs((prev) => prev.map((item) => item.id === job.id ? {
+      ...item,
+      active: Boolean(updated.active),
+      status: typeof updated.status === "string" ? updated.status : item.status,
+      expires_at: typeof updated.expires_at === "string" ? updated.expires_at : item.expires_at,
+      dashboard_status: dashboardStatusForJob(typeof updated.status === "string" ? updated.status : item.status, Boolean(updated.active), typeof updated.expires_at === "string" ? updated.expires_at : item.expires_at),
+    } : item));
 
-    if (!matchedOwnership) {
-      setActionError(
-        "This job is linked to a different employer account than your current session. Please refresh or sign in with the employer account that owns this listing."
-      );
-      setBusyJobId(null);
-      return;
-    }
-
-    const updatePayload = { active: nextActive, status: nextStatus };
-    const updateAttempts: OwnershipMatch[] = [
-      matchedOwnership,
-      ...(matchedOwnership === "employer_account_id"
-        ? ["employer_user_id" as const, "employer_email" as const]
-        : matchedOwnership === "employer_user_id"
-          ? ["employer_email" as const, "employer_account_id" as const]
-          : ["employer_user_id" as const, "employer_account_id" as const]),
-    ];
-    let updateError: SupabaseActionError | null = null;
-    let updatedJob: Pick<DashboardJob, "active" | "status" | "employer_user_id" | "employer_email"> | null = null;
-    let matchedBy: OwnershipMatch | null = null;
-
-    for (const ownershipField of updateAttempts) {
-      const ownerValue = ownershipField === "employer_account_id"
-        ? currentOwner.accountId
-        : ownershipField === "employer_user_id"
-          ? currentOwner.userId
-          : currentOwner.email;
-      if (!ownerValue) continue;
-      const result = await supabase
-        .from("jobs")
-        .update(updatePayload)
-        .eq("id", job.id)
-        .eq(ownershipField, ownerValue)
-        .select(PAUSE_RESUME_RETURN_FIELDS)
-        .maybeSingle();
-
-      if (result.error) {
-        updateError = result.error;
-        continue;
-      }
-
-      if (result.data) {
-        updatedJob = {
-          active: Boolean(result.data.active),
-          status: typeof result.data.status === "string" ? result.data.status : null,
-          employer_user_id:
-            typeof result.data.employer_user_id === "string" && result.data.employer_user_id.trim()
-              ? result.data.employer_user_id.trim()
-              : null,
-          employer_email:
-            typeof result.data.employer_email === "string" && result.data.employer_email.trim()
-              ? result.data.employer_email.trim()
-              : null,
-        };
-        matchedBy = ownershipField;
-        break;
-      }
-    }
-
-    if (updateError && !updatedJob) {
-      setActionError(
-        pauseResumeFailureMessage("We could not save this job status. Please refresh and try again.", updateError)
-      );
-      setBusyJobId(null);
-      return;
-    }
-
-    if (!updatedJob) {
-      setActionError(
-        pauseResumeFailureMessage(
-          "This job still appears linked to your employer account, but Supabase did not update the row. Please refresh and try again.",
-          {
-            message:
-              "No row was returned by the authenticated update. This usually means the jobs UPDATE RLS policy blocked the row or the ownership filter did not match at write time.",
-          }
-        )
-      );
-      setBusyJobId(null);
-      return;
-    }
-
-    setOwner(currentOwner);
-    setJobs((prev) =>
-      prev.map((item) =>
-        item.id === job.id
-          ? {
-              ...item,
-              active: updatedJob.active,
-              status: updatedJob.status,
-              employer_user_id: updatedJob.employer_user_id,
-              employer_email: updatedJob.employer_email,
-              ownership_match: matchedBy ?? item.ownership_match,
-              dashboard_status: dashboardStatusForJob(updatedJob.status, updatedJob.active),
-            }
-          : item
-      )
-    );
+    if (payload.billing?.warning) setActionError(payload.billing.warning);
+    else if (action === "renew") setActionSuccess(`Job renewed and reactivated. It now expires on ${formatExpirationDate(typeof updated.expires_at === "string" ? updated.expires_at : null) ?? "the new expiration date"}.`);
+    else setActionSuccess(action === "pause" ? "Job paused. Its expiration date will continue to count down." : "Job resumed without changing its expiration date.");
     setBusyJobId(null);
-    void syncBillingQuantity().then(refreshBillingSummary);
+    await refreshBillingSummary();
   }
 
   function handleDeleteClick(job: DashboardJob) {
@@ -1310,7 +1250,60 @@ export default function EmployerDashboardPage() {
     setActionError(null);
     setActionSuccess(null);
 
-    const updatePayload = action === "pause" ? { active: false, status: "paused" } : { active: true, status: "active" };
+
+    if (action !== "delete") {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) {
+        setActionError("We could not update selected jobs because the employer session is unavailable. Please refresh and try again.");
+        setBulkAction(null);
+        return;
+      }
+
+      const affectedIds = new Set<string>();
+      let warningCount = 0;
+      let lastErrorMessage: string | null = null;
+
+      for (const job of eligibleJobs) {
+        const endpointAction = action === "pause" ? "pause" : "resume";
+        const response = await fetch(`/api/employer/jobs/${job.id}/${endpointAction}`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
+          },
+        });
+        const payload = (await response.json().catch(() => null)) as { job?: Partial<DashboardJob>; error?: string; billing?: { warning?: string | null } } | null;
+        if (!response.ok || !payload?.job) {
+          lastErrorMessage = payload?.error || "Could not update one of the selected jobs.";
+          continue;
+        }
+        affectedIds.add(job.id);
+        if (payload.billing?.warning) warningCount += 1;
+        const updated = payload.job;
+        setJobs((prev) => prev.map((item) => item.id === job.id ? {
+          ...item,
+          active: Boolean(updated.active),
+          status: typeof updated.status === "string" ? updated.status : item.status,
+          expires_at: typeof updated.expires_at === "string" ? updated.expires_at : item.expires_at,
+          dashboard_status: dashboardStatusForJob(typeof updated.status === "string" ? updated.status : item.status, Boolean(updated.active), typeof updated.expires_at === "string" ? updated.expires_at : item.expires_at),
+        } : item));
+      }
+
+      if (affectedIds.size === 0) {
+        setActionError(lastErrorMessage || "We could not update the selected jobs. Please refresh and try again.");
+        setBulkAction(null);
+        return;
+      }
+
+      clearJobSelection();
+      setActionSuccess(`${affectedIds.size} selected ${affectedIds.size === 1 ? "job was" : "jobs were"} ${action === "pause" ? "paused" : "resumed"}.${skippedCount > 0 ? ` ${skippedCount} selected ${skippedCount === 1 ? "job was" : "jobs were"} skipped because ${skippedCount === 1 ? "it is" : "they are"} not eligible.` : ""}`);
+      if (warningCount > 0) setActionError("One or more job status updates succeeded, but billing sync could not be confirmed. Please retry billing sync or contact support if the issue continues.");
+      setBulkAction(null);
+      await refreshBillingSummary();
+      return;
+    }
+
     const affectedIds = new Set<string>();
     let affectedCount = 0;
     let lastError: SupabaseActionError | null = null;
@@ -1326,7 +1319,7 @@ export default function EmployerDashboardPage() {
 
       const result = action === "delete"
         ? await supabase.from("jobs").delete().in("id", ids).eq(ownershipField, ownerValue).select("id")
-        : await supabase.from("jobs").update(updatePayload).in("id", ids).eq(ownershipField, ownerValue).select("id");
+        : await supabase.from("jobs").delete().in("id", ids).eq(ownershipField, ownerValue).select("id");
 
       if (result.error) {
         lastError = result.error;
@@ -1342,11 +1335,7 @@ export default function EmployerDashboardPage() {
       return;
     }
 
-    setJobs((prev) => action === "delete"
-      ? prev.filter((job) => !affectedIds.has(job.id))
-      : prev.map((job) => affectedIds.has(job.id)
-          ? { ...job, active: updatePayload.active, status: updatePayload.status, dashboard_status: dashboardStatusForJob(updatePayload.status, updatePayload.active) }
-          : job));
+    setJobs((prev) => prev.filter((job) => !affectedIds.has(job.id)));
     clearJobSelection();
     setActionSuccess(`${affectedCount} selected ${affectedCount === 1 ? "job was" : "jobs were"} ${action === "delete" ? "deleted" : action === "pause" ? "paused" : "activated"}.${skippedCount > 0 ? ` ${skippedCount} selected ${skippedCount === 1 ? "job was" : "jobs were"} skipped because ${skippedCount === 1 ? "it is" : "they are"} not eligible.` : ""}`);
     setBulkAction(null);
@@ -2178,6 +2167,7 @@ export default function EmployerDashboardPage() {
                       <th>Status</th>
                       <th>Location</th>
                       <th>Date Posted</th>
+                      <th>Expiration</th>
                       <th>Views</th>
                       <th>Actions</th>
                     </tr>
@@ -2199,6 +2189,7 @@ export default function EmployerDashboardPage() {
                         </td>
                         <td>{[job.city, job.state].filter(Boolean).join(", ") || "—"}</td>
                         <td>{formatDate(job.created_at)}</td>
+                        <td>{formatExpirationDate(job.expires_at) ?? "—"}{getRemainingCalendarDays(job.expires_at) !== null && job.dashboard_status !== "Expired" ? ` (${getRemainingCalendarDays(job.expires_at)} days left)` : job.dashboard_status === "Expired" ? " (expired)" : ""}</td>
                         <td>{job.views}</td>
                         <td>
                           <div className="rn-dashboard-actions">
@@ -2227,7 +2218,7 @@ export default function EmployerDashboardPage() {
                                 onClick={() => (canManageJobs ? handlePauseToggle(job) : setActionError("Contact your account admin to make changes."))}
                                 disabled={busyJobId === job.id}
                               >
-                                {busyJobId === job.id ? "Saving..." : job.dashboard_status === "Paused" ? "Resume" : "Pause"}
+                                {busyJobId === job.id ? "Saving..." : getJobAction(job) === "renew" ? "Renew & Reactivate" : getJobAction(job) === "resume" ? "Resume Job" : "Pause"}
                               </button>
                             ) : null}
                             {canManageJobs ? (
@@ -2271,7 +2262,7 @@ export default function EmployerDashboardPage() {
                       {[job.city, job.state].filter(Boolean).join(", ") || "—"}
                     </p>
                     <p style={{ margin: "4px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
-                      Posted {formatDate(job.created_at)} • {job.views} views
+                      Posted {formatDate(job.created_at)} • Expires {formatExpirationDate(job.expires_at) ?? "—"}{job.dashboard_status === "Expired" ? " (expired)" : ""} • {job.views} views
                     </p>
                     <div className="rn-dashboard-actions" style={{ marginTop: 12 }}>
                       <Link
@@ -2299,7 +2290,7 @@ export default function EmployerDashboardPage() {
                           onClick={() => (canManageJobs ? handlePauseToggle(job) : setActionError("Contact your account admin to make changes."))}
                           disabled={busyJobId === job.id}
                         >
-                          {busyJobId === job.id ? "Saving..." : job.dashboard_status === "Paused" ? "Resume" : "Pause"}
+                          {busyJobId === job.id ? "Saving..." : getJobAction(job) === "renew" ? "Renew & Reactivate" : getJobAction(job) === "resume" ? "Resume Job" : "Pause"}
                         </button>
                       ) : null}
                       {canManageJobs ? (
