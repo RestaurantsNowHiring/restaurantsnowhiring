@@ -1689,7 +1689,7 @@ export default function EmployerDashboardPage() {
                 Job Templates
               </Link>
               <Link href="/employer-dashboard/ats" style={homeSecondaryButton} className="rn-btn-secondary">
-                ATS Integration
+                Import Jobs
               </Link>
               {canManageTeam ? (
                 <Link href="/employer-dashboard/team" style={homeSecondaryButton} className="rn-btn-secondary">

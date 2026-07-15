@@ -100,7 +100,7 @@ export default function AtsIntegrationPage() {
   }, [loadEmployerAccess, router]);
 
   if (authStatus === "loading") {
-    return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading ATS integration…</main>;
+    return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading import jobs…</main>;
   }
 
   return (
@@ -116,10 +116,10 @@ export default function AtsIntegrationPage() {
           <div className="rn-ats-header-row">
             <div>
               <h1 style={{ margin: "8px 0", fontSize: 38, lineHeight: 1.1, fontFamily: "var(--font-heading)", color: homeTheme.green }}>
-                ATS Integration
+                Import Jobs
               </h1>
               <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 700, maxWidth: 780 }}>
-                Import jobs directly from your public careers page. RestaurantsNowHiring will scan your careers page, detect your applicant tracking system, and allow you to import jobs for review before they are published.
+                Import jobs directly from your public careers page. Paste your careers page below and we’ll find your open jobs automatically.
               </p>
             </div>
             <Link href="/employer-dashboard" style={homeSecondaryButton} className="rn-btn-secondary">
@@ -130,7 +130,7 @@ export default function AtsIntegrationPage() {
 
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
           <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
-            Import from Careers Page
+            Connect Your Careers Page
           </h2>
           <div className="rn-ats-import-form">
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
@@ -149,11 +149,11 @@ export default function AtsIntegrationPage() {
                 style={{ ...homePrimaryButton, opacity: 0.55, cursor: "not-allowed" }}
                 disabled
               >
-                Import Jobs
+                Find My Jobs
               </button>
             </div>
             <p id="ats-import-note" style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>
-              Coming soon. ATS importing is currently under development.
+              Coming soon. Job importing is currently under development.
             </p>
           </div>
         </section>
