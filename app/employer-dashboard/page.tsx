@@ -38,6 +38,7 @@ type DashboardJob = {
   ownership_match: OwnershipMatch | null;
   employer_account_id?: string | null;
   employer_store_id?: string | null;
+  store_location_name?: string | null;
   candidate_notification_email?: string | null;
   candidate_notification_emails?: string[] | string | null;
   created_at: string;
@@ -230,6 +231,20 @@ function formatEmployerRole(role?: EmployerRole | null) {
   if (role === "hiring_manager") return "Hiring Manager";
   if (role === "viewer") return "Viewer";
   return "Account Owner";
+}
+
+function getLinkedStoreLocationName(job: Record<string, unknown>) {
+  const storeRecord = job.employer_stores;
+  const store = Array.isArray(storeRecord) ? storeRecord[0] : storeRecord;
+
+  if (!store || typeof store !== "object") return null;
+
+  const locationName = (store as { location_name?: unknown }).location_name;
+  return typeof locationName === "string" && locationName.trim() ? locationName : null;
+}
+
+function getJobLocationDisplay(job: Pick<DashboardJob, "city" | "state" | "store_location_name">) {
+  return job.store_location_name || [job.city, job.state].filter(Boolean).join(", ") || "—";
 }
 
 function formatDate(isoDate: string) {
@@ -643,6 +658,7 @@ export default function EmployerDashboardPage() {
           employer_email: employerEmail,
           employer_account_id: employerAccountId,
           employer_store_id: typeof job.employer_store_id === "string" && job.employer_store_id.trim() ? job.employer_store_id.trim() : null,
+          store_location_name: getLinkedStoreLocationName(job),
           expires_at: typeof job.expires_at === "string" ? job.expires_at : null,
           candidate_notification_email: typeof job.candidate_notification_email === "string" ? job.candidate_notification_email : null,
           candidate_notification_emails: Array.isArray(job.candidate_notification_emails)
@@ -776,6 +792,7 @@ export default function EmployerDashboardPage() {
         employer_email: employerEmail,
         employer_account_id: employerAccountId,
         employer_store_id: typeof job.employer_store_id === "string" && job.employer_store_id.trim() ? job.employer_store_id.trim() : null,
+        store_location_name: getLinkedStoreLocationName(job),
         expires_at: expiresAt,
         candidate_notification_email: typeof job.candidate_notification_email === "string" ? job.candidate_notification_email : null,
         candidate_notification_emails: Array.isArray(job.candidate_notification_emails)
@@ -1233,7 +1250,7 @@ export default function EmployerDashboardPage() {
         if (!matchesStatus) return false;
         if (!normalizedSearch) return true;
 
-        return [job.title, job.city, job.state, job.restaurant_name]
+        return [job.title, job.city, job.state, job.restaurant_name, job.store_location_name]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(normalizedSearch));
       })
@@ -2185,8 +2202,8 @@ export default function EmployerDashboardPage() {
                       setSelectedJobIds(new Set());
                       setJobCurrentPage(1);
                     }}
-                    placeholder="Search by title, city, state, or restaurant"
-                    aria-label="Search job listings by title, city, state, or restaurant"
+                    placeholder="Search by title, location, city, state, or restaurant"
+                    aria-label="Search job listings by title, location, city, state, or restaurant"
                   />
                 </label>
                 <label className="rn-job-listing-control">
@@ -2368,7 +2385,7 @@ export default function EmployerDashboardPage() {
                         <td>
                           <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
                         </td>
-                        <td>{[job.city, job.state].filter(Boolean).join(", ") || "—"}</td>
+                        <td>{getJobLocationDisplay(job)}</td>
                         <td>{formatDate(job.created_at)}</td>
                         <td>{renderExpirationCell(job)}</td>
                         <td>{job.views}</td>
@@ -2425,7 +2442,7 @@ export default function EmployerDashboardPage() {
                       <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
                     </div>
                     <p style={{ margin: "8px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
-                      {[job.city, job.state].filter(Boolean).join(", ") || "—"}
+                      {getJobLocationDisplay(job)}
                     </p>
                     <p style={{ margin: "4px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
                       Posted {formatDate(job.created_at)} • Expires {formatExpirationDate(job.expires_at) ?? "—"}{job.dashboard_status === "Expired" ? " (expired)" : ""} • {job.views} views

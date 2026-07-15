@@ -12,11 +12,11 @@ type JobsQueryVariant = {
 
 const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   {
-    fields: "id,title,restaurant_name,city,state,active,status,created_at,expires_at,views,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails",
+    fields: "id,title,restaurant_name,city,state,active,status,created_at,expires_at,views,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails,employer_stores!jobs_employer_store_id_fkey(location_name)",
     includesViews: true,
   },
   {
-    fields: "id,title,restaurant_name,city,state,active,status,created_at,expires_at,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails",
+    fields: "id,title,restaurant_name,city,state,active,status,created_at,expires_at,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails,employer_stores!jobs_employer_store_id_fkey(location_name)",
     includesViews: false,
   },
 ];
