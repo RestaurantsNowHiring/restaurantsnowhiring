@@ -1681,3 +1681,27 @@ iframe {
 .rn-team-edit-assigned-locations {
   grid-column: 1 / -1;
 }
+
+.rn-ats-header-row {
+  align-items: flex-start;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.rn-ats-import-form {
+  display: grid;
+  gap: 14px;
+  max-width: 680px;
+}
+
+@media (max-width: 700px) {
+  .rn-ats-header-row {
+    grid-template-columns: 1fr;
+  }
+
+  .rn-ats-header-row .rn-btn-secondary,
+  .rn-ats-import-form .rn-btn-primary {
+    width: 100%;
+  }
+}
