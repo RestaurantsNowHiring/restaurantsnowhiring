@@ -1,4 +1,9 @@
+"use client";
+
 import Link from "next/link";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../../../lib/supabase";
 import {
   homeCardStyle,
   homeInputStyle,
@@ -7,9 +12,102 @@ import {
   homeTheme,
 } from "../../styles/homepageDesignSystem";
 
+type EmployerRole = "account_owner" | "hiring_manager" | "viewer";
+type EmployerAccessScope = "single_location" | "multi_location" | "full_account_access";
+
+type EmployerAccess = {
+  role: EmployerRole;
+  userType: EmployerAccessScope;
+  assignedStoreIds: string[];
+  accountId: string | null;
+  accountName: string | null;
+  restaurantBrandName: string | null;
+  locationName: string | null;
+  ownerUserId: string;
+  ownerEmail: string;
+  canManageProfile: boolean;
+  canManageBilling: boolean;
+  canManageJobs: boolean;
+  canViewCandidates: boolean;
+  canUpdateCandidateStatuses: boolean;
+  canManageTeam: boolean;
+  canManageNotificationRouting: boolean;
+};
+
+function employerAccountHeaders(token: string) {
+  const selectedEmployerAccountId =
+    typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem("rn-selected-employer-account-id");
+
+  return {
+    Authorization: `Bearer ${token}`,
+    ...(selectedEmployerAccountId
+      ? { "X-Employer-Account-Id": selectedEmployerAccountId }
+      : {}),
+  };
+}
+
 export default function AtsIntegrationPage() {
+  const router = useRouter();
+  const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
+  const [employerAccess, setEmployerAccess] = useState<EmployerAccess | null>(null);
+
+  const loadEmployerAccess = useCallback(async (token: string) => {
+    const response = await fetch("/api/employer/me", {
+      headers: employerAccountHeaders(token),
+    });
+
+    if (!response.ok) {
+      setEmployerAccess(null);
+      setAuthStatus("allowed");
+      return;
+    }
+
+    const payload = (await response.json().catch(() => null)) as { employer?: EmployerAccess } | null;
+    setEmployerAccess(payload?.employer ?? null);
+    setAuthStatus("allowed");
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkAuthAndLoadAccess() {
+      const { data, error } = await supabase.auth.getUser();
+      if (!mounted) return;
+
+      if (error || !data.user) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
+
+      if (!token) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+
+      await loadEmployerAccess(token);
+    }
+
+    void checkAuthAndLoadAccess();
+
+    return () => {
+      mounted = false;
+    };
+  }, [loadEmployerAccess, router]);
+
+  if (authStatus === "loading") {
+    return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading ATS integration…</main>;
+  }
+
   return (
-    <main style={{ minHeight: "100vh", paddingTop: 100, paddingBottom: 72, backgroundColor: homeTheme.bg }}>
+    <main
+      data-employer-account-id={employerAccess?.accountId ?? undefined}
+      style={{ minHeight: "100vh", paddingTop: 100, paddingBottom: 72, backgroundColor: homeTheme.bg }}
+    >
       <div style={{ maxWidth: 1180, margin: "0 auto", padding: "0 18px" }}>
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
           <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>
