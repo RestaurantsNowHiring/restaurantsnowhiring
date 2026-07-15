@@ -17,14 +17,23 @@ export type AtsProvider = {
   syncJobs?: (careersPage: CareersPage) => Promise<ImportedJob[]>;
 };
 
-export type DetectionResult = {
-  providerKey: AtsProviderKey;
-  matched: boolean;
-  confidence: DetectionConfidence;
-  sourceUrl: string;
-  evidence: string[];
-  detectedAt: string;
-};
+export type DetectionResult =
+  | {
+      matched: true;
+      providerKey: AtsProviderKey;
+      confidence: DetectionConfidence;
+      sourceUrl: string;
+      evidence: string[];
+      detectedAt: string;
+    }
+  | {
+      matched: false;
+      providerKey: null;
+      confidence: null;
+      sourceUrl: string;
+      evidence: string[];
+      detectedAt: string;
+    };
 
 export type CareersPage = {
   employerAccountId?: string;
