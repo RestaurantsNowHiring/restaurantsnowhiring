@@ -145,8 +145,8 @@ export default function AtsIntegrationPage() {
             <div>
               <button
                 type="button"
-                className="rn-btn-primary"
-                style={{ ...homePrimaryButton, opacity: 0.62, cursor: "not-allowed" }}
+                className="rn-btn-primary rn-ats-import-button"
+                style={{ ...homePrimaryButton, opacity: 0.55, cursor: "not-allowed" }}
                 disabled
               >
                 Import Jobs
