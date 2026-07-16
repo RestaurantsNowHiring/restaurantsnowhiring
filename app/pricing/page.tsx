@@ -15,7 +15,8 @@ import {
 export const metadata = buildPageMetadata({
   title: "Simple Pricing for Restaurant Hiring",
   description:
-    "Start with a 30-day free trial, pay $9 per approved restaurant job ad every 30 days, and pause or cancel anytime.",
+    "description:
+  "Start with a 30-day free trial. Approved public restaurant jobs are just $9 per 30-day listing with no long-term contracts.",
   path: "/pricing",
 });
 
@@ -154,7 +155,7 @@ export default function PricingPage() {
     {
       question: "What is billed after the free trial?",
       answer:
-        "After the 30-day free trial, pricing is $9 per approved job ad every 30 days. Pending, paused, rejected, removed, or private ads are not billed.",
+        "After the 30-day free trial, approved jobs are billed $9 per 30-day listing. Pending jobs are never billed.",
     },
     {
       question: "Will I be charged today?",
@@ -164,12 +165,12 @@ export default function PricingPage() {
     {
       question: "What happens after 30 days?",
       answer:
-        "Approved job ads automatically pause after 30 days. You can manage, pause, remove, or reactivate listings from the employer dashboard.",
+        "Approved jobs automatically expire after 30 days to prevent unintended renewals. You can renew, pause, remove, or reactivate listings at any time from your employer dashboard.",
     },
     {
       question: "Can I cancel anytime?",
       answer:
-        "Yes. Pause or remove jobs anytime from your dashboard. Only approved ads count toward billing.",
+        "Yes. You can pause or remove jobs at any time. Pausing removes a job from public view immediately and prevents future renewal charges. Current 30-day listing periods are not prorated or refunded.",
     },
   ];
 
@@ -230,13 +231,13 @@ export default function PricingPage() {
                   fontWeight: 700,
                 }}
               >
-                Start with a 30-day free trial. There is no charge today, and only approved
-               job ads are billed after approval.
+                Start with a 30-day free trial. There is no charge today. Approved
+               job ads are billed $9 per 30-day listing after approval.
               </p>
 
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 26 }}>
                 <Link href="/employer-login?next=/post-job" style={primaryBtn} className="rn-btn-primary">
-                  Start Your Free Trial
+                  Post Your First Job Free
                 </Link>
                 <Link href="/employer-dashboard" style={secondaryBtn} className="rn-btn-secondary">
                   Manage Jobs
@@ -316,14 +317,14 @@ export default function PricingPage() {
                       fontWeight: 900,
                     }}
                   >
-                    per approved ad / 30 days
+                    per approved ad every 30 days
                   </div>
                 </div>
 
                 <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
                   {[
-                    "Only approved ads are billed",
-                    "Jobs auto-expire after 30 days",
+                    "Only approved job ads are billed",
+                    "Jobs automatically expire after 30 days",
                     "Pause or remove jobs anytime",
                   ].map((item) => (
                     <div key={item} style={checkRow}>
@@ -345,8 +346,7 @@ export default function PricingPage() {
                     fontFamily: "var(--font-body)",
                   }}
                 >
-                  No charge today. Jobs auto-pause after 30 days so you stay in control of what is
-                  public and billable.
+                  No charge today. Jobs are billed in 30-day listing periods. Pausing a job removes it from public view immediately and prevents future renewals. Current listing periods are not prorated or refunded.
                 </div>
 
                 <Link
