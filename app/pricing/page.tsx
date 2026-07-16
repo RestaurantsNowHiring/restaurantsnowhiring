@@ -15,8 +15,7 @@ import {
 export const metadata = buildPageMetadata({
   title: "Simple Pricing for Restaurant Hiring",
   description:
-    "description:
-  "Start with a 30-day free trial. Approved public restaurant jobs are just $9 per 30-day listing with no long-term contracts.",
+    "Start with a 30-day free trial. Approved public restaurant jobs are just $9 per 30-day listing with no long-term contracts.",
   path: "/pricing",
 });
 
