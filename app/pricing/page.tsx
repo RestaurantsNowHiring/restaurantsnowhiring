@@ -15,7 +15,7 @@ import {
 export const metadata = buildPageMetadata({
   title: "Simple Pricing for Restaurant Hiring",
   description:
-    "Start with a 30-day free trial, pay $9 per active approved restaurant job ad every 30 days, and pause or cancel anytime.",
+    "Start with a 30-day free trial, pay $9 per approved restaurant job ad every 30 days, and pause or cancel anytime.",
   path: "/pricing",
 });
 
@@ -141,10 +141,10 @@ export default function PricingPage() {
   const includedItems = [
     "30-day free trial",
     "No charge today",
-    "$9 per active approved job ad every 30 days",
+    "$9 per approved job ad every 30 days",
     "Cancel anytime",
-    "Only active approved public ads are billed",
-    "Jobs auto-pause after 30 days",
+    "Only approved jobs are billed",
+    "Jobs auto-expire after 30 days",
     "Pause/remove jobs anytime",
     "Google Jobs optimized",
     "Employer dashboard included",
@@ -154,7 +154,7 @@ export default function PricingPage() {
     {
       question: "What is billed after the free trial?",
       answer:
-        "After the 30-day free trial, pricing is $9 per active approved public job ad every 30 days. Pending, paused, rejected, removed, or private ads are not billed.",
+        "After the 30-day free trial, pricing is $9 per approved job ad every 30 days. Pending, paused, rejected, removed, or private ads are not billed.",
     },
     {
       question: "Will I be charged today?",
@@ -169,7 +169,7 @@ export default function PricingPage() {
     {
       question: "Can I cancel anytime?",
       answer:
-        "Yes. Pause or remove jobs anytime from your dashboard. Only active approved public ads count toward billing.",
+        "Yes. Pause or remove jobs anytime from your dashboard. Only approved ads count toward billing.",
     },
   ];
 
@@ -230,8 +230,8 @@ export default function PricingPage() {
                   fontWeight: 700,
                 }}
               >
-                Start with a 30-day free trial. There is no charge today, and only active approved
-                public job ads are billed after approval.
+                Start with a 30-day free trial. There is no charge today, and only approved
+               job ads are billed after approval.
               </p>
 
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 26 }}>
@@ -316,14 +316,14 @@ export default function PricingPage() {
                       fontWeight: 900,
                     }}
                   >
-                    per active approved ad / 30 days
+                    per approved ad / 30 days
                   </div>
                 </div>
 
                 <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
                   {[
-                    "Only active approved public ads are billed",
-                    "Jobs auto-pause after 30 days",
+                    "Only approved ads are billed",
+                    "Jobs auto-expire after 30 days",
                     "Pause or remove jobs anytime",
                   ].map((item) => (
                     <div key={item} style={checkRow}>
