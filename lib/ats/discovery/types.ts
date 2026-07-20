@@ -21,6 +21,7 @@ export type DiscoveryResult =
       finalUrl: string;
       redirectHistory: RedirectStep[];
       httpStatus: number;
+      html: string | null;
     }
   | {
       status: "failed";

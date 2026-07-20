@@ -9,6 +9,7 @@ import { isIP } from "node:net";
 import type { DiscoveryResult, RedirectStep } from "./types";
 
 const REQUEST_TIMEOUT_MS = 10_000;
+export const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const MAX_REDIRECTS = 10;
 const USER_AGENT =
   "RestaurantsNowHiring/1.0 (+https://restaurantsnowhiring.com; careers-page-discovery)";
@@ -31,6 +32,15 @@ type HeadersResponse = {
   headers: IncomingHttpHeaders;
   body: IncomingMessage;
 };
+
+class HtmlBodyTooLargeError extends Error {
+  constructor() {
+    super(
+      `Careers page HTML is too large to analyze. Maximum supported size is ${MAX_HTML_BYTES} bytes.`,
+    );
+    this.name = "HtmlBodyTooLargeError";
+  }
+}
 
 class DiscoveryTimeoutError extends Error {
   constructor() {
@@ -89,7 +99,11 @@ function ipv4ToNumber(address: string): number | null {
   return parts.reduce((total, part) => total * 256 + part, 0);
 }
 
-function isIpv4InCidr(address: string, baseAddress: string, prefixLength: number): boolean {
+function isIpv4InCidr(
+  address: string,
+  baseAddress: string,
+  prefixLength: number,
+): boolean {
   const addressNumber = ipv4ToNumber(address);
   const baseNumber = ipv4ToNumber(baseAddress);
 
@@ -97,7 +111,8 @@ function isIpv4InCidr(address: string, baseAddress: string, prefixLength: number
     return true;
   }
 
-  const mask = prefixLength === 0 ? 0 : (0xffffffff << (32 - prefixLength)) >>> 0;
+  const mask =
+    prefixLength === 0 ? 0 : (0xffffffff << (32 - prefixLength)) >>> 0;
 
   return (addressNumber & mask) === (baseNumber & mask);
 }
@@ -178,13 +193,22 @@ function isLocalHostname(hostname: string): boolean {
   );
 }
 
+function getAbortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DiscoveryTimeoutError();
+}
+
 function throwIfAborted(signal: AbortSignal): void {
   if (signal.aborted) {
-    throw signal.reason instanceof Error ? signal.reason : new DiscoveryTimeoutError();
+    throw getAbortReason(signal);
   }
 }
 
-async function withAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise<T> {
+async function withAbort<T>(
+  operation: Promise<T>,
+  signal: AbortSignal,
+): Promise<T> {
   throwIfAborted(signal);
 
   let abortHandler: (() => void) | null = null;
@@ -194,7 +218,11 @@ async function withAbort<T>(operation: Promise<T>, signal: AbortSignal): Promise
       operation,
       new Promise<never>((_, reject) => {
         abortHandler = () =>
-          reject(signal.reason instanceof Error ? signal.reason : new DiscoveryTimeoutError());
+          reject(
+            signal.reason instanceof Error
+              ? signal.reason
+              : new DiscoveryTimeoutError(),
+          );
         signal.addEventListener("abort", abortHandler, { once: true });
       }),
     ]);
@@ -258,7 +286,10 @@ async function validatePublicHttpDestination(
   }
 }
 
-function getHeaderValue(headers: IncomingHttpHeaders, headerName: string): string | null {
+function getHeaderValue(
+  headers: IncomingHttpHeaders,
+  headerName: string,
+): string | null {
   const value = headers[headerName.toLowerCase()];
 
   if (Array.isArray(value)) {
@@ -268,7 +299,113 @@ function getHeaderValue(headers: IncomingHttpHeaders, headerName: string): strin
   return value ?? null;
 }
 
-function getRedirectTarget(response: HeadersResponse, currentUrl: URL): URL | null {
+function getContentTypeMediaType(headers: IncomingHttpHeaders): string | null {
+  const contentType = getHeaderValue(headers, "content-type");
+
+  if (!contentType) {
+    return null;
+  }
+
+  return contentType.split(";", 1)[0]?.trim().toLowerCase() || null;
+}
+
+function isHtmlCompatibleContentType(headers: IncomingHttpHeaders): boolean {
+  const mediaType = getContentTypeMediaType(headers);
+
+  return mediaType === "text/html" || mediaType === "application/xhtml+xml";
+}
+
+function getContentLength(headers: IncomingHttpHeaders): number | null {
+  const contentLength = getHeaderValue(headers, "content-length");
+
+  if (!contentLength || !/^\d+$/.test(contentLength.trim())) {
+    return null;
+  }
+
+  const parsedLength = Number(contentLength);
+
+  return Number.isSafeInteger(parsedLength) ? parsedLength : null;
+}
+
+function getCharset(headers: IncomingHttpHeaders): string {
+  const contentType = getHeaderValue(headers, "content-type");
+  const charset = contentType
+    ?.split(";")
+    .slice(1)
+    .map((parameter) => parameter.trim())
+    .find((parameter) => parameter.toLowerCase().startsWith("charset="))
+    ?.slice("charset=".length)
+    .trim()
+    .replace(/^['"]|['"]$/g, "");
+
+  return charset || "utf-8";
+}
+
+function decodeHtmlBody(body: Buffer, charset: string): string {
+  try {
+    return new TextDecoder(charset, { fatal: false }).decode(body);
+  } catch {
+    return new TextDecoder("utf-8", { fatal: false }).decode(body);
+  }
+}
+
+async function readBoundedHtmlBody(
+  response: HeadersResponse,
+  signal: AbortSignal,
+): Promise<string> {
+  throwIfAborted(signal);
+
+  const contentLength = getContentLength(response.headers);
+
+  if (contentLength !== null && contentLength > MAX_HTML_BYTES) {
+    cancelResponseBody(response);
+    throw new HtmlBodyTooLargeError();
+  }
+
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+  const abortHandler = () =>
+    cancelResponseBody(response, getAbortReason(signal));
+
+  signal.addEventListener("abort", abortHandler, { once: true });
+
+  try {
+    for await (const chunk of response.body) {
+      throwIfAborted(signal);
+
+      const bufferChunk = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+      totalBytes += bufferChunk.byteLength;
+
+      if (totalBytes > MAX_HTML_BYTES) {
+        cancelResponseBody(response);
+        throw new HtmlBodyTooLargeError();
+      }
+
+      chunks.push(bufferChunk);
+    }
+  } catch (error) {
+    if (signal.aborted) {
+      throw getAbortReason(signal);
+    }
+
+    throw error;
+  } finally {
+    signal.removeEventListener("abort", abortHandler);
+    cancelResponseBody(response);
+  }
+
+  throwIfAborted(signal);
+
+  return decodeHtmlBody(
+    Buffer.concat(chunks, totalBytes),
+    getCharset(response.headers),
+  );
+}
+
+function getRedirectTarget(
+  response: HeadersResponse,
+  currentUrl: URL,
+): URL | null {
   const location = getHeaderValue(response.headers, "location");
 
   if (!location) {
@@ -282,8 +419,19 @@ function getRedirectTarget(response: HeadersResponse, currentUrl: URL): URL | nu
   }
 }
 
-function cancelResponseBody(response: HeadersResponse | null): void {
-  response?.body.destroy();
+function cancelResponseBody(
+  response: HeadersResponse | null,
+  error?: Error,
+): void {
+  if (!response || response.body.destroyed || response.body.readableEnded) {
+    return;
+  }
+
+  try {
+    response.body.destroy(error);
+  } catch {
+    // Best-effort cleanup should not mask discovery's primary result.
+  }
 }
 
 function requestHeadersForAddress(
@@ -347,20 +495,28 @@ async function requestHeaders(
     }
   }
 
-  throw lastError instanceof Error ? lastError : new Error("All validated addresses failed to connect.");
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("All validated addresses failed to connect.");
 }
 
 function isTimeoutError(error: unknown): boolean {
   return (
     error instanceof DiscoveryTimeoutError ||
-    (error instanceof DOMException && (error.name === "AbortError" || error.name === "TimeoutError")) ||
-    (error instanceof Error && (error.name === "AbortError" || error.name === "TimeoutError"))
+    (error instanceof DOMException &&
+      (error.name === "AbortError" || error.name === "TimeoutError")) ||
+    (error instanceof Error &&
+      (error.name === "AbortError" || error.name === "TimeoutError"))
   );
 }
 
 function getFetchErrorMessage(error: unknown): string {
   if (isTimeoutError(error)) {
     return `Careers page request timed out after ${REQUEST_TIMEOUT_MS}ms.`;
+  }
+
+  if (error instanceof HtmlBodyTooLargeError) {
+    return error.message;
   }
 
   if (error instanceof Error) {
@@ -415,7 +571,11 @@ export async function discoverCareersPage(
         });
       }
 
-      response = await requestHeaders(currentUrl, validationResult, timeoutController.signal);
+      response = await requestHeaders(
+        currentUrl,
+        validationResult,
+        timeoutController.signal,
+      );
       lastStatus = response.status;
 
       if (REDIRECT_STATUSES.has(response.status)) {
@@ -423,11 +583,15 @@ export async function discoverCareersPage(
           cancelResponseBody(response);
           response = null;
 
-          return failedResult(originalUrl, `Careers page exceeded ${MAX_REDIRECTS} redirects.`, {
-            finalUrl: currentUrl.toString(),
-            redirectHistory,
-            httpStatus: lastStatus,
-          });
+          return failedResult(
+            originalUrl,
+            `Careers page exceeded ${MAX_REDIRECTS} redirects.`,
+            {
+              finalUrl: currentUrl.toString(),
+              redirectHistory,
+              httpStatus: lastStatus,
+            },
+          );
         }
 
         const nextUrl = getRedirectTarget(response, currentUrl);
@@ -435,11 +599,15 @@ export async function discoverCareersPage(
         response = null;
 
         if (!nextUrl) {
-          return failedResult(originalUrl, "Redirect response did not include a valid Location header.", {
-            finalUrl: currentUrl.toString(),
-            redirectHistory,
-            httpStatus: lastStatus,
-          });
+          return failedResult(
+            originalUrl,
+            "Redirect response did not include a valid Location header.",
+            {
+              finalUrl: currentUrl.toString(),
+              redirectHistory,
+              httpStatus: lastStatus,
+            },
+          );
         }
 
         redirectHistory.push({
@@ -459,11 +627,15 @@ export async function discoverCareersPage(
         cancelResponseBody(response);
         response = null;
 
-        return failedResult(originalUrl, "Final careers page URL is not an http:// or https:// URL.", {
-          finalUrl,
-          redirectHistory,
-          httpStatus: lastStatus,
-        });
+        return failedResult(
+          originalUrl,
+          "Final careers page URL is not an http:// or https:// URL.",
+          {
+            finalUrl,
+            redirectHistory,
+            httpStatus: lastStatus,
+          },
+        );
       }
 
       if (response.status < 200 || response.status > 299) {
@@ -481,7 +653,24 @@ export async function discoverCareersPage(
         );
       }
 
-      cancelResponseBody(response);
+      if (!isHtmlCompatibleContentType(response.headers)) {
+        cancelResponseBody(response);
+        response = null;
+
+        return {
+          status: "success",
+          originalUrl,
+          finalUrl,
+          redirectHistory,
+          httpStatus: lastStatus,
+          html: null,
+        };
+      }
+
+      const html = await readBoundedHtmlBody(
+        response,
+        timeoutController.signal,
+      );
       response = null;
 
       return {
@@ -490,6 +679,7 @@ export async function discoverCareersPage(
         finalUrl,
         redirectHistory,
         httpStatus: lastStatus,
+        html,
       };
     }
   } catch (error) {
