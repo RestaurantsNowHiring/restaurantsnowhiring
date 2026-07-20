@@ -1,4 +1,5 @@
 import type { DiscoveryResult } from "../discovery/types";
+import type { RankedCandidateLink } from "../discovery/rankCandidateLinks";
 import type { DetectionResult } from "../types";
 
 export type CareersPageAnalysisResult =
@@ -14,8 +15,16 @@ export type CareersPageAnalysisResult =
       detection: Extract<DetectionResult, { matched: true }>;
     }
   | {
-      stage: "detection";
-      status: "unmatched";
+      stage: "link-discovery";
+      status: "candidates-found";
       discovery: Extract<DiscoveryResult, { status: "success" }>;
       detection: Extract<DetectionResult, { matched: false }>;
+      candidateLinks: RankedCandidateLink[];
+    }
+  | {
+      stage: "link-discovery";
+      status: "no-candidates";
+      discovery: Extract<DiscoveryResult, { status: "success" }>;
+      detection: Extract<DetectionResult, { matched: false }>;
+      candidateLinks: [];
     };
