@@ -2,6 +2,9 @@ import "server-only";
 
 import { detectProvider } from "../detection/detectProvider";
 import { discoverCareersPage } from "../discovery/discoverCareersPage";
+import { extractCandidateLinks } from "../discovery/extractCandidateLinks";
+import { rankCandidateLinks } from "../discovery/rankCandidateLinks";
+import { selectCandidateLinks } from "../discovery/selectCandidateLinks";
 import type { CareersPage } from "../types";
 import type { CareersPageAnalysisResult } from "./types";
 
@@ -33,10 +36,35 @@ export async function analyzeCareersPage(
     };
   }
 
+  if (discovery.html === null) {
+    return {
+      stage: "link-discovery",
+      status: "no-candidates",
+      discovery,
+      detection,
+      candidateLinks: [],
+    };
+  }
+
+  const candidateLinks = selectCandidateLinks(
+    rankCandidateLinks(extractCandidateLinks(discovery.html, discovery.finalUrl)),
+  );
+
+  if (candidateLinks.length > 0) {
+    return {
+      stage: "link-discovery",
+      status: "candidates-found",
+      discovery,
+      detection,
+      candidateLinks,
+    };
+  }
+
   return {
-    stage: "detection",
-    status: "unmatched",
+    stage: "link-discovery",
+    status: "no-candidates",
     discovery,
     detection,
+    candidateLinks: [],
   };
 }
