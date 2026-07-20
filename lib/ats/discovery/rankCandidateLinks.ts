@@ -54,19 +54,19 @@ const SOCIAL_HOST_PATTERNS = [
 ];
 
 const RECRUITING_PLATFORM_HOST_PATTERNS = [
-  /(?:^|\.)greenhouse\.io$/,
-  /(?:^|\.)lever\.co$/,
+  /^boards\.greenhouse\.io$/,
+  /^job-boards\.greenhouse\.io$/,
+  /^jobs\.lever\.co$/,
   /(?:^|\.)myworkdayjobs\.com$/,
   /(?:^|\.)workdayjobs\.com$/,
-  /(?:^|\.)smartrecruiters\.com$/,
-  /(?:^|\.)jobvite\.com$/,
-  /(?:^|\.)bamboohr\.com$/,
-  /(?:^|\.)icims\.com$/,
-  /(?:^|\.)paylocity\.com$/,
-  /(?:^|\.)paycomonline\.net$/,
-  /(?:^|\.)adp\.com$/,
-  /(?:^|\.)ultipro\.com$/,
-  /(?:^|\.)successfactors\.com$/,
+  /^companies\.smartrecruiters\.com$/,
+  /^jobs\.jobvite\.com$/,
+  /^recruiting\.paylocity\.com$/,
+  /^www\.paycomonline\.net$/,
+  /^workforcenow\.adp\.com$/,
+  /^recruiting\.ultipro\.com$/,
+  /^career[0-9]*\.successfactors\.com$/,
+  /^careers-[^.]+\.icims\.com$/,
 ];
 
 function normalizeText(value: string): string {
