@@ -1,4 +1,5 @@
 import type { DiscoveryResult } from "../discovery/types";
+import type { DetectionResult } from "../types";
 
 export type CareersPageAnalysisResult =
   | {
@@ -8,6 +9,13 @@ export type CareersPageAnalysisResult =
     }
   | {
       stage: "detection";
-      status: "pending";
+      status: "matched";
       discovery: Extract<DiscoveryResult, { status: "success" }>;
+      detection: Extract<DetectionResult, { matched: true }>;
+    }
+  | {
+      stage: "detection";
+      status: "unmatched";
+      discovery: Extract<DiscoveryResult, { status: "success" }>;
+      detection: Extract<DetectionResult, { matched: false }>;
     };

@@ -1,6 +1,8 @@
 import "server-only";
 
+import { detectProvider } from "../detection/detectProvider";
 import { discoverCareersPage } from "../discovery/discoverCareersPage";
+import type { CareersPage } from "../types";
 import type { CareersPageAnalysisResult } from "./types";
 
 export async function analyzeCareersPage(
@@ -16,9 +18,25 @@ export async function analyzeCareersPage(
     };
   }
 
+  const careersPage: CareersPage = {
+    url: discovery.finalUrl,
+  };
+
+  const detection = await detectProvider(careersPage);
+
+  if (detection.matched) {
+    return {
+      stage: "detection",
+      status: "matched",
+      discovery,
+      detection,
+    };
+  }
+
   return {
     stage: "detection",
-    status: "pending",
+    status: "unmatched",
     discovery,
+    detection,
   };
 }
