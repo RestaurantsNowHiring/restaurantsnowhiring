@@ -312,9 +312,10 @@ export const greenhouseProvider: AtsProvider = {
   async detect(careersPage: CareersPage): Promise<DetectionResult> {
     const detectedAt = new Date().toISOString();
     const sourceUrl = getValidGreenhouseSourceUrl(careersPage.url);
+    const boardToken = deriveGreenhouseBoardToken(careersPage.url);
     const hostname = sourceUrl?.hostname.toLowerCase().replace(/\.$/, "");
 
-    if (hostname) {
+    if (hostname && boardToken) {
       return {
         matched: true,
         providerKey: "greenhouse",
