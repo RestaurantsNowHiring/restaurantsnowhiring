@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/ats/providers/greenhouse/provider.test.mjs"
+    "test": "node --test lib/ats/providers/greenhouse/provider.test.mjs lib/ats/import/previewJobImport.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
