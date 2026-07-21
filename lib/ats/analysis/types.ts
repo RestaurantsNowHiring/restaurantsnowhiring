@@ -1,5 +1,5 @@
 import type { DiscoveryResult } from "../discovery/types";
-import type { CandidateLinkInspectionResult } from "../discovery/inspectCandidateLinks";
+import type { CareersPathInspectionResult } from "../discovery/inspectCareersPath";
 import type { RankedCandidateLink } from "../discovery/rankCandidateLinks";
 import type { DetectionResult } from "../types";
 
@@ -23,24 +23,24 @@ export type CareersPageAnalysisResult =
       candidateLinks: [];
     }
   | {
-      stage: "candidate-inspection";
+      stage: "careers-path-inspection";
       status: "matched";
       discovery: Extract<DiscoveryResult, { status: "success" }>;
       detection: Extract<DetectionResult, { matched: false }>;
       candidateLinks: RankedCandidateLink[];
-      candidateInspection: Extract<
-        CandidateLinkInspectionResult,
+      careersPathInspection: Extract<
+        CareersPathInspectionResult,
         { status: "matched" }
       >;
     }
   | {
-      stage: "candidate-inspection";
+      stage: "careers-path-inspection";
       status: "unmatched";
       discovery: Extract<DiscoveryResult, { status: "success" }>;
       detection: Extract<DetectionResult, { matched: false }>;
       candidateLinks: RankedCandidateLink[];
-      candidateInspection: Extract<
-        CandidateLinkInspectionResult,
+      careersPathInspection: Extract<
+        CareersPathInspectionResult,
         { status: "unmatched" }
       >;
     };

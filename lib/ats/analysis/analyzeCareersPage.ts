@@ -3,7 +3,7 @@ import "server-only";
 import { detectProvider } from "../detection/detectProvider";
 import { discoverCareersPage } from "../discovery/discoverCareersPage";
 import { extractCandidateLinks } from "../discovery/extractCandidateLinks";
-import { inspectCandidateLinks } from "../discovery/inspectCandidateLinks";
+import { inspectCareersPath } from "../discovery/inspectCareersPath";
 import { rankCandidateLinks } from "../discovery/rankCandidateLinks";
 import { selectCandidateLinks } from "../discovery/selectCandidateLinks";
 import type { CareersPage } from "../types";
@@ -61,25 +61,25 @@ export async function analyzeCareersPage(
     };
   }
 
-  const candidateInspection = await inspectCandidateLinks(candidateLinks);
+  const careersPathInspection = await inspectCareersPath(candidateLinks);
 
-  if (candidateInspection.status === "matched") {
+  if (careersPathInspection.status === "matched") {
     return {
-      stage: "candidate-inspection",
+      stage: "careers-path-inspection",
       status: "matched",
       discovery,
       detection,
       candidateLinks,
-      candidateInspection,
+      careersPathInspection,
     };
   }
 
   return {
-    stage: "candidate-inspection",
+    stage: "careers-path-inspection",
     status: "unmatched",
     discovery,
     detection,
     candidateLinks,
-    candidateInspection,
+    careersPathInspection,
   };
 }
