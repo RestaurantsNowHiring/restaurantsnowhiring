@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import {
@@ -52,6 +53,11 @@ export default function AtsIntegrationPage() {
   const router = useRouter();
   const [authStatus, setAuthStatus] = useState<"loading" | "allowed">("loading");
   const [employerAccess, setEmployerAccess] = useState<EmployerAccess | null>(null);
+  const [careersPageUrl, setCareersPageUrl] = useState("");
+  const [isFindingJobs, setIsFindingJobs] = useState(false);
+  const [, setPreviewJobs] = useState<unknown[] | null>(null);
+  const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const requestInFlightRef = useRef(false);
 
   const loadEmployerAccess = useCallback(async (token: string) => {
     const response = await fetch("/api/employer/me", {
@@ -99,6 +105,90 @@ export default function AtsIntegrationPage() {
     };
   }, [loadEmployerAccess, router]);
 
+  async function findJobs(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const trimmedUrl = careersPageUrl.trim();
+    if (!trimmedUrl || requestInFlightRef.current) return;
+
+    requestInFlightRef.current = true;
+    setIsFindingJobs(true);
+    setPreviewJobs(null);
+    setResultMessage(null);
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+
+      if (!accessToken) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+
+      const response = await fetch("/api/employer/ats/preview", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...employerAccountHeaders(accessToken),
+        },
+        body: JSON.stringify({ careersPageUrl: trimmedUrl }),
+      });
+
+      if (response.status === 401) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+
+      if (response.status === 400) {
+        setResultMessage("Please enter a valid careers page URL and try again.");
+        return;
+      }
+
+      if (response.status === 403) {
+        setResultMessage("You don’t have permission to find jobs for this employer account.");
+        return;
+      }
+
+      if (!response.ok) {
+        setResultMessage("We couldn’t find your jobs right now. Please try again.");
+        return;
+      }
+
+      const payload = (await response.json().catch(() => null)) as
+        | { status?: unknown; jobs?: unknown; message?: unknown }
+        | null;
+
+      if (payload?.status === "ready" && Array.isArray(payload.jobs)) {
+        setPreviewJobs(payload.jobs);
+        setResultMessage(
+          payload.jobs.length === 0
+            ? "We connected to your careers page, but there are no open jobs right now."
+            : `We found ${payload.jobs.length} ${payload.jobs.length === 1 ? "job" : "jobs"}.`,
+        );
+        return;
+      }
+
+      if (
+        (payload?.status === "discovery-failed" ||
+          payload?.status === "no-job-links" ||
+          payload?.status === "unsupported" ||
+          payload?.status === "retrieval-failed") &&
+        typeof payload.message === "string"
+      ) {
+        setResultMessage(payload.message);
+        return;
+      }
+
+      setResultMessage("We couldn’t find your jobs right now. Please try again.");
+    } catch {
+      setPreviewJobs(null);
+      setResultMessage("We couldn’t find your jobs right now. Please try again.");
+    } finally {
+      requestInFlightRef.current = false;
+      setIsFindingJobs(false);
+    }
+  }
+
   if (authStatus === "loading") {
     return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading import jobs…</main>;
   }
@@ -132,30 +222,42 @@ export default function AtsIntegrationPage() {
           <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
             Connect Your Careers Page
           </h2>
-          <div className="rn-ats-import-form">
+          <form className="rn-ats-import-form" onSubmit={findJobs}>
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
               Careers Page URL
               <input
                 type="url"
+                value={careersPageUrl}
+                onChange={(event) => setCareersPageUrl(event.target.value)}
                 placeholder="https://company.com/careers"
                 style={{ ...homeInputStyle, marginTop: 6 }}
                 aria-describedby="ats-import-note"
+                disabled={isFindingJobs}
               />
             </label>
             <div>
               <button
-                type="button"
+                type="submit"
                 className="rn-btn-primary rn-ats-import-button"
-                style={{ ...homePrimaryButton, opacity: 0.55, cursor: "not-allowed" }}
-                disabled
+                style={{
+                  ...homePrimaryButton,
+                  ...(!careersPageUrl.trim() || isFindingJobs
+                    ? { opacity: 0.55, cursor: "not-allowed" }
+                    : {}),
+                }}
+                disabled={!careersPageUrl.trim() || isFindingJobs}
               >
-                Find My Jobs
+                {isFindingJobs ? "Finding Jobs..." : "Find My Jobs"}
               </button>
             </div>
-            <p id="ats-import-note" style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>
-              Coming soon. Job importing is currently under development.
+            <p
+              id="ats-import-note"
+              role={resultMessage ? "status" : undefined}
+              style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}
+            >
+              {resultMessage ?? "We’ll search your public careers page for open jobs."}
             </p>
-          </div>
+          </form>
         </section>
 
         <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
