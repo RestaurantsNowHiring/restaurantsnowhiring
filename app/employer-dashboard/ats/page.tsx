@@ -35,6 +35,30 @@ type EmployerAccess = {
   canManageNotificationRouting: boolean;
 };
 
+type PreviewJob = {
+  title: string;
+  location?: string;
+  department?: string;
+  employmentType?: string;
+};
+
+function getDisplayValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function toPreviewJob(value: unknown): PreviewJob {
+  const job = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+
+  return {
+    title: getDisplayValue(job.title) ?? "Untitled job",
+    ...(getDisplayValue(job.location) ? { location: getDisplayValue(job.location) } : {}),
+    ...(getDisplayValue(job.department) ? { department: getDisplayValue(job.department) } : {}),
+    ...(getDisplayValue(job.employmentType)
+      ? { employmentType: getDisplayValue(job.employmentType) }
+      : {}),
+  };
+}
+
 function employerAccountHeaders(token: string) {
   const selectedEmployerAccountId =
     typeof window === "undefined"
@@ -55,7 +79,7 @@ export default function AtsIntegrationPage() {
   const [employerAccess, setEmployerAccess] = useState<EmployerAccess | null>(null);
   const [careersPageUrl, setCareersPageUrl] = useState("");
   const [isFindingJobs, setIsFindingJobs] = useState(false);
-  const [, setPreviewJobs] = useState<unknown[] | null>(null);
+  const [previewJobs, setPreviewJobs] = useState<PreviewJob[] | null>(null);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const requestInFlightRef = useRef(false);
 
@@ -159,11 +183,11 @@ export default function AtsIntegrationPage() {
         | null;
 
       if (payload?.status === "ready" && Array.isArray(payload.jobs)) {
-        setPreviewJobs(payload.jobs);
+        setPreviewJobs(payload.jobs.map(toPreviewJob));
         setResultMessage(
           payload.jobs.length === 0
             ? "We connected to your careers page, but there are no open jobs right now."
-            : `We found ${payload.jobs.length} ${payload.jobs.length === 1 ? "job" : "jobs"}.`,
+            : null,
         );
         return;
       }
@@ -259,6 +283,49 @@ export default function AtsIntegrationPage() {
             </p>
           </form>
         </section>
+
+        {previewJobs && previewJobs.length > 0 ? (
+          <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+            <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
+              Jobs Found
+            </h2>
+            <p role="status" style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
+              We found {previewJobs.length} {previewJobs.length === 1 ? "job" : "jobs"}.
+            </p>
+            <div style={{ display: "grid", gap: 12 }}>
+              {previewJobs.map((job, index) => (
+                <article
+                  key={`${job.title}-${index}`}
+                  style={{
+                    padding: 16,
+                    border: `1px solid ${homeTheme.border}`,
+                    borderRadius: 12,
+                    backgroundColor: homeTheme.bg,
+                  }}
+                >
+                  <h3 style={{ margin: 0, color: homeTheme.text, fontSize: 19 }}>
+                    {job.title}
+                  </h3>
+                  {job.location ? (
+                    <p style={{ margin: "8px 0 0", color: homeTheme.muted, fontWeight: 700 }}>
+                      Location: {job.location}
+                    </p>
+                  ) : null}
+                  {job.department ? (
+                    <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 700 }}>
+                      Department: {job.department}
+                    </p>
+                  ) : null}
+                  {job.employmentType ? (
+                    <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 700 }}>
+                      Employment Type: {job.employmentType}
+                    </p>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          </section>
+        ) : null}
 
         <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
           <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
