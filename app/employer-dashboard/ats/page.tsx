@@ -36,6 +36,7 @@ type EmployerAccess = {
 };
 
 type PreviewJob = {
+  selectionKey: string;
   title: string;
   location?: string;
   department?: string;
@@ -50,6 +51,10 @@ function toPreviewJob(value: unknown): PreviewJob {
   const job = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 
   return {
+    selectionKey: JSON.stringify([
+      getDisplayValue(job.providerKey) ?? "",
+      getDisplayValue(job.externalId) ?? "",
+    ]),
     title: getDisplayValue(job.title) ?? "Untitled job",
     ...(getDisplayValue(job.location) ? { location: getDisplayValue(job.location) } : {}),
     ...(getDisplayValue(job.department) ? { department: getDisplayValue(job.department) } : {}),
@@ -80,6 +85,7 @@ export default function AtsIntegrationPage() {
   const [careersPageUrl, setCareersPageUrl] = useState("");
   const [isFindingJobs, setIsFindingJobs] = useState(false);
   const [previewJobs, setPreviewJobs] = useState<PreviewJob[] | null>(null);
+  const [selectedJobKeys, setSelectedJobKeys] = useState<Set<string>>(() => new Set());
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const requestInFlightRef = useRef(false);
 
@@ -138,6 +144,7 @@ export default function AtsIntegrationPage() {
     requestInFlightRef.current = true;
     setIsFindingJobs(true);
     setPreviewJobs(null);
+    setSelectedJobKeys(new Set());
     setResultMessage(null);
 
     try {
@@ -211,6 +218,20 @@ export default function AtsIntegrationPage() {
       requestInFlightRef.current = false;
       setIsFindingJobs(false);
     }
+  }
+
+  function toggleJobSelection(selectionKey: string) {
+    setSelectedJobKeys((currentSelection) => {
+      const nextSelection = new Set(currentSelection);
+
+      if (nextSelection.has(selectionKey)) {
+        nextSelection.delete(selectionKey);
+      } else {
+        nextSelection.add(selectionKey);
+      }
+
+      return nextSelection;
+    });
   }
 
   if (authStatus === "loading") {
@@ -292,10 +313,13 @@ export default function AtsIntegrationPage() {
             <p role="status" style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
               We found {previewJobs.length} {previewJobs.length === 1 ? "job" : "jobs"}.
             </p>
+            <p role="status" style={{ margin: "0 0 16px", color: homeTheme.text, fontWeight: 900 }}>
+              {selectedJobKeys.size} {selectedJobKeys.size === 1 ? "job" : "jobs"} selected
+            </p>
             <div style={{ display: "grid", gap: 12 }}>
-              {previewJobs.map((job, index) => (
+              {previewJobs.map((job) => (
                 <article
-                  key={`${job.title}-${index}`}
+                  key={job.selectionKey}
                   style={{
                     padding: 16,
                     border: `1px solid ${homeTheme.border}`,
@@ -303,9 +327,18 @@ export default function AtsIntegrationPage() {
                     backgroundColor: homeTheme.bg,
                   }}
                 >
-                  <h3 style={{ margin: 0, color: homeTheme.text, fontSize: 19 }}>
-                    {job.title}
-                  </h3>
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+                    <input
+                      type="checkbox"
+                      checked={selectedJobKeys.has(job.selectionKey)}
+                      onChange={() => toggleJobSelection(job.selectionKey)}
+                      aria-label={`Select ${job.title}`}
+                      style={{ width: 18, height: 18, margin: "2px 0 0", flexShrink: 0 }}
+                    />
+                    <h3 style={{ margin: 0, color: homeTheme.text, fontSize: 19 }}>
+                      {job.title}
+                    </h3>
+                  </div>
                   {job.location ? (
                     <p style={{ margin: "8px 0 0", color: homeTheme.muted, fontWeight: 700 }}>
                       Location: {job.location}
