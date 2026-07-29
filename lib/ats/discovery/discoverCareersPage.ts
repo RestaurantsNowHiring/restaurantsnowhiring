@@ -5,6 +5,7 @@ import { request as httpRequest } from "node:http";
 import { request as httpsRequest } from "node:https";
 import type { IncomingHttpHeaders, IncomingMessage } from "node:http";
 import { isIP } from "node:net";
+import type { LookupFunction } from "node:net";
 
 import type { DiscoveryResult, RedirectStep } from "./types";
 
@@ -434,6 +435,27 @@ function cancelResponseBody(
   }
 }
 
+/**
+ * Pin a request to one address that has already passed SSRF validation.
+ *
+ * Modern versions of Node may ask custom lookup functions for all addresses
+ * while performing automatic connection-family selection. In that mode the
+ * callback must receive an array, even when DNS pinning intentionally supplies
+ * exactly one address.
+ */
+export function createPinnedLookup(
+  validatedAddress: ValidatedAddress,
+): LookupFunction {
+  return (_hostname, options, callback) => {
+    if (options.all) {
+      callback(null, [validatedAddress]);
+      return;
+    }
+
+    callback(null, validatedAddress.address, validatedAddress.family);
+  };
+}
+
 function requestHeadersForAddress(
   url: URL,
   validatedAddress: ValidatedAddress,
@@ -452,9 +474,7 @@ function requestHeadersForAddress(
         method: "GET",
         headers: REQUEST_HEADERS,
         servername: url.protocol === "https:" ? url.hostname : undefined,
-        lookup: (_hostname, _options, callback) => {
-          callback(null, validatedAddress.address, validatedAddress.family);
-        },
+        lookup: createPinnedLookup(validatedAddress),
         signal,
       },
       (body) => {
