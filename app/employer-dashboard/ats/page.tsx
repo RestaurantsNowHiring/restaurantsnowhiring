@@ -43,6 +43,8 @@ type PreviewJob = {
   employmentType?: string;
 };
 
+const MAX_IMPORT_SELECTION = 500;
+
 function getDisplayValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
@@ -226,12 +228,28 @@ export default function AtsIntegrationPage() {
 
       if (nextSelection.has(selectionKey)) {
         nextSelection.delete(selectionKey);
-      } else {
+      } else if (nextSelection.size < MAX_IMPORT_SELECTION) {
         nextSelection.add(selectionKey);
       }
 
       return nextSelection;
     });
+  }
+
+  function selectAllJobs() {
+    if (!previewJobs) return;
+
+    setSelectedJobKeys(
+      new Set(
+        previewJobs
+          .slice(0, MAX_IMPORT_SELECTION)
+          .map((job) => job.selectionKey),
+      ),
+    );
+  }
+
+  function clearJobSelection() {
+    setSelectedJobKeys(new Set());
   }
 
   if (authStatus === "loading") {
@@ -313,9 +331,36 @@ export default function AtsIntegrationPage() {
             <p role="status" style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
               We found {previewJobs.length} {previewJobs.length === 1 ? "job" : "jobs"}.
             </p>
-            <p role="status" style={{ margin: "0 0 16px", color: homeTheme.text, fontWeight: 900 }}>
-              {selectedJobKeys.size} {selectedJobKeys.size === 1 ? "job" : "jobs"} selected
-            </p>
+            <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
+              <p role="status" style={{ margin: 0, color: homeTheme.text, fontWeight: 900 }}>
+                {selectedJobKeys.size} {selectedJobKeys.size === 1 ? "job" : "jobs"} selected
+              </p>
+              <button
+                type="button"
+                className="rn-btn-secondary"
+                style={homeSecondaryButton}
+                onClick={selectAllJobs}
+                disabled={
+                  selectedJobKeys.size >= Math.min(previewJobs.length, MAX_IMPORT_SELECTION)
+                }
+              >
+                Select All
+              </button>
+              <button
+                type="button"
+                className="rn-btn-secondary"
+                style={homeSecondaryButton}
+                onClick={clearJobSelection}
+                disabled={selectedJobKeys.size === 0}
+              >
+                Clear Selection
+              </button>
+            </div>
+            {selectedJobKeys.size === MAX_IMPORT_SELECTION ? (
+              <p role="status" style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
+                You can import up to 500 jobs at a time.
+              </p>
+            ) : null}
             <div style={{ display: "grid", gap: 12 }}>
               {previewJobs.map((job) => (
                 <article
@@ -332,6 +377,10 @@ export default function AtsIntegrationPage() {
                       type="checkbox"
                       checked={selectedJobKeys.has(job.selectionKey)}
                       onChange={() => toggleJobSelection(job.selectionKey)}
+                      disabled={
+                        selectedJobKeys.size === MAX_IMPORT_SELECTION &&
+                        !selectedJobKeys.has(job.selectionKey)
+                      }
                       aria-label={`Select ${job.title}`}
                       style={{ width: 18, height: 18, margin: "2px 0 0", flexShrink: 0 }}
                     />
