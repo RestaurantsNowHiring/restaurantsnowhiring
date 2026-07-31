@@ -551,7 +551,10 @@ export default function AtsIntegrationPage() {
               ))}
             </div>
             {filteredJobs.length > 0 ? (
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16 }}>
+              <nav
+                aria-label="Job preview pagination"
+                style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16 }}
+              >
                 <button
                   type="button"
                   className="rn-btn-secondary"
@@ -570,7 +573,7 @@ export default function AtsIntegrationPage() {
                 >
                   Next
                 </button>
-              </div>
+              </nav>
             ) : null}
           </section>
         ) : null}
