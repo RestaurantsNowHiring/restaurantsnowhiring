@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
@@ -44,6 +44,7 @@ type PreviewJob = {
 };
 
 const MAX_IMPORT_SELECTION = 500;
+const JOBS_PER_PAGE = 25;
 
 function getDisplayValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -88,8 +89,60 @@ export default function AtsIntegrationPage() {
   const [isFindingJobs, setIsFindingJobs] = useState(false);
   const [previewJobs, setPreviewJobs] = useState<PreviewJob[] | null>(null);
   const [selectedJobKeys, setSelectedJobKeys] = useState<Set<string>>(() => new Set());
+  const [jobSearchQuery, setJobSearchQuery] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState("");
+  const [selectedDepartment, setSelectedDepartment] = useState("");
+  const [selectedEmploymentType, setSelectedEmploymentType] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
   const requestInFlightRef = useRef(false);
+
+  const filterOptions = useMemo(() => {
+    function uniqueSortedValues(field: keyof Pick<PreviewJob, "location" | "department" | "employmentType">) {
+      return Array.from(
+        new Set((previewJobs ?? []).map((job) => job[field]).filter((value): value is string => Boolean(value))),
+      ).sort((first, second) => first.localeCompare(second, undefined, { sensitivity: "base" }));
+    }
+
+    return {
+      locations: uniqueSortedValues("location"),
+      departments: uniqueSortedValues("department"),
+      employmentTypes: uniqueSortedValues("employmentType"),
+    };
+  }, [previewJobs]);
+
+  const filteredJobs = useMemo(() => {
+    const normalizedQuery = jobSearchQuery.trim().toLocaleLowerCase();
+
+    return (previewJobs ?? []).filter((job) => {
+      const matchesSearch =
+        !normalizedQuery ||
+        [job.title, job.location, job.department, job.employmentType].some((value) =>
+          value?.toLocaleLowerCase().includes(normalizedQuery),
+        );
+
+      return (
+        matchesSearch &&
+        (!selectedLocation || job.location === selectedLocation) &&
+        (!selectedDepartment || job.department === selectedDepartment) &&
+        (!selectedEmploymentType || job.employmentType === selectedEmploymentType)
+      );
+    });
+  }, [
+    jobSearchQuery,
+    previewJobs,
+    selectedDepartment,
+    selectedEmploymentType,
+    selectedLocation,
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredJobs.length / JOBS_PER_PAGE));
+  const paginatedJobs = useMemo(
+    () => filteredJobs.slice((currentPage - 1) * JOBS_PER_PAGE, currentPage * JOBS_PER_PAGE),
+    [currentPage, filteredJobs],
+  );
+  const rangeStart = filteredJobs.length === 0 ? 0 : (currentPage - 1) * JOBS_PER_PAGE + 1;
+  const rangeEnd = Math.min(currentPage * JOBS_PER_PAGE, filteredJobs.length);
 
   const loadEmployerAccess = useCallback(async (token: string) => {
     const response = await fetch("/api/employer/me", {
@@ -147,6 +200,11 @@ export default function AtsIntegrationPage() {
     setIsFindingJobs(true);
     setPreviewJobs(null);
     setSelectedJobKeys(new Set());
+    setJobSearchQuery("");
+    setSelectedLocation("");
+    setSelectedDepartment("");
+    setSelectedEmploymentType("");
+    setCurrentPage(1);
     setResultMessage(null);
 
     try {
@@ -361,8 +419,94 @@ export default function AtsIntegrationPage() {
                 You can import up to 500 jobs at a time.
               </p>
             ) : null}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                flexWrap: "wrap",
+                gap: 12,
+                marginBottom: 16,
+              }}
+            >
+              <label style={{ flex: "2 1 240px", fontWeight: 900, color: homeTheme.text }}>
+                Search Jobs
+                <input
+                  type="search"
+                  value={jobSearchQuery}
+                  onChange={(event) => {
+                    setJobSearchQuery(event.target.value);
+                    setCurrentPage(1);
+                  }}
+                  placeholder="Search jobs"
+                  style={{ ...homeInputStyle, marginTop: 6 }}
+                />
+              </label>
+              {filterOptions.locations.length > 0 ? (
+                <label style={{ flex: "1 1 180px", fontWeight: 900, color: homeTheme.text }}>
+                  Location
+                  <select
+                    value={selectedLocation}
+                    onChange={(event) => {
+                      setSelectedLocation(event.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{ ...homeInputStyle, marginTop: 6 }}
+                  >
+                    <option value="">All</option>
+                    {filterOptions.locations.map((location) => (
+                      <option key={location} value={location}>{location}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {filterOptions.departments.length > 0 ? (
+                <label style={{ flex: "1 1 180px", fontWeight: 900, color: homeTheme.text }}>
+                  Department
+                  <select
+                    value={selectedDepartment}
+                    onChange={(event) => {
+                      setSelectedDepartment(event.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{ ...homeInputStyle, marginTop: 6 }}
+                  >
+                    <option value="">All</option>
+                    {filterOptions.departments.map((department) => (
+                      <option key={department} value={department}>{department}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+              {filterOptions.employmentTypes.length > 0 ? (
+                <label style={{ flex: "1 1 180px", fontWeight: 900, color: homeTheme.text }}>
+                  Employment Type
+                  <select
+                    value={selectedEmploymentType}
+                    onChange={(event) => {
+                      setSelectedEmploymentType(event.target.value);
+                      setCurrentPage(1);
+                    }}
+                    style={{ ...homeInputStyle, marginTop: 6 }}
+                  >
+                    <option value="">All</option>
+                    {filterOptions.employmentTypes.map((employmentType) => (
+                      <option key={employmentType} value={employmentType}>{employmentType}</option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+            {filteredJobs.length > 0 ? (
+              <p role="status" style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
+                Showing {rangeStart}–{rangeEnd} of {filteredJobs.length} {filteredJobs.length === 1 ? "job" : "jobs"}
+              </p>
+            ) : (
+              <p role="status" style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
+                No jobs match your current search or filters.
+              </p>
+            )}
             <div style={{ display: "grid", gap: 12 }}>
-              {previewJobs.map((job) => (
+              {paginatedJobs.map((job) => (
                 <article
                   key={job.selectionKey}
                   style={{
@@ -406,6 +550,28 @@ export default function AtsIntegrationPage() {
                 </article>
               ))}
             </div>
+            {filteredJobs.length > 0 ? (
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16 }}>
+                <button
+                  type="button"
+                  className="rn-btn-secondary"
+                  style={homeSecondaryButton}
+                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                  disabled={currentPage === 1}
+                >
+                  Previous
+                </button>
+                <button
+                  type="button"
+                  className="rn-btn-secondary"
+                  style={homeSecondaryButton}
+                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                </button>
+              </div>
+            ) : null}
           </section>
         ) : null}
 
