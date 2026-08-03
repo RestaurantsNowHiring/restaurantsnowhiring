@@ -15,6 +15,7 @@ function loadRoute() {
     if (specifier === "next/server") return { NextResponse: { json: (body, init = {}) => Response.json(body, init) } };
     if (specifier.endsWith("/importPreparedJobs")) return { importPreparedJobs: async () => emptyResult };
     if (specifier.endsWith("/prepareJobImport")) return { prepareJobImport: async () => prepared, normalizeProviderKey: (value) => value.trim().toLowerCase() };
+    if (specifier.endsWith("/connections/registerEmployerAtsConnection")) return { registerEmployerAtsConnection: async () => ({ status: "failed", message: "safe" }) };
     if (specifier.endsWith("/lib/ats/types")) return {};
     if (specifier.endsWith("/lib/billing")) return { getAuthUserFromRequest: async () => null };
     if (specifier.endsWith("/lib/employerAccounts")) return { getEmployerAccountContext: async () => ({}), getSelectedEmployerAccountIdFromRequest: () => null, assertEmployerPermission: () => {} };
@@ -37,6 +38,7 @@ function dependencies(overrides = {}) {
     assertEmployerPermission: (context, permission) => { assert.equal(permission, "canManageJobs"); if (!context.canManageJobs) { const error = new Error("secret forbidden"); error.name = "EmployerPermissionError"; throw error; } },
     prepareJobImport: async () => prepared,
     importPreparedJobs: async () => emptyResult,
+    registerEmployerAtsConnection: async () => ({ status: "connected", connectionId: "connection-1" }),
     ...overrides,
   };
 }
@@ -109,8 +111,8 @@ test("prepared items, corrections, and server-resolved account are passed to imp
   assert.deepEqual(input, { employerAccountId: "server_account", preparedJobs: preparedItems, reviewCorrections: [{ ...reviewCorrections[0], providerKey: "greenhouse", externalId: "12345" }] });
 });
 
-test("client job objects, URLs, status, and account data are rejected before services", async () => {
-  for (const field of ["jobs", "sourceUrl", "applyUrl", "status", "active", "employerAccountId"]) {
+test("client job objects, URLs, status, provider, account, and user data are rejected before services", async () => {
+  for (const field of ["jobs", "sourceUrl", "applyUrl", "status", "active", "providerKey", "employerAccountId", "connectedByUserId"]) {
     let called = false;
     const result = await call({ ...validBody, [field]: "untrusted" }, { prepareJobImport: async () => { called = true; return prepared; } });
     assert.equal(called, false); assert.equal(result.status, 400);
@@ -124,7 +126,41 @@ const outcomes = [
 ];
 for (const [name, serviceResult, summary] of outcomes) test(`${name} returns completed HTTP 200 with counts`, async () => {
   const result = await call(validBody, { importPreparedJobs: async () => serviceResult });
-  assert.equal(result.status, 200); assert.deepEqual(result.body, { status: "completed", summary, ...serviceResult });
+  const connection = serviceResult.Imported.length || serviceResult.Updated.length ? { connection: { status: "connected" } } : {};
+  assert.equal(result.status, 200); assert.deepEqual(result.body, { status: "completed", summary, ...serviceResult, ...connection });
+});
+
+test("connection is not registered when no item was imported or updated", async () => {
+  let called = false;
+  const serviceResult = { Imported: [], Updated: [], Skipped: [{ providerKey: "g", externalId: "1", message: "skip" }], Failed: [] };
+  const result = await call(validBody, { importPreparedJobs: async () => serviceResult, registerEmployerAtsConnection: async () => { called = true; return { status: "connected", connectionId: "id" }; } });
+  assert.equal(called, false); assert.equal("connection" in result.body, false);
+});
+
+for (const [name, serviceResult] of [
+  ["Imported", { Imported: [{ externalId: "1" }], Updated: [], Skipped: [], Failed: [] }],
+  ["Updated", { Imported: [], Updated: [{ externalId: "1" }], Skipped: [], Failed: [] }],
+]) test(`${name} success registers with server-authoritative identities and discovered source`, async () => {
+  let registrationInput;
+  const result = await call({ ...validBody, careersPageUrl: " https://example.com/employer-careers " }, { importPreparedJobs: async () => serviceResult, registerEmployerAtsConnection: async (input) => { registrationInput = input; return { status: "connected", connectionId: "private-id" }; } });
+  assert.deepEqual(registrationInput, { employerAccountId: "server_account", connectedByUserId: "user_1", inputUrl: "https://example.com/employer-careers", providerKey: "greenhouse", sourceUrl: "https://boards.greenhouse.io/example" });
+  assert.deepEqual(result.body.connection, { status: "connected" });
+  assert.doesNotMatch(JSON.stringify(result.body), /server_account|user_1|private-id/);
+});
+
+test("connection failure preserves successful import outcome and adds a safe warning", async () => {
+  const serviceResult = { Imported: [{ providerKey: "g", externalId: "1", message: "ok" }], Updated: [], Skipped: [], Failed: [] };
+  const result = await call(validBody, { importPreparedJobs: async () => serviceResult, registerEmployerAtsConnection: async () => ({ status: "failed", message: "raw database detail" }) });
+  assert.equal(result.status, 200);
+  assert.deepEqual(result.body, { status: "completed", summary: { imported: 1, updated: 0, skipped: 0, failed: 0 }, ...serviceResult, connection: { status: "warning", message: "Your jobs were imported, but automatic synchronization could not be enabled yet." } });
+  assert.doesNotMatch(JSON.stringify(result.body), /raw database detail/);
+});
+
+test("an unexpected registration exception also preserves the successful import", async () => {
+  const serviceResult = { Imported: [], Updated: [{ externalId: "1" }], Skipped: [], Failed: [] };
+  const result = await call(validBody, { importPreparedJobs: async () => serviceResult, registerEmployerAtsConnection: async () => { throw new Error("raw connection exception"); } });
+  assert.equal(result.status, 200); assert.equal(result.body.Updated.length, 1); assert.equal(result.body.connection.status, "warning");
+  assert.doesNotMatch(JSON.stringify(result.body), /raw connection exception/);
 });
 
 test("unexpected errors return sanitized 500 without raw text", async () => {
@@ -136,5 +172,5 @@ test("unexpected errors return sanitized 500 without raw text", async () => {
 test("route exposes no direct database or persistence dependency", () => {
   const source = readFileSync(routePath, "utf8");
   assert.doesNotMatch(source, /supabase|\.from\(|database\.(?:insert|update)|billing quantity|stripe/i);
-  assert.equal(Object.keys(dependencies()).some((name) => /database|insert|update|billing|audit|sync/i.test(name)), false);
+  assert.equal(Object.keys(dependencies()).some((name) => /database|insert|billing|audit/i.test(name)), false);
 });

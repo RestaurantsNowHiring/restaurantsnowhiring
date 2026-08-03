@@ -9,6 +9,7 @@ import {
   type SelectedImportJobKey,
 } from "../../../../../lib/ats/import/prepareJobImport";
 import type { AtsProviderKey } from "../../../../../lib/ats/types";
+import { registerEmployerAtsConnection } from "../../../../../lib/ats/connections/registerEmployerAtsConnection";
 import { getAuthUserFromRequest } from "../../../../../lib/billing";
 import {
   assertEmployerPermission,
@@ -36,6 +37,7 @@ type AtsImportRouteDependencies = {
   assertEmployerPermission: typeof assertEmployerPermission;
   prepareJobImport: typeof prepareJobImport;
   importPreparedJobs: typeof importPreparedJobs;
+  registerEmployerAtsConnection: typeof registerEmployerAtsConnection;
 };
 
 const defaultDependencies: AtsImportRouteDependencies = {
@@ -45,6 +47,7 @@ const defaultDependencies: AtsImportRouteDependencies = {
   assertEmployerPermission,
   prepareJobImport,
   importPreparedJobs,
+  registerEmployerAtsConnection,
 };
 
 function permissionStatus(error: unknown) {
@@ -182,6 +185,25 @@ export async function handleAtsImportPost(
       preparedJobs: preparation.items,
       reviewCorrections: payload.reviewCorrections,
     });
+    let connection: { status: "connected" } | { status: "warning"; message: string } | undefined;
+    if (result.Imported.length > 0 || result.Updated.length > 0) {
+      try {
+        const registration = await dependencies.registerEmployerAtsConnection({
+          employerAccountId: employerContext.accountId,
+          connectedByUserId: user.id,
+          inputUrl: payload.careersPageUrl,
+          providerKey: preparation.providerKey,
+          sourceUrl: preparation.sourceUrl,
+        });
+        if (registration.status === "connected") connection = { status: "connected" };
+      } catch {
+        // Preserve the completed job import; the response below carries a safe warning.
+      }
+      connection ??= {
+        status: "warning",
+        message: "Your jobs were imported, but automatic synchronization could not be enabled yet.",
+      };
+    }
     return NextResponse.json({
       status: "completed",
       summary: {
@@ -191,6 +213,7 @@ export async function handleAtsImportPost(
         failed: result.Failed.length,
       },
       ...result,
+      ...(connection ? { connection } : {}),
     });
   } catch (error) {
     console.error("Employer ATS job import failed", {
