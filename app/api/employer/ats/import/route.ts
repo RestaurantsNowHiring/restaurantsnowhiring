@@ -5,6 +5,7 @@ import {
 } from "../../../../../lib/ats/import/importPreparedJobs";
 import {
   prepareJobImport,
+  normalizeProviderKey,
   type SelectedImportJobKey,
 } from "../../../../../lib/ats/import/prepareJobImport";
 import type { AtsProviderKey } from "../../../../../lib/ats/types";
@@ -22,8 +23,7 @@ const MAX_EXTERNAL_ID_LENGTH = 1_024;
 const MAX_SELECTED_JOB_KEYS = 500;
 const MAX_REVIEW_CORRECTIONS = 500;
 const CORRECTION_LIMITS = {
-  city: 200,
-  state: 2,
+  employerStoreId: 100,
   roleCategory: 100,
   employmentType: 100,
   description: 250_000,
@@ -119,7 +119,7 @@ async function readPayload(request: Request) {
     if (providerKey.length > MAX_PROVIDER_KEY_LENGTH) return { error: "providerKey is too long." as const };
     if (!externalId) return { error: "Each externalId must be a non-empty string." as const };
     if (externalId.length > MAX_EXTERNAL_ID_LENGTH) return { error: "externalId is too long." as const };
-    selectedJobKeys.push({ providerKey: providerKey as AtsProviderKey, externalId });
+    selectedJobKeys.push({ providerKey: normalizeProviderKey(providerKey) as AtsProviderKey, externalId });
   }
 
   if (!Array.isArray(payload.reviewCorrections)) return { error: "reviewCorrections must be an array." as const };
@@ -139,7 +139,7 @@ async function readPayload(request: Request) {
         !externalId || externalId.length > MAX_EXTERNAL_ID_LENGTH) {
       return { error: "Each review correction requires a valid providerKey and externalId." as const };
     }
-    const correction: JobReviewCorrection = { providerKey, externalId };
+    const correction: JobReviewCorrection = { providerKey: normalizeProviderKey(providerKey), externalId };
     for (const field of Object.keys(CORRECTION_LIMITS) as Array<keyof typeof CORRECTION_LIMITS>) {
       const fieldValue = value[field];
       if (fieldValue === undefined) continue;
@@ -169,6 +169,7 @@ export async function handleAtsImportPost(
     if ("error" in payload) return NextResponse.json({ error: payload.error }, { status: 400 });
 
     const preparation = await dependencies.prepareJobImport({
+      employerAccountId: employerContext.accountId,
       careersPageUrl: payload.careersPageUrl,
       selectedJobKeys: payload.selectedJobKeys,
     });

@@ -6,6 +6,7 @@ import { buildCanonicalJobInsertPayload } from "../../jobPersistence";
 import { getSupabaseAdminClient } from "../../supabaseAdmin";
 import { getAtsProvider } from "../providers/registry";
 import type { PreparedImportItem, PreparedRnhJob } from "./prepareJobImport";
+import { normalizeAtsLocationKey, normalizeProviderKey } from "./prepareJobImport";
 
 const MAX_JOBS = 500;
 const BATCH_SIZE = 50;
@@ -18,8 +19,7 @@ const STATES = new Set(STATE_OPTIONS);
 export type JobReviewCorrection = {
   providerKey: string;
   externalId: string;
-  city?: string;
-  state?: string;
+  employerStoreId?: string;
   roleCategory?: string;
   employmentType?: string;
   description?: string;
@@ -46,6 +46,7 @@ export type ImportPreparedJobsResult = {
 
 type Account = { id: string; owner_user_id: string; owner_email: string; restaurant_name: string | null };
 type ExistingJob = { id: string; ats_provider: string; ats_external_job_id: string };
+type Store = { id: string; employer_account_id: string; location_name: string; city: string; state: string; active: boolean; is_assignable_location: boolean };
 type DbResult<T = unknown> = { data: T | null; error: { code?: string; message?: string } | null };
 
 type ImportDatabase = {
@@ -53,6 +54,8 @@ type ImportDatabase = {
   findExisting(accountId: string, providerKey: string, externalIds: string[]): Promise<DbResult<ExistingJob[]>>;
   insert(payload: Record<string, unknown>): Promise<DbResult<{ id: string }>>;
   update(id: string, payload: Record<string, unknown>): Promise<DbResult<{ id: string }>>;
+  getStore(accountId: string, storeId: string): Promise<DbResult<Store>>;
+  upsertLocationMapping(payload: Record<string, unknown>): Promise<DbResult<{ id: string }>>;
 };
 
 export type ImportPreparedJobsDependencies = {
@@ -89,6 +92,17 @@ function defaultDatabase(): ImportDatabase | null {
       const result = await client.from("jobs").update(payload).eq("id", id).select("id").single();
       return result as DbResult<{ id: string }>;
     },
+    async getStore(accountId, storeId) {
+      const result = await client.from("employer_stores").select("id,employer_account_id,location_name,city,state,active,is_assignable_location")
+        .eq("id", storeId).maybeSingle();
+      return result as DbResult<Store>;
+    },
+    async upsertLocationMapping(payload) {
+      const result = await client.from("employer_ats_location_mappings").upsert(payload, {
+        onConflict: "employer_account_id,ats_provider,ats_location_key",
+      }).select("id").single();
+      return result as DbResult<{ id: string }>;
+    },
   };
 }
 
@@ -110,27 +124,28 @@ function cleanString(value: unknown, max = MAX_TEXT) {
   return clean && clean.length <= max ? clean : undefined;
 }
 
-function validateAndMerge(item: PreparedImportItem, correction: JobReviewCorrection | undefined): { job: PreparedRnhJob } | { error: string } {
+function validateAndMerge(item: PreparedImportItem, correction: JobReviewCorrection | undefined, store?: Store): { job: PreparedRnhJob } | { error: string } {
   if (item.status === "unavailable") return { error: item.message || "This job is unavailable." };
   const job = item.job;
-  const provider = cleanString(item.providerKey, 128);
+  const rawProvider = cleanString(item.providerKey, 128);
+  const provider = rawProvider ? normalizeProviderKey(rawProvider) : undefined;
   const externalId = cleanString(item.externalId, 1024);
-  if (!provider || !getAtsProvider(provider) || provider !== job.providerKey) return { error: "The ATS provider identity is invalid." };
+  if (!provider || !getAtsProvider(provider) || provider !== normalizeProviderKey(job.providerKey)) return { error: "The ATS provider identity is invalid." };
   if (!externalId || externalId !== job.externalId) return { error: "The ATS job identity is invalid." };
   if (!validUrl(job.sourceUrl) || !validUrl(job.applyUrl)) return { error: "The ATS job URLs are invalid." };
   if (correction && (correction.providerKey !== provider || correction.externalId !== externalId)) return { error: "The review correction identity is invalid." };
 
   const issueFields = new Set(item.status === "needs-review" ? item.issues.map((issue) => issue.field) : []);
   const supplied = correction ?? { providerKey: provider, externalId };
-  if ((!issueFields.has("location") && (supplied.city !== undefined || supplied.state !== undefined)) ||
+  if ((!issueFields.has("location") && supplied.employerStoreId !== undefined && !job.atsLocation) ||
       (!issueFields.has("roleCategory") && supplied.roleCategory !== undefined) ||
       (!issueFields.has("employmentType") && supplied.employmentType !== undefined) ||
       (!issueFields.has("description") && supplied.description !== undefined)) {
     return { error: "A review correction was supplied for a field that did not require review." };
   }
 
-  const city = cleanString(issueFields.has("location") ? supplied.city : job.city, 200);
-  const state = cleanString(issueFields.has("location") ? supplied.state : job.state, 2)?.toUpperCase();
+  const city = cleanString(store ? store.city : job.city, 200);
+  const state = cleanString(store ? store.state : job.state, 2)?.toUpperCase();
   const roleCategory = cleanString(issueFields.has("roleCategory") ? supplied.roleCategory : job.roleCategory, 100);
   const employmentType = cleanString(issueFields.has("employmentType") ? supplied.employmentType : job.employmentType, 100);
   const descriptionHtml = cleanString(issueFields.has("description") ? supplied.description : job.descriptionHtml, MAX_DESCRIPTION);
@@ -181,20 +196,21 @@ export async function importPreparedJobs(input: ImportPreparedJobsInput, depende
       continue;
     }
     const correction = value as JobReviewCorrection;
-    const allowedKeys = new Set(["providerKey", "externalId", "city", "state", "roleCategory", "employmentType", "description"]);
+    const allowedKeys = new Set(["providerKey", "externalId", "employerStoreId", "roleCategory", "employmentType", "description"]);
     if (Object.keys(correction).some((field) => !allowedKeys.has(field)) ||
         !cleanString(correction.providerKey, 128) || !cleanString(correction.externalId, 1024) ||
-        [correction.city, correction.state, correction.roleCategory, correction.employmentType, correction.description]
+        [correction.employerStoreId, correction.roleCategory, correction.employmentType, correction.description]
           .some((field) => field !== undefined && typeof field !== "string")) {
       result.Failed.push({ ...safeIdentity(correction as Partial<PreparedImportItem>), message: "A review correction is invalid." });
       continue;
     }
+    correction.providerKey = normalizeProviderKey(correction.providerKey);
     const key = `${correction.providerKey}\0${correction.externalId}`;
     if (corrections.has(key)) {
       result.Failed.push({ ...safeIdentity(correction as Partial<PreparedImportItem>), message: "Duplicate review corrections were provided." });
     } else corrections.set(key, correction);
   }
-  const preparedIdentities = new Set(input.preparedJobs.map((item) => `${item?.providerKey}\0${item?.externalId}`));
+  const preparedIdentities = new Set(input.preparedJobs.map((item) => `${normalizeProviderKey(item?.providerKey ?? "")}\0${item?.externalId}`));
   for (const [key, correction] of corrections) {
     if (!preparedIdentities.has(key)) {
       result.Failed.push({ ...safeIdentity(correction as Partial<PreparedImportItem>), message: "A review correction does not match a prepared job." });
@@ -206,75 +222,102 @@ export async function importPreparedJobs(input: ImportPreparedJobsInput, depende
 
   for (let offset = 0; offset < input.preparedJobs.length; offset += BATCH_SIZE) {
     const batch = input.preparedJobs.slice(offset, offset + BATCH_SIZE);
-    const valid: Array<{ item: PreparedImportItem; job: PreparedRnhJob; key: string }> = [];
+    const valid: Array<{ item: PreparedImportItem; job: PreparedRnhJob; key: string; store?: Store }> = [];
     for (const item of batch) {
       const identity = safeIdentity(item);
-      const key = `${identity.providerKey}\0${identity.externalId}`;
+      const key = `${normalizeProviderKey(identity.providerKey)}\0${identity.externalId}`;
       if (seen.has(key)) { result.Skipped.push({ ...identity, message: "This ATS job appeared more than once in the import." }); continue; }
       seen.add(key);
-      const checked = validateAndMerge(item, corrections.get(key));
+      const correction = corrections.get(key);
+      const locationIssue = item.status === "needs-review" && item.issues.some((issue) => issue.field === "location");
+      const locationOverride = Boolean(correction?.employerStoreId && item.status !== "unavailable" && item.job.atsLocation);
+      let store: Store | undefined;
+      if (locationIssue || locationOverride) {
+        const storeId = cleanString(correction?.employerStoreId, 100);
+        if (!storeId) { result.Failed.push({ ...identity, message: "Choose a restaurant location." }); continue; }
+        const storeResult = await database.getStore(accountId, storeId);
+        if (storeResult.error || !storeResult.data || storeResult.data.employer_account_id !== accountId ||
+            !storeResult.data.active || !storeResult.data.is_assignable_location ||
+            !cleanString(storeResult.data.city, 200) || !STATES.has(storeResult.data.state?.toUpperCase())) {
+          result.Failed.push({ ...identity, message: "Choose a valid restaurant location." }); continue;
+        }
+        store = storeResult.data;
+      }
+      const checked = validateAndMerge(item, correction, store);
       if ("error" in checked) { (item.status === "unavailable" ? result.Skipped : result.Failed).push({ ...identity, message: checked.error }); continue; }
-      valid.push({ item, job: checked.job, key });
+      valid.push({ item, job: checked.job, key, ...(store ? { store } : {}) });
     }
 
-    for (const providerKey of new Set(valid.map(({ job }) => job.providerKey))) {
-      const providerJobs = valid.filter(({ job }) => job.providerKey === providerKey);
+    for (const providerKey of new Set(valid.map(({ job }) => normalizeProviderKey(job.providerKey)))) {
+      const providerJobs = valid.filter(({ job }) => normalizeProviderKey(job.providerKey) === providerKey);
       const existingResult = await database.findExisting(accountId, providerKey, providerJobs.map(({ job }) => job.externalId));
       if (existingResult.error) {
         for (const { item } of providerJobs) result.Failed.push({ ...safeIdentity(item), message: "This job could not be checked for an existing import." });
         continue;
       }
       const existing = new Map((existingResult.data ?? []).map((row) => [row.ats_external_job_id, row]));
-      for (const { item, job } of providerJobs) {
+      for (const { item, job, store } of providerJobs) {
         const identity = safeIdentity(item);
         // Sanitization deliberately happens here, immediately before persistence.
         const managed = {
           title: job.title.trim(), role_category: job.roleCategory, city: job.city, state: job.state,
           employment_type: job.employmentType, description: sanitizeRichText(job.descriptionHtml).trim(),
-          source_type: "ats", ats_provider: job.providerKey, ats_external_job_id: job.externalId,
+          source_type: "ats", ats_provider: normalizeProviderKey(job.providerKey), ats_external_job_id: job.externalId,
           ats_source_url: job.sourceUrl, ats_apply_url: job.applyUrl, ats_last_synced_at: now,
           ats_remote_updated_at: job.remoteUpdatedAt ?? null,
         };
         if (!managed.description) { result.Failed.push({ ...identity, message: "The job description is empty after sanitization." }); continue; }
         const prior = existing.get(job.externalId);
+        let persistedAs: "Imported" | "Updated" | undefined;
         if (prior) {
           const update = await database.update(prior.id, managed);
-          (update.error ? result.Failed : result.Updated).push({ ...identity, message: update.error ? "This existing job could not be updated." : "The ATS job was updated." });
-          continue;
-        }
-        const inserted = await database.insert({
-          ...buildCanonicalJobInsertPayload({
-            restaurantName,
-            title: managed.title,
-            roleCategory: job.roleCategory!,
-            city: job.city!,
-            state: job.state!,
-            // public.jobs historically requires apply_email. ATS application routing uses
-            // how_to_apply/ats_apply_url; this compatibility value is not notification routing.
-            applyEmail: accountResult.data.owner_email,
-            employmentType: job.employmentType!,
-            description: managed.description,
-            employerEmail: accountResult.data.owner_email,
-            employerUserId: accountResult.data.owner_user_id,
-            employerAccountId: accountResult.data.id,
-            postedByUserId: accountResult.data.owner_user_id,
-            postedByEmail: accountResult.data.owner_email,
-            howToApply: job.applyUrl,
-            candidateNotificationEmail: null,
-            candidateNotificationEmails: null,
-          }),
-          ...managed,
-        });
-        if (!inserted.error) { result.Imported.push({ ...identity, message: "The ATS job was imported for approval." }); continue; }
-        if (isUniqueViolation(inserted.error)) {
-          const raced = await database.findExisting(accountId, providerKey, [job.externalId]);
-          const row = raced.data?.[0];
-          if (row && !(await database.update(row.id, managed)).error) {
-            result.Updated.push({ ...identity, message: "The existing ATS job was updated." });
-            continue;
+          if (update.error) { result.Failed.push({ ...identity, message: "This existing job could not be updated." }); continue; }
+          persistedAs = "Updated";
+        } else {
+          const inserted = await database.insert({
+            ...buildCanonicalJobInsertPayload({
+              restaurantName,
+              title: managed.title,
+              roleCategory: job.roleCategory!,
+              city: job.city!,
+              state: job.state!,
+              // public.jobs historically requires apply_email. ATS application routing uses
+              // how_to_apply/ats_apply_url; this compatibility value is not notification routing.
+              applyEmail: accountResult.data.owner_email,
+              employmentType: job.employmentType!,
+              description: managed.description,
+              employerEmail: accountResult.data.owner_email,
+              employerUserId: accountResult.data.owner_user_id,
+              employerAccountId: accountResult.data.id,
+              postedByUserId: accountResult.data.owner_user_id,
+              postedByEmail: accountResult.data.owner_email,
+              howToApply: job.applyUrl,
+              candidateNotificationEmail: null,
+              candidateNotificationEmails: null,
+            }),
+            ...managed,
+          });
+          if (!inserted.error) persistedAs = "Imported";
+          else if (isUniqueViolation(inserted.error)) {
+            const raced = await database.findExisting(accountId, providerKey, [job.externalId]);
+            const row = raced.data?.[0];
+            if (row && !(await database.update(row.id, managed)).error) persistedAs = "Updated";
           }
         }
-        result.Failed.push({ ...identity, message: "This job could not be imported." });
+        if (!persistedAs) { result.Failed.push({ ...identity, message: "This job could not be imported." }); continue; }
+
+        let mappingFailed = false;
+        if (store && job.atsLocation) {
+          const mapping = await database.upsertLocationMapping({
+            employer_account_id: accountId, employer_store_id: store.id,
+            ats_provider: normalizeProviderKey(job.providerKey), ats_location_value: job.atsLocation,
+            ats_location_key: normalizeAtsLocationKey(job.atsLocation), city: job.city, state: job.state,
+          });
+          mappingFailed = Boolean(mapping.error);
+        }
+        result[persistedAs].push({ ...identity, message: mappingFailed
+          ? `The ATS job was ${persistedAs === "Imported" ? "imported" : "updated"}, but its location mapping could not be saved. Choose the restaurant location again on the next import.`
+          : persistedAs === "Imported" ? "The ATS job was imported for approval." : "The ATS job was updated." });
       }
     }
   }

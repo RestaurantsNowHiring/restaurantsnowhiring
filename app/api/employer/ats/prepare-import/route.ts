@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   prepareJobImport,
+  normalizeProviderKey,
   type SelectedImportJobKey,
 } from "../../../../../lib/ats/import/prepareJobImport";
 import type { AtsProviderKey } from "../../../../../lib/ats/types";
@@ -115,7 +116,7 @@ async function readPayload(request: Request) {
     if (providerKey.length > MAX_PROVIDER_KEY_LENGTH) return { error: "providerKey is too long." as const };
     if (!externalId) return { error: "Each externalId must be a non-empty string." as const };
     if (externalId.length > MAX_EXTERNAL_ID_LENGTH) return { error: "externalId is too long." as const };
-    selectedJobKeys.push({ providerKey: providerKey as AtsProviderKey, externalId });
+    selectedJobKeys.push({ providerKey: normalizeProviderKey(providerKey) as AtsProviderKey, externalId });
   }
 
   return { careersPageUrl, selectedJobKeys };
@@ -137,7 +138,7 @@ export async function handleAtsPrepareImportPost(
     const payload = await readPayload(request);
     if ("error" in payload) return NextResponse.json({ error: payload.error }, { status: 400 });
 
-    const result = await dependencies.prepareJobImport(payload);
+    const result = await dependencies.prepareJobImport({ ...payload, employerAccountId: context.accountId });
     return NextResponse.json(result, { status: result.status === "invalid-request" ? 400 : 200 });
   } catch (error) {
     console.error("Employer ATS import preparation failed", {

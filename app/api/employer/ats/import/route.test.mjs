@@ -14,7 +14,7 @@ function loadRoute() {
   const require = (specifier) => {
     if (specifier === "next/server") return { NextResponse: { json: (body, init = {}) => Response.json(body, init) } };
     if (specifier.endsWith("/importPreparedJobs")) return { importPreparedJobs: async () => emptyResult };
-    if (specifier.endsWith("/prepareJobImport")) return { prepareJobImport: async () => prepared };
+    if (specifier.endsWith("/prepareJobImport")) return { prepareJobImport: async () => prepared, normalizeProviderKey: (value) => value.trim().toLowerCase() };
     if (specifier.endsWith("/lib/ats/types")) return {};
     if (specifier.endsWith("/lib/billing")) return { getAuthUserFromRequest: async () => null };
     if (specifier.endsWith("/lib/employerAccounts")) return { getEmployerAccountContext: async () => ({}), getSelectedEmployerAccountIdFromRequest: () => null, assertEmployerPermission: () => {} };
@@ -80,7 +80,7 @@ const invalidCases = [
   ["empty selectedJobKeys", { ...validBody, selectedJobKeys: [] }, "selectedJobKeys must contain between 1 and 500 items."],
   ["501 selectedJobKeys", { ...validBody, selectedJobKeys: Array.from({ length: 501 }, (_, i) => ({ providerKey: "greenhouse", externalId: String(i) })) }, "selectedJobKeys must contain between 1 and 500 items."],
   ["malformed selected identity", { ...validBody, selectedJobKeys: [{ providerKey: " ", externalId: "1" }] }, "Each providerKey must be a non-empty string."],
-  ["malformed correction", { ...validBody, reviewCorrections: [{ providerKey: "greenhouse", externalId: "1", city: 4 }] }, "Correction city must be a string."],
+  ["malformed correction", { ...validBody, reviewCorrections: [{ providerKey: "greenhouse", externalId: "1", employerStoreId: 4 }] }, "Correction employerStoreId must be a string."],
   ["unsupported correction field", { ...validBody, reviewCorrections: [{ providerKey: "greenhouse", externalId: "1", title: "Client title" }] }, "Review corrections contain an unsupported field."],
   ["unexpected top-level ownership field", { ...validBody, employerAccountId: "client_account" }, "Request body contains unexpected fields."],
 ];
@@ -103,7 +103,7 @@ for (const status of ["invalid-request", "discovery-failed", "no-job-links", "un
 
 test("prepared items, corrections, and server-resolved account are passed to import", async () => {
   let input;
-  const reviewCorrections = [{ providerKey: " greenhouse ", externalId: " 12345 ", city: "Baltimore", state: "MD", roleCategory: "Manager", employmentType: "Full time", description: "<p>Reviewed</p>" }];
+  const reviewCorrections = [{ providerKey: " greenhouse ", externalId: " 12345 ", employerStoreId: "store-1", roleCategory: "Manager", employmentType: "Full time", description: "<p>Reviewed</p>" }];
   const result = await call({ ...validBody, careersPageUrl: " https://example.com/careers ", selectedJobKeys: [{ providerKey: " greenhouse ", externalId: " 12345 " }], reviewCorrections }, { importPreparedJobs: async (value) => { input = value; return emptyResult; } });
   assert.equal(result.status, 200);
   assert.deepEqual(input, { employerAccountId: "server_account", preparedJobs: preparedItems, reviewCorrections: [{ ...reviewCorrections[0], providerKey: "greenhouse", externalId: "12345" }] });

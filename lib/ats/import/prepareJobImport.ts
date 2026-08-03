@@ -2,6 +2,7 @@ import "server-only";
 
 import { previewJobImport } from "./previewJobImport";
 import type { AtsProviderKey, ImportedJob } from "../types";
+import { getSupabaseAdminClient } from "../../supabaseAdmin";
 
 export const MAX_IMPORT_SELECTION = 500;
 
@@ -11,9 +12,31 @@ export type SelectedImportJobKey = {
 };
 
 export type PrepareJobImportInput = {
+  employerAccountId: string;
   careersPageUrl: string;
   selectedJobKeys: SelectedImportJobKey[];
 };
+
+export type AtsLocationMapping = {
+  ats_provider: string;
+  ats_location_value: string;
+  ats_location_key: string;
+  city: string;
+  state: string;
+  employer_store_id: string;
+  employer_stores: { id: string; employer_account_id: string; city: string | null; state: string | null; active: boolean; is_assignable_location: boolean } | null;
+};
+export type PrepareJobImportDependencies = {
+  findLocationMappings(accountId: string, provider: string, locationKeys: string[]): Promise<AtsLocationMapping[]>;
+};
+
+export function normalizeProviderKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+export function normalizeAtsLocationKey(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
+}
 
 export type ImportReviewIssue = {
   field: "location" | "roleCategory" | "employmentType" | "description";
@@ -153,7 +176,7 @@ function validHttpUrl(value: string | undefined): value is string {
   }
 }
 
-function prepareJob(job: ImportedJob): PreparedImportItem {
+function prepareJob(job: ImportedJob, mapping?: AtsLocationMapping): PreparedImportItem {
   if (!validHttpUrl(job.applyUrl)) {
     return {
       status: "unavailable", providerKey: job.providerKey, externalId: job.externalId,
@@ -161,7 +184,7 @@ function prepareJob(job: ImportedJob): PreparedImportItem {
     };
   }
 
-  const location = mapUsLocation(job.location);
+  const location = mapping ? { city: mapping.city, state: mapping.state } : mapUsLocation(job.location);
   const roleCategory = mapRoleCategory(job.title, job.department);
   const employmentType = mapEmploymentType(job.employmentType);
   // Keep the refreshed ATS markup as source-of-truth. The persistence service must
@@ -199,7 +222,20 @@ const SAFE_PREVIEW_MESSAGES = {
   "retrieval-failed": "We found the job system, but couldn't retrieve the jobs right now. Please try again.",
 } as const;
 
-export async function prepareJobImport(input: PrepareJobImportInput): Promise<PrepareJobImportResult> {
+function defaultDependencies(): PrepareJobImportDependencies | null {
+  const client = getSupabaseAdminClient();
+  if (!client) return null;
+  return { async findLocationMappings(accountId, provider, locationKeys) {
+    if (!locationKeys.length) return [];
+    const result = await client.from("employer_ats_location_mappings")
+      .select("ats_provider,ats_location_value,ats_location_key,city,state,employer_store_id,employer_stores!inner(id,employer_account_id,city,state,active,is_assignable_location)")
+      .eq("employer_account_id", accountId).eq("ats_provider", provider).in("ats_location_key", locationKeys);
+    if (result.error) throw new Error("Could not load ATS location mappings.");
+    return (result.data ?? []) as unknown as AtsLocationMapping[];
+  } };
+}
+
+export async function prepareJobImport(input: PrepareJobImportInput, dependencies?: PrepareJobImportDependencies): Promise<PrepareJobImportResult> {
   if (!Array.isArray(input.selectedJobKeys) || input.selectedJobKeys.length === 0 || input.selectedJobKeys.length > MAX_IMPORT_SELECTION) {
     return { status: "invalid-request", message: `Select between 1 and ${MAX_IMPORT_SELECTION} jobs to import.` };
   }
@@ -212,16 +248,43 @@ export async function prepareJobImport(input: PrepareJobImportInput): Promise<Pr
   }
   if (preview.status !== "ready") return { status: preview.status, message: SAFE_PREVIEW_MESSAGES[preview.status] };
 
-  const jobs = new Map(preview.jobs.map((job) => [`${job.providerKey}\u0000${job.externalId}`, job]));
+  const jobs = new Map(preview.jobs.map((job) => [`${normalizeProviderKey(job.providerKey)}\u0000${job.externalId}`, job]));
   const seen = new Set<string>();
+  const matchedJobs = new Map<string, ImportedJob>();
+  for (const selected of input.selectedJobKeys) {
+    const identity = `${normalizeProviderKey(selected.providerKey)}\u0000${selected.externalId}`;
+    const job = jobs.get(identity);
+    if (job && normalizeProviderKey(selected.providerKey) === normalizeProviderKey(preview.providerKey)) matchedJobs.set(identity, job);
+  }
+
+  const database = dependencies ?? defaultDependencies();
+  let savedMappings: AtsLocationMapping[] = [];
+  if (database && input.employerAccountId) {
+    try {
+      const locationKeys = [...new Set([...matchedJobs.values()].map((job) => job.location ? normalizeAtsLocationKey(job.location) : "").filter(Boolean))];
+      savedMappings = await database.findLocationMappings(input.employerAccountId, normalizeProviderKey(preview.providerKey), locationKeys);
+    } catch {
+      return { status: "retrieval-failed", message: SAFE_PREVIEW_MESSAGES["retrieval-failed"] };
+    }
+  }
+  const mappings = new Map(savedMappings.filter((mapping) =>
+    normalizeProviderKey(mapping.ats_provider) === normalizeProviderKey(preview.providerKey) &&
+    mapping.ats_location_key === normalizeAtsLocationKey(mapping.ats_location_value) &&
+    mapping.employer_stores?.id === mapping.employer_store_id &&
+    mapping.employer_stores.employer_account_id === input.employerAccountId &&
+    mapping.employer_stores.active && mapping.employer_stores.is_assignable_location &&
+    Boolean(mapping.employer_stores.city?.trim() && mapping.employer_stores.state?.trim()),
+  ).map((mapping) => [mapping.ats_location_key, {
+    ...mapping, city: mapping.employer_stores!.city!.trim(), state: mapping.employer_stores!.state!.trim().toUpperCase(),
+  }]));
   const items = input.selectedJobKeys.map((selected): PreparedImportItem => {
-    const identity = `${selected.providerKey}\u0000${selected.externalId}`;
+    const identity = `${normalizeProviderKey(selected.providerKey)}\u0000${selected.externalId}`;
     if (seen.has(identity)) return { status: "unavailable", ...selected, message: "This job was selected more than once." };
     seen.add(identity);
-    if (selected.providerKey !== preview.providerKey) return { status: "unavailable", ...selected, message: "This job does not belong to the job system found on the careers page." };
+    if (normalizeProviderKey(selected.providerKey) !== normalizeProviderKey(preview.providerKey)) return { status: "unavailable", ...selected, message: "This job does not belong to the job system found on the careers page." };
     const job = jobs.get(identity);
     if (!job) return { status: "unavailable", ...selected, message: "This job is no longer available from the careers page." };
-    return prepareJob(job);
+    return prepareJob(job, job.location ? mappings.get(normalizeAtsLocationKey(job.location)) : undefined);
   });
   return {
     status: "prepared", providerKey: preview.providerKey, sourceUrl: preview.sourceUrl, items,
