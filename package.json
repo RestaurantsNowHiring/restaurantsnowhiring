@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test lib/ats/discovery/discoverCareersPage.test.mjs lib/ats/providers/greenhouse/provider.test.mjs lib/ats/import/previewJobImport.test.mjs lib/ats/import/prepareJobImport.test.mjs app/api/employer/ats/preview/route.test.mjs"
+    "test": "node --test lib/ats/discovery/discoverCareersPage.test.mjs lib/ats/providers/greenhouse/provider.test.mjs lib/ats/import/previewJobImport.test.mjs lib/ats/import/prepareJobImport.test.mjs app/api/employer/ats/preview/route.test.mjs app/api/employer/ats/prepare-import/route.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.93.3",
