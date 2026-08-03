@@ -8,7 +8,6 @@ import { supabase } from "../../../lib/supabase";
 import {
   EMPLOYMENT_OPTIONS,
   ROLE_OPTIONS,
-  STATE_OPTIONS,
 } from "../../../lib/jobFormOptions";
 import {
   homeCardStyle,
@@ -74,7 +73,8 @@ type PreparedResult = {
   items: PreparedItem[];
   summary: { ready: number; needsReview: number; unavailable: number };
 };
-type ReviewCorrections = Partial<Record<ReviewField | "city" | "state", string>>;
+type ReviewCorrections = Partial<Record<ReviewField | "employerStoreId", string>>;
+type RestaurantLocation = { id: string; location_name: string; city: string | null; state: string | null };
 type ImportOutcomeName = "Imported" | "Updated" | "Skipped" | "Failed";
 type ImportOutcomeItem = {
   providerKey?: unknown;
@@ -142,6 +142,7 @@ export default function AtsIntegrationPage() {
   const [preparedResult, setPreparedResult] = useState<PreparedResult | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
   const [reviewCorrections, setReviewCorrections] = useState<Record<string, ReviewCorrections>>({});
+  const [restaurantLocations, setRestaurantLocations] = useState<RestaurantLocation[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -157,7 +158,7 @@ export default function AtsIntegrationPage() {
       const itemKey = JSON.stringify([item.providerKey, item.externalId]);
       const corrections = reviewCorrections[itemKey] ?? {};
       return item.issues.some((issue) => issue.field === "location"
-        ? !corrections.city?.trim() || !corrections.state?.trim()
+        ? !corrections.employerStoreId?.trim()
         : !corrections[issue.field]?.trim());
     }),
     [importableItems, reviewCorrections],
@@ -226,6 +227,12 @@ export default function AtsIntegrationPage() {
 
     const payload = (await response.json().catch(() => null)) as { employer?: EmployerAccess } | null;
     setEmployerAccess(payload?.employer ?? null);
+    if (payload?.employer?.accountId) {
+      const storesResponse = await fetch("/api/employer/stores?assignableOnly=true", { headers: employerAccountHeaders(token) });
+      const storesPayload = (await storesResponse.json().catch(() => null)) as { stores?: RestaurantLocation[] } | null;
+      setRestaurantLocations(Array.isArray(storesPayload?.stores)
+        ? storesPayload.stores.filter((store) => Boolean(store.city && store.state)) : []);
+    }
     setAuthStatus("allowed");
   }, []);
 
@@ -475,7 +482,7 @@ export default function AtsIntegrationPage() {
         providerKey: item.providerKey,
         externalId: item.externalId,
       };
-      for (const field of ["city", "state", "roleCategory", "employmentType", "description"] as const) {
+      for (const field of ["employerStoreId", "roleCategory", "employmentType", "description"] as const) {
         const value = values[field]?.trim();
         if (value) correction[field] = value;
       }
@@ -902,12 +909,20 @@ export default function AtsIntegrationPage() {
 
                 const job = item.job;
                 if (item.status === "ready") {
+                  const corrections = reviewCorrections[itemKey] ?? {};
                   return (
                     <article key={itemKey} style={{ padding: 18, border: "1px solid #b9d7c5", borderRadius: 12, background: "#f6fcf8" }}>
                       <h3 style={{ margin: 0, color: homeTheme.text }}>✓ {job.title}</h3>
                       <p style={{ margin: "8px 0 0", color: homeTheme.muted }}>Location: {[job.city, job.state].filter(Boolean).join(", ")}</p>
                       <p style={{ margin: "6px 0 0", color: homeTheme.muted }}>Category: {job.roleCategory}</p>
                       <p style={{ margin: "6px 0 0", color: homeTheme.muted }}>Employment Type: {job.employmentType}</p>
+                      {job.atsLocation ? <label style={{ display: "block", marginTop: 12, color: homeTheme.text, fontWeight: 800 }}>
+                        Change Restaurant Location (optional)
+                        <select value={corrections.employerStoreId ?? ""} onChange={(event) => updateCorrection(itemKey, "employerStoreId", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting}>
+                          <option value="">Keep current mapping</option>
+                          {restaurantLocations.map((location) => <option key={location.id} value={location.id}>{location.location_name} — {location.city}, {location.state}</option>)}
+                        </select>
+                      </label> : null}
                       <p style={{ margin: "10px 0 0", color: homeTheme.green, fontWeight: 900 }}>Ready to Import</p>
                     </article>
                   );
@@ -930,17 +945,14 @@ export default function AtsIntegrationPage() {
                           <p style={{ margin: "0 0 8px", color: homeTheme.text, fontWeight: 800 }}>{issue.message}</p>
                           {issue.originalValue ? <p style={{ margin: "-4px 0 8px", color: homeTheme.muted, fontSize: 14 }}>Original value: {issue.originalValue}</p> : null}
                           {issue.field === "location" ? (
-                            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
-                              <label style={{ color: homeTheme.text, fontWeight: 800 }}>City
-                                <input value={corrections.city ?? ""} onChange={(event) => updateCorrection(itemKey, "city", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting} />
-                              </label>
-                              <label style={{ color: homeTheme.text, fontWeight: 800 }}>State
-                                <select value={corrections.state ?? ""} onChange={(event) => updateCorrection(itemKey, "state", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting}>
-                                  <option value="">Select…</option>
-                                  {STATE_OPTIONS.map((state) => <option key={state} value={state}>{state}</option>)}
-                                </select>
-                              </label>
-                            </div>
+                            <label style={{ display: "block", color: homeTheme.text, fontWeight: 800 }}>Restaurant Location
+                              <select value={corrections.employerStoreId ?? ""} onChange={(event) => updateCorrection(itemKey, "employerStoreId", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting}>
+                                <option value="">Select a restaurant location…</option>
+                                {restaurantLocations.map((location) => (
+                                  <option key={location.id} value={location.id}>{location.location_name} — {location.city}, {location.state}</option>
+                                ))}
+                              </select>
+                            </label>
                           ) : issue.field === "roleCategory" ? (
                             <label style={{ color: homeTheme.text, fontWeight: 800 }}>Role Category
                               <select value={corrections.roleCategory ?? ""} onChange={(event) => updateCorrection(itemKey, "roleCategory", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting}>

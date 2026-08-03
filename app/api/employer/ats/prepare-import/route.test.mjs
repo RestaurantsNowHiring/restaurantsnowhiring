@@ -15,7 +15,7 @@ function loadRoute() {
   const testModule = { exports: {} };
   const require = (specifier) => {
     if (specifier === "next/server") return { NextResponse: { json: (body, init = {}) => Response.json(body, init) } };
-    if (specifier.endsWith("/lib/ats/import/prepareJobImport")) return { prepareJobImport: async () => ({ status: "unsupported", message: "unused" }) };
+    if (specifier.endsWith("/lib/ats/import/prepareJobImport")) return { prepareJobImport: async () => ({ status: "unsupported", message: "unused" }), normalizeProviderKey: (value) => value.trim().toLowerCase() };
     if (specifier.endsWith("/lib/ats/types")) return {};
     if (specifier.endsWith("/lib/billing")) return { getAuthUserFromRequest: async () => null };
     if (specifier.endsWith("/lib/employerAccounts")) return {
@@ -95,7 +95,7 @@ for (const [name, body, message] of invalidCases) test(`${name} returns 400`, as
 test("valid input is trimmed before prepareJobImport is called", async () => {
   let received;
   const result = await call({ careersPageUrl: "  https://example.com/careers  ", selectedJobKeys: [{ providerKey: " greenhouse ", externalId: " 12345 " }] }, { prepareJobImport: async (input) => { received = input; return prepared; } });
-  assert.deepEqual(received, validBody);
+  assert.deepEqual(received, { ...validBody, employerAccountId: "acct_1" });
   assert.equal(result.status, 200);
 });
 
