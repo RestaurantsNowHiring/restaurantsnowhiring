@@ -4,7 +4,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../lib/candidateNotificationEmails";
-import { BENEFIT_OPTIONS, SCHEDULE_OPTIONS } from "../../lib/jobFormOptions";
+import {
+  BENEFIT_OPTIONS,
+  EMPLOYMENT_OPTIONS,
+  ROLE_OPTIONS,
+  SCHEDULE_OPTIONS,
+  STATE_OPTIONS,
+} from "../../lib/jobFormOptions";
 import { normalizeRichTextForEditing, sanitizeRichText } from "../../lib/richText";
 import { supabase } from "../../lib/supabase";
 import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
@@ -281,29 +287,6 @@ export default function PostJobPage() {
     "Fine Dining",
     "Food Truck",
     "Other",
-  ];
-
-  const ROLE_OPTIONS = [
-    "Line",
-    "Prep",
-    "Dish",
-    "Server",
-    "Cashier",
-    "Host",
-    "Bartender",
-    "Manager",
-    "Other",
-  ];
-
-  const EMPLOYMENT_OPTIONS = ["Full time", "Part time", "Seasonal", "Temporary"];
-
-
-  const STATES = [
-    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
-    "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
-    "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
-    "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
-    "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY","DC",
   ];
 
   useEffect(() => {
@@ -1767,7 +1750,7 @@ export default function PostJobPage() {
                     style={inputStyle}
                   >
                     <option value="">Select…</option>
-                    {STATES.map((state) => (
+                    {STATE_OPTIONS.map((state) => (
                       <option key={state} value={state}>
                         {state}
                       </option>

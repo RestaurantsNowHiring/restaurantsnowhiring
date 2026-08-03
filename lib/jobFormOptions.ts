@@ -32,3 +32,25 @@ export const BENEFIT_OPTIONS = [
   "Career growth",
   "Other",
 ];
+
+export const ROLE_OPTIONS = [
+  "Line",
+  "Prep",
+  "Dish",
+  "Server",
+  "Cashier",
+  "Host",
+  "Bartender",
+  "Manager",
+  "Other",
+];
+
+export const EMPLOYMENT_OPTIONS = ["Full time", "Part time", "Seasonal", "Temporary"];
+
+export const STATE_OPTIONS = [
+  "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+  "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+  "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+  "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+  "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
+];

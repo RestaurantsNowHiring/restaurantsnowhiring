@@ -6,6 +6,11 @@ import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
 import {
+  EMPLOYMENT_OPTIONS,
+  ROLE_OPTIONS,
+  STATE_OPTIONS,
+} from "../../../lib/jobFormOptions";
+import {
   homeCardStyle,
   homeInputStyle,
   homePrimaryButton,
@@ -42,6 +47,34 @@ type PreviewJob = {
   department?: string;
   employmentType?: string;
 };
+
+type ReviewField = "location" | "roleCategory" | "employmentType" | "description";
+type ReviewIssue = {
+  field: ReviewField;
+  reason: "missing" | "unmapped";
+  originalValue?: string;
+  message: string;
+};
+type PreparedJob = {
+  title: string;
+  atsLocation?: string;
+  city?: string;
+  state?: string;
+  roleCategory?: string;
+  employmentType?: string;
+  department?: string;
+  descriptionHtml?: string;
+};
+type PreparedItem =
+  | { status: "ready"; providerKey: string; externalId: string; job: PreparedJob }
+  | { status: "needs-review"; providerKey: string; externalId: string; job: PreparedJob; issues: ReviewIssue[] }
+  | { status: "unavailable"; providerKey: string; externalId: string; message: string };
+type PreparedResult = {
+  status: "prepared";
+  items: PreparedItem[];
+  summary: { ready: number; needsReview: number; unavailable: number };
+};
+type ReviewCorrections = Partial<Record<ReviewField | "city" | "state", string>>;
 
 const MAX_IMPORT_SELECTION = 500;
 const JOBS_PER_PAGE = 25;
@@ -95,6 +128,9 @@ export default function AtsIntegrationPage() {
   const [selectedEmploymentType, setSelectedEmploymentType] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const [preparedResult, setPreparedResult] = useState<PreparedResult | null>(null);
+  const [isPreparing, setIsPreparing] = useState(false);
+  const [reviewCorrections, setReviewCorrections] = useState<Record<string, ReviewCorrections>>({});
   const requestInFlightRef = useRef(false);
 
   const filterOptions = useMemo(() => {
@@ -206,6 +242,8 @@ export default function AtsIntegrationPage() {
     setSelectedEmploymentType("");
     setCurrentPage(1);
     setResultMessage(null);
+    setPreparedResult(null);
+    setReviewCorrections({});
 
     try {
       const { data } = await supabase.auth.getSession();
@@ -310,6 +348,79 @@ export default function AtsIntegrationPage() {
     setSelectedJobKeys(new Set());
   }
 
+  async function prepareSelectedJobs() {
+    if (selectedJobKeys.size === 0 || requestInFlightRef.current) return;
+
+    requestInFlightRef.current = true;
+    setIsPreparing(true);
+    setResultMessage(null);
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+
+      const selectedKeys = Array.from(selectedJobKeys, (selectionKey) => {
+        const [providerKey, externalId] = JSON.parse(selectionKey) as [string, string];
+        return { providerKey, externalId };
+      });
+      const response = await fetch("/api/employer/ats/prepare-import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...employerAccountHeaders(accessToken),
+        },
+        body: JSON.stringify({ careersPageUrl: careersPageUrl.trim(), selectedJobKeys: selectedKeys }),
+      });
+
+      if (response.status === 401) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+      if (response.status === 400) {
+        setResultMessage("Please select at least one available job and try again.");
+        return;
+      }
+      if (response.status === 403) {
+        setResultMessage("You don’t have permission to prepare jobs for this employer account.");
+        return;
+      }
+      if (!response.ok) {
+        setResultMessage("We couldn’t prepare your selected jobs right now. Please try again.");
+        return;
+      }
+
+      const payload = (await response.json().catch(() => null)) as
+        | PreparedResult
+        | { status?: string; message?: unknown }
+        | null;
+      if (payload?.status === "prepared" && "items" in payload && Array.isArray(payload.items)) {
+        setPreparedResult(payload);
+        setReviewCorrections({});
+        return;
+      }
+      const safeMessage = payload && "message" in payload && typeof payload.message === "string"
+        ? payload.message
+        : "We couldn’t prepare your selected jobs right now. Please try again.";
+      setResultMessage(safeMessage);
+    } catch {
+      setResultMessage("We couldn’t prepare your selected jobs right now. Please try again.");
+    } finally {
+      requestInFlightRef.current = false;
+      setIsPreparing(false);
+    }
+  }
+
+  function updateCorrection(itemKey: string, field: keyof ReviewCorrections, value: string) {
+    setReviewCorrections((current) => ({
+      ...current,
+      [itemKey]: { ...current[itemKey], [field]: value },
+    }));
+  }
+
   if (authStatus === "loading") {
     return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading import jobs…</main>;
   }
@@ -339,7 +450,7 @@ export default function AtsIntegrationPage() {
           </div>
         </section>
 
-        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+        {!preparedResult ? <section style={{ ...homeCardStyle, marginBottom: 16 }}>
           <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
             Connect Your Careers Page
           </h2>
@@ -379,9 +490,9 @@ export default function AtsIntegrationPage() {
               {resultMessage ?? "We’ll search your public careers page for open jobs."}
             </p>
           </form>
-        </section>
+        </section> : null}
 
-        {previewJobs && previewJobs.length > 0 ? (
+        {!preparedResult && previewJobs && previewJobs.length > 0 ? (
           <section style={{ ...homeCardStyle, marginBottom: 16 }}>
             <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
               Jobs Found
@@ -575,6 +686,150 @@ export default function AtsIntegrationPage() {
                 </button>
               </nav>
             ) : null}
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+              <button
+                type="button"
+                className="rn-btn-primary"
+                style={{
+                  ...homePrimaryButton,
+                  ...(selectedJobKeys.size === 0 || isPreparing
+                    ? { opacity: 0.55, cursor: "not-allowed" }
+                    : {}),
+                }}
+                onClick={() => void prepareSelectedJobs()}
+                disabled={selectedJobKeys.size === 0 || isPreparing}
+              >
+                {isPreparing ? "Preparing Jobs..." : "Continue"}
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {preparedResult ? (
+          <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+              <div>
+                <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>
+                  Review Selected Jobs
+                </p>
+                <h2 style={{ margin: "8px 0 0", fontFamily: "var(--font-heading)", color: homeTheme.text }}>
+                  Review Selected Jobs
+                </h2>
+              </div>
+              <button
+                type="button"
+                className="rn-btn-secondary"
+                style={homeSecondaryButton}
+                onClick={() => setPreparedResult(null)}
+              >
+                Back to Selection
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 12, margin: "20px 0" }}>
+              {[
+                ["Ready", preparedResult.summary.ready],
+                ["Needs Review", preparedResult.summary.needsReview],
+                ["Unavailable", preparedResult.summary.unavailable],
+              ].map(([label, count]) => (
+                <div key={label} style={{ padding: 16, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: homeTheme.bg }}>
+                  <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>{label}:</p>
+                  <p style={{ margin: "4px 0 0", color: homeTheme.text, fontSize: 28, fontWeight: 900 }}>{count}</p>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "grid", gap: 14 }}>
+              {preparedResult.items.map((item) => {
+                const itemKey = JSON.stringify([item.providerKey, item.externalId]);
+                const previewJob = previewJobs?.find((job) => job.selectionKey === itemKey);
+
+                if (item.status === "unavailable") {
+                  return (
+                    <article key={itemKey} style={{ padding: 18, border: "1px solid #e5b8b8", borderRadius: 12, background: "#fff8f8" }}>
+                      <h3 style={{ margin: 0, color: homeTheme.text }}>{previewJob?.title ?? "Selected job"}</h3>
+                      <p style={{ margin: "8px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Unavailable</p>
+                      <p style={{ margin: "6px 0 0", color: homeTheme.muted }}>{item.message}</p>
+                    </article>
+                  );
+                }
+
+                const job = item.job;
+                if (item.status === "ready") {
+                  return (
+                    <article key={itemKey} style={{ padding: 18, border: "1px solid #b9d7c5", borderRadius: 12, background: "#f6fcf8" }}>
+                      <h3 style={{ margin: 0, color: homeTheme.text }}>✓ {job.title}</h3>
+                      <p style={{ margin: "8px 0 0", color: homeTheme.muted }}>Location: {[job.city, job.state].filter(Boolean).join(", ")}</p>
+                      <p style={{ margin: "6px 0 0", color: homeTheme.muted }}>Category: {job.roleCategory}</p>
+                      <p style={{ margin: "6px 0 0", color: homeTheme.muted }}>Employment Type: {job.employmentType}</p>
+                      <p style={{ margin: "10px 0 0", color: homeTheme.green, fontWeight: 900 }}>Ready to Import</p>
+                    </article>
+                  );
+                }
+
+                const corrections = reviewCorrections[itemKey] ?? {};
+                return (
+                  <article key={itemKey} style={{ padding: 18, border: "1px solid #e8cf92", borderRadius: 12, background: "#fffcf3" }}>
+                    <h3 style={{ margin: 0, color: homeTheme.text }}>{job.title}</h3>
+                    <div style={{ marginTop: 12, color: homeTheme.muted }}>
+                      <p style={{ margin: 0, fontWeight: 900 }}>Current ATS values</p>
+                      <p style={{ margin: "6px 0 0" }}>Location: {job.atsLocation ?? "Not provided"}</p>
+                      <p style={{ margin: "4px 0 0" }}>Role Category: {job.roleCategory ?? "Not mapped"}</p>
+                      <p style={{ margin: "4px 0 0" }}>Employment Type: {previewJob?.employmentType ?? job.employmentType ?? "Not provided"}</p>
+                      <p style={{ margin: "4px 0 0" }}>Description: {job.descriptionHtml ? "Provided" : "Not provided"}</p>
+                    </div>
+                    <div style={{ display: "grid", gap: 14, marginTop: 16 }}>
+                      {item.issues.map((issue) => (
+                        <div key={issue.field}>
+                          <p style={{ margin: "0 0 8px", color: homeTheme.text, fontWeight: 800 }}>{issue.message}</p>
+                          {issue.originalValue ? <p style={{ margin: "-4px 0 8px", color: homeTheme.muted, fontSize: 14 }}>ATS value: {issue.originalValue}</p> : null}
+                          {issue.field === "location" ? (
+                            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
+                              <label style={{ color: homeTheme.text, fontWeight: 800 }}>City
+                                <input value={corrections.city ?? ""} onChange={(event) => updateCorrection(itemKey, "city", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} />
+                              </label>
+                              <label style={{ color: homeTheme.text, fontWeight: 800 }}>State
+                                <select value={corrections.state ?? ""} onChange={(event) => updateCorrection(itemKey, "state", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }}>
+                                  <option value="">Select…</option>
+                                  {STATE_OPTIONS.map((state) => <option key={state} value={state}>{state}</option>)}
+                                </select>
+                              </label>
+                            </div>
+                          ) : issue.field === "roleCategory" ? (
+                            <label style={{ color: homeTheme.text, fontWeight: 800 }}>Role Category
+                              <select value={corrections.roleCategory ?? ""} onChange={(event) => updateCorrection(itemKey, "roleCategory", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }}>
+                                <option value="">Select…</option>
+                                {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
+                              </select>
+                            </label>
+                          ) : issue.field === "employmentType" ? (
+                            <label style={{ color: homeTheme.text, fontWeight: 800 }}>Employment Type
+                              <select value={corrections.employmentType ?? ""} onChange={(event) => updateCorrection(itemKey, "employmentType", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }}>
+                                <option value="">Select…</option>
+                                {EMPLOYMENT_OPTIONS.map((type) => <option key={type} value={type}>{type}</option>)}
+                              </select>
+                            </label>
+                          ) : (
+                            <label style={{ color: homeTheme.text, fontWeight: 800 }}>Description
+                              <textarea value={corrections.description ?? ""} onChange={(event) => updateCorrection(itemKey, "description", event.target.value)} rows={5} style={{ ...homeInputStyle, marginTop: 5, resize: "vertical" }} />
+                            </label>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
+              <button type="button" className="rn-btn-primary" style={{ ...homePrimaryButton, opacity: 0.55, cursor: "not-allowed" }} disabled title="Import will be available in a future update.">
+                Import Selected Jobs
+              </button>
+            </div>
+            <p style={{ margin: "10px 0 0", textAlign: "right", color: homeTheme.muted, fontWeight: 700 }}>
+              Your corrections are not saved yet.
+            </p>
           </section>
         ) : null}
 
