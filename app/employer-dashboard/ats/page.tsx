@@ -75,6 +75,17 @@ type PreparedResult = {
   summary: { ready: number; needsReview: number; unavailable: number };
 };
 type ReviewCorrections = Partial<Record<ReviewField | "city" | "state", string>>;
+type ImportOutcomeName = "Imported" | "Updated" | "Skipped" | "Failed";
+type ImportOutcomeItem = {
+  providerKey?: unknown;
+  externalId?: unknown;
+  message?: unknown;
+};
+type ImportResultItem = { title: string; message: string };
+type ImportResult = {
+  summary: { imported: number; updated: number; skipped: number; failed: number };
+  groups: Record<ImportOutcomeName, ImportResultItem[]>;
+};
 
 const MAX_IMPORT_SELECTION = 500;
 const JOBS_PER_PAGE = 25;
@@ -131,7 +142,29 @@ export default function AtsIntegrationPage() {
   const [preparedResult, setPreparedResult] = useState<PreparedResult | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
   const [reviewCorrections, setReviewCorrections] = useState<Record<string, ReviewCorrections>>({});
+  const [isImporting, setIsImporting] = useState(false);
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
   const requestInFlightRef = useRef(false);
+
+  const importableItems = useMemo(
+    () => preparedResult?.items.filter((item) => item.status !== "unavailable") ?? [],
+    [preparedResult],
+  );
+  const hasUnresolvedReviewIssues = useMemo(
+    () => importableItems.some((item) => {
+      if (item.status !== "needs-review") return false;
+      const itemKey = JSON.stringify([item.providerKey, item.externalId]);
+      const corrections = reviewCorrections[itemKey] ?? {};
+      return item.issues.some((issue) => issue.field === "location"
+        ? !corrections.city?.trim() || !corrections.state?.trim()
+        : !corrections[issue.field]?.trim());
+    }),
+    [importableItems, reviewCorrections],
+  );
+  const canImport = Boolean(
+    preparedResult && importableItems.length > 0 && !hasUnresolvedReviewIssues && !isImporting,
+  );
 
   const filterOptions = useMemo(() => {
     function uniqueSortedValues(field: keyof Pick<PreviewJob, "location" | "department" | "employmentType">) {
@@ -244,6 +277,8 @@ export default function AtsIntegrationPage() {
     setResultMessage(null);
     setPreparedResult(null);
     setReviewCorrections({});
+    setImportResult(null);
+    setImportMessage(null);
 
     try {
       const { data } = await supabase.auth.getSession();
@@ -421,6 +456,110 @@ export default function AtsIntegrationPage() {
     }));
   }
 
+  async function importSelectedJobs() {
+    if (!canImport || requestInFlightRef.current || !preparedResult) return;
+
+    requestInFlightRef.current = true;
+    setIsImporting(true);
+    setImportMessage(null);
+
+    const attemptedKeys = importableItems.map((item) => ({
+      providerKey: item.providerKey,
+      externalId: item.externalId,
+    }));
+    const serializedCorrections = importableItems.flatMap((item) => {
+      const itemKey = JSON.stringify([item.providerKey, item.externalId]);
+      const values = reviewCorrections[itemKey];
+      if (!values) return [];
+      const correction: Record<string, string> = {
+        providerKey: item.providerKey,
+        externalId: item.externalId,
+      };
+      for (const field of ["city", "state", "roleCategory", "employmentType", "description"] as const) {
+        const value = values[field]?.trim();
+        if (value) correction[field] = value;
+      }
+      return Object.keys(correction).length > 2 ? [correction] : [];
+    });
+    const titlesByKey = new Map(importableItems.map((item) => {
+      const itemKey = JSON.stringify([item.providerKey, item.externalId]);
+      const title = item.job.title;
+      return [itemKey, title || "Selected job"];
+    }));
+
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+      const response = await fetch("/api/employer/ats/import", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...employerAccountHeaders(accessToken),
+        },
+        body: JSON.stringify({
+          careersPageUrl: careersPageUrl.trim(),
+          selectedJobKeys: attemptedKeys,
+          reviewCorrections: serializedCorrections,
+        }),
+      });
+      if (response.status === 401) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+      if (response.status === 400) {
+        setImportMessage("We couldn’t import these jobs because some information was invalid. Please review your selections and try again.");
+        return;
+      }
+      if (response.status === 403) {
+        setImportMessage("You don’t have permission to import jobs for this employer account.");
+        return;
+      }
+      if (!response.ok) {
+        setImportMessage("We couldn’t import your jobs right now. Please try again.");
+        return;
+      }
+      const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      if (payload?.status !== "completed") {
+        setImportMessage(typeof payload?.message === "string"
+          ? payload.message
+          : "We couldn’t import your jobs right now. Please try again.");
+        return;
+      }
+      const summary = payload.summary as ImportResult["summary"] | undefined;
+      if (!summary) {
+        setImportMessage("We couldn’t import your jobs right now. Please try again.");
+        return;
+      }
+      const groups = Object.fromEntries(
+        (["Imported", "Updated", "Skipped", "Failed"] as ImportOutcomeName[]).map((groupName) => {
+          const items = Array.isArray(payload[groupName]) ? payload[groupName] as ImportOutcomeItem[] : [];
+          return [groupName, items.map((item, index) => {
+            const key = typeof item.providerKey === "string" && typeof item.externalId === "string"
+              ? JSON.stringify([item.providerKey, item.externalId])
+              : "";
+            return {
+              title: titlesByKey.get(key) ?? `Selected job ${index + 1}`,
+              message: typeof item.message === "string" ? item.message : "No additional details were provided.",
+            };
+          })];
+        }),
+      ) as Record<ImportOutcomeName, ImportResultItem[]>;
+      setImportResult({ summary, groups });
+      setPreparedResult(null);
+      setSelectedJobKeys(new Set());
+      setReviewCorrections({});
+    } catch {
+      setImportMessage("We couldn’t import your jobs right now. Please try again.");
+    } finally {
+      requestInFlightRef.current = false;
+      setIsImporting(false);
+    }
+  }
+
   if (authStatus === "loading") {
     return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading import jobs…</main>;
   }
@@ -444,9 +583,15 @@ export default function AtsIntegrationPage() {
                 Import jobs directly from your public careers page. Paste your careers page below and we’ll find your open jobs automatically.
               </p>
             </div>
-            <Link href="/employer-dashboard" style={homeSecondaryButton} className="rn-btn-secondary">
-              Back to Dashboard
-            </Link>
+            {isImporting ? (
+              <button type="button" style={homeSecondaryButton} className="rn-btn-secondary" disabled>
+                Back to Dashboard
+              </button>
+            ) : (
+              <Link href="/employer-dashboard" style={homeSecondaryButton} className="rn-btn-secondary">
+                Back to Dashboard
+              </Link>
+            )}
           </div>
         </section>
 
@@ -721,6 +866,7 @@ export default function AtsIntegrationPage() {
                 className="rn-btn-secondary"
                 style={homeSecondaryButton}
                 onClick={() => setPreparedResult(null)}
+                disabled={isImporting}
               >
                 Back to Selection
               </button>
@@ -772,7 +918,7 @@ export default function AtsIntegrationPage() {
                   <article key={itemKey} style={{ padding: 18, border: "1px solid #e8cf92", borderRadius: 12, background: "#fffcf3" }}>
                     <h3 style={{ margin: 0, color: homeTheme.text }}>{job.title}</h3>
                     <div style={{ marginTop: 12, color: homeTheme.muted }}>
-                      <p style={{ margin: 0, fontWeight: 900 }}>Current ATS values</p>
+                      <p style={{ margin: 0, fontWeight: 900 }}>Current job values</p>
                       <p style={{ margin: "6px 0 0" }}>Location: {job.atsLocation ?? "Not provided"}</p>
                       <p style={{ margin: "4px 0 0" }}>Role Category: {job.roleCategory ?? "Not mapped"}</p>
                       <p style={{ margin: "4px 0 0" }}>Employment Type: {previewJob?.employmentType ?? job.employmentType ?? "Not provided"}</p>
@@ -782,14 +928,14 @@ export default function AtsIntegrationPage() {
                       {item.issues.map((issue) => (
                         <div key={issue.field}>
                           <p style={{ margin: "0 0 8px", color: homeTheme.text, fontWeight: 800 }}>{issue.message}</p>
-                          {issue.originalValue ? <p style={{ margin: "-4px 0 8px", color: homeTheme.muted, fontSize: 14 }}>ATS value: {issue.originalValue}</p> : null}
+                          {issue.originalValue ? <p style={{ margin: "-4px 0 8px", color: homeTheme.muted, fontSize: 14 }}>Original value: {issue.originalValue}</p> : null}
                           {issue.field === "location" ? (
                             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 10 }}>
                               <label style={{ color: homeTheme.text, fontWeight: 800 }}>City
-                                <input value={corrections.city ?? ""} onChange={(event) => updateCorrection(itemKey, "city", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} />
+                                <input value={corrections.city ?? ""} onChange={(event) => updateCorrection(itemKey, "city", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting} />
                               </label>
                               <label style={{ color: homeTheme.text, fontWeight: 800 }}>State
-                                <select value={corrections.state ?? ""} onChange={(event) => updateCorrection(itemKey, "state", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }}>
+                                <select value={corrections.state ?? ""} onChange={(event) => updateCorrection(itemKey, "state", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting}>
                                   <option value="">Select…</option>
                                   {STATE_OPTIONS.map((state) => <option key={state} value={state}>{state}</option>)}
                                 </select>
@@ -797,21 +943,21 @@ export default function AtsIntegrationPage() {
                             </div>
                           ) : issue.field === "roleCategory" ? (
                             <label style={{ color: homeTheme.text, fontWeight: 800 }}>Role Category
-                              <select value={corrections.roleCategory ?? ""} onChange={(event) => updateCorrection(itemKey, "roleCategory", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }}>
+                              <select value={corrections.roleCategory ?? ""} onChange={(event) => updateCorrection(itemKey, "roleCategory", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting}>
                                 <option value="">Select…</option>
                                 {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
                               </select>
                             </label>
                           ) : issue.field === "employmentType" ? (
                             <label style={{ color: homeTheme.text, fontWeight: 800 }}>Employment Type
-                              <select value={corrections.employmentType ?? ""} onChange={(event) => updateCorrection(itemKey, "employmentType", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }}>
+                              <select value={corrections.employmentType ?? ""} onChange={(event) => updateCorrection(itemKey, "employmentType", event.target.value)} style={{ ...homeInputStyle, marginTop: 5 }} disabled={isImporting}>
                                 <option value="">Select…</option>
                                 {EMPLOYMENT_OPTIONS.map((type) => <option key={type} value={type}>{type}</option>)}
                               </select>
                             </label>
                           ) : (
                             <label style={{ color: homeTheme.text, fontWeight: 800 }}>Description
-                              <textarea value={corrections.description ?? ""} onChange={(event) => updateCorrection(itemKey, "description", event.target.value)} rows={5} style={{ ...homeInputStyle, marginTop: 5, resize: "vertical" }} />
+                              <textarea value={corrections.description ?? ""} onChange={(event) => updateCorrection(itemKey, "description", event.target.value)} rows={5} style={{ ...homeInputStyle, marginTop: 5, resize: "vertical" }} disabled={isImporting} />
                             </label>
                           )}
                         </div>
@@ -823,24 +969,71 @@ export default function AtsIntegrationPage() {
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
-              <button type="button" className="rn-btn-primary" style={{ ...homePrimaryButton, opacity: 0.55, cursor: "not-allowed" }} disabled title="Import will be available in a future update.">
-                Import Selected Jobs
+              <button
+                type="button"
+                className="rn-btn-primary"
+                style={{
+                  ...homePrimaryButton,
+                  ...(!canImport ? { opacity: 0.55, cursor: "not-allowed" } : {}),
+                }}
+                disabled={!canImport}
+                onClick={() => void importSelectedJobs()}
+              >
+                {isImporting ? "Importing Jobs..." : "Import Selected Jobs"}
               </button>
             </div>
-            <p style={{ margin: "10px 0 0", textAlign: "right", color: homeTheme.muted, fontWeight: 700 }}>
-              Your corrections are not saved yet.
-            </p>
+            {hasUnresolvedReviewIssues ? (
+              <p role="status" style={{ margin: "10px 0 0", textAlign: "right", color: homeTheme.muted, fontWeight: 700 }}>
+                Complete all required job corrections before importing.
+              </p>
+            ) : importableItems.length === 0 ? (
+              <p role="status" style={{ margin: "10px 0 0", textAlign: "right", color: homeTheme.muted, fontWeight: 700 }}>
+                No available jobs are eligible to import.
+              </p>
+            ) : null}
+            {importMessage ? <p role="alert" style={{ margin: "10px 0 0", textAlign: "right", color: homeTheme.muted, fontWeight: 800 }}>{importMessage}</p> : null}
           </section>
         ) : null}
 
-        <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
-          <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
-            Imported Jobs
-          </h2>
-          <p style={{ marginBottom: 0, color: homeTheme.muted, fontWeight: 800 }}>
-            No jobs have been imported yet.
-          </p>
-        </section>
+        {importResult ? (
+          <section aria-labelledby="import-result-heading" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+            <h2 id="import-result-heading" style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
+              Import complete
+            </h2>
+            <div role="status" style={{ display: "flex", flexWrap: "wrap", gap: 16, color: homeTheme.text, fontWeight: 900 }}>
+              {([
+                ["imported", importResult.summary.imported],
+                ["updated", importResult.summary.updated],
+                ["skipped", importResult.summary.skipped],
+                ["failed", importResult.summary.failed],
+              ] as const).map(([label, count]) => (
+                <span key={label}>{count} {label}</span>
+              ))}
+            </div>
+            {(["Imported", "Updated", "Skipped", "Failed"] as ImportOutcomeName[]).map((groupName) => (
+              importResult.groups[groupName].length > 0 ? (
+                <div key={groupName} style={{ marginTop: 22 }}>
+                  <h3 style={{ margin: "0 0 10px", color: homeTheme.text }}>{groupName}</h3>
+                  <ul style={{ margin: 0, paddingLeft: 22, color: homeTheme.muted }}>
+                    {importResult.groups[groupName].map((item, index) => (
+                      <li key={`${groupName}-${index}`} style={{ marginTop: index ? 8 : 0 }}>
+                        <strong style={{ color: homeTheme.text }}>{item.title}:</strong> {item.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null
+            ))}
+            <Link href="/employer-dashboard" className="rn-btn-primary" style={{ ...homePrimaryButton, display: "inline-flex", marginTop: 24 }}>
+              View My Jobs
+            </Link>
+          </section>
+        ) : (
+          <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+            <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Imported Jobs</h2>
+            <p style={{ marginBottom: 0, color: homeTheme.muted, fontWeight: 800 }}>No jobs have been imported yet.</p>
+          </section>
+        )}
       </div>
     </main>
   );
