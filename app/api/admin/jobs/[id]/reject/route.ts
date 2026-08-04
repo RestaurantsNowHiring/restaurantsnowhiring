@@ -33,9 +33,13 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     );
   }
 
+  const loadedJob = await supabaseAdmin.from("jobs").select("id,source_type").eq("id", jobId).maybeSingle();
+  if (loadedJob.error) return NextResponse.json({ error: "Job could not be loaded." }, { status: 500 });
+  if (!loadedJob.data) return NextResponse.json({ error: "Job not found." }, { status: 404 });
+
   const updateWithStatus = await supabaseAdmin
     .from("jobs")
-    .update({ active: false, status: "rejected" })
+    .update({ active: false, status: "rejected", ...(loadedJob.data.source_type === "ats" ? { ats_inactive_reason: "admin_rejected" } : {}) })
     .eq("id", jobId)
     .select("id,active,status,employer_user_id")
     .single();
