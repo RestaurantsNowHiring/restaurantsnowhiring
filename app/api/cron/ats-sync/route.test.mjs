@@ -62,7 +62,7 @@ test("safe response excludes IDs URLs and job details", async () => {
   assert.doesNotMatch(JSON.stringify(result.body), /connection|account|https|job|description|provider/i);
 });
 
-test("cron schedule is exactly every 6 hours", () => {
+test("cron schedule is exactly once daily at 12:00 UTC", () => {
   const vercel = JSON.parse(readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "../../../../vercel.json"), "utf8"));
-  assert.ok(vercel.crons.some((cron) => cron.path === "/api/cron/ats-sync" && cron.schedule === "0 */6 * * *"));
+  assert.ok(vercel.crons.some((cron) => cron.path === "/api/cron/ats-sync" && cron.schedule === "0 12 * * *"));
 });
