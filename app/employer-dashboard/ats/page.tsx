@@ -105,6 +105,19 @@ type SyncResultSummary = {
   counts: string[];
   warning: string | null;
 };
+type AtsSyncHistoryRow = {
+  id: string;
+  connectionId: string;
+  startedAt: string;
+  completedAt: string | null;
+  status: string;
+  updated: number;
+  closed: number;
+  reopened: number;
+  needsReview: number;
+  failed: number;
+  warningMessage: string | null;
+};
 
 const MAX_IMPORT_SELECTION = 500;
 const JOBS_PER_PAGE = 25;
@@ -112,6 +125,17 @@ const JOB_SOURCE_LOAD_ERROR = "We couldn’t load or sync your job sources right
 
 function pluralize(count: number, singular: string, plural = `${singular}s`) {
   return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatDuration(startedAt: string, completedAt: string | null) {
+  const start = new Date(startedAt).getTime();
+  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) return "—";
+  const seconds = Math.round((end - start) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return remainingSeconds ? `${minutes}m ${remainingSeconds}s` : `${minutes}m`;
 }
 
 function formatDashboardTimestamp(value: string | null) {
@@ -212,6 +236,11 @@ export default function AtsIntegrationPage() {
   const [syncResults, setSyncResults] = useState<Record<string, SyncResultSummary>>({});
   const [actingConnectionIds, setActingConnectionIds] = useState<Set<string>>(() => new Set());
   const [editingSourceById, setEditingSourceById] = useState<Record<string, string>>({});
+  const [syncHistory, setSyncHistory] = useState<AtsSyncHistoryRow[]>([]);
+  const [syncHistoryPage, setSyncHistoryPage] = useState(1);
+  const [syncHistoryTotal, setSyncHistoryTotal] = useState(0);
+  const [syncHistoryLoading, setSyncHistoryLoading] = useState(false);
+  const [syncHistoryMessage, setSyncHistoryMessage] = useState<string | null>(null);
   const requestInFlightRef = useRef(false);
   const syncingConnectionIdsRef = useRef<Set<string>>(new Set());
 
@@ -281,6 +310,28 @@ export default function AtsIntegrationPage() {
   );
   const rangeStart = filteredJobs.length === 0 ? 0 : (currentPage - 1) * JOBS_PER_PAGE + 1;
   const rangeEnd = Math.min(currentPage * JOBS_PER_PAGE, filteredJobs.length);
+  const syncHistoryTotalPages = Math.max(1, Math.ceil(syncHistoryTotal / 10));
+
+  const loadSyncHistory = useCallback(async (token: string, nextPage = syncHistoryPage, connectionRows = connections) => {
+    if (connectionRows.length === 0) { setSyncHistory([]); setSyncHistoryTotal(0); return; }
+    setSyncHistoryLoading(true);
+    setSyncHistoryMessage(null);
+    try {
+      const params = new URLSearchParams({ connectionId: connectionRows[0].id, page: String(nextPage), pageSize: "10" });
+      const response = await fetch(`/api/employer/ats/sync-history?${params.toString()}`, { headers: employerAccountHeaders(token) });
+      if (response.status === 401) { router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`); return; }
+      if (response.status === 403) { setSyncHistoryMessage("You don’t have permission to view sync history for this employer account."); return; }
+      if (!response.ok) { setSyncHistoryMessage("We couldn’t load sync history right now."); return; }
+      const payload = (await response.json().catch(() => null)) as { history?: AtsSyncHistoryRow[]; total?: number } | null;
+      setSyncHistory(Array.isArray(payload?.history) ? payload.history : []);
+      setSyncHistoryTotal(typeof payload?.total === "number" ? payload.total : 0);
+      setSyncHistoryPage(nextPage);
+    } catch {
+      setSyncHistoryMessage("We couldn’t load sync history right now.");
+    } finally {
+      setSyncHistoryLoading(false);
+    }
+  }, [connections, router, syncHistoryPage]);
 
   const loadConnections = useCallback(async (token: string) => {
     setConnectionsLoading(true);
@@ -302,14 +353,16 @@ export default function AtsIntegrationPage() {
         return;
       }
       const payload = (await response.json().catch(() => null)) as { connections?: AtsConnection[] } | null;
-      setConnections(Array.isArray(payload?.connections) ? payload.connections : []);
+      const nextConnections = Array.isArray(payload?.connections) ? payload.connections : [];
+      setConnections(nextConnections);
+      await loadSyncHistory(token, 1, nextConnections);
     } catch {
       setConnectionsMessage(JOB_SOURCE_LOAD_ERROR);
       setConnections([]);
     } finally {
       setConnectionsLoading(false);
     }
-  }, [router]);
+  }, [loadSyncHistory, router]);
 
   const loadEmployerAccess = useCallback(async (token: string) => {
     const response = await fetch("/api/employer/me", {
@@ -486,6 +539,7 @@ export default function AtsIntegrationPage() {
       const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
       setSyncResults((current) => ({ ...current, [connectionId]: summarizeSyncResult(response.ok ? payload : null) }));
       await loadConnections(accessToken);
+      await loadSyncHistory(accessToken, 1, connections);
     } catch {
       setSyncResults((current) => ({ ...current, [connectionId]: { status: "failed", message: JOB_SOURCE_LOAD_ERROR, counts: [], warning: null } }));
     } finally {
@@ -846,6 +900,43 @@ export default function AtsIntegrationPage() {
                   </article>
                 );
               })}
+            </div>
+          ) : null}
+        </section>
+
+        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Sync History</h2>
+              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Newest ATS synchronization runs for your connected job source.</p>
+            </div>
+          </div>
+          {syncHistoryLoading ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading sync history…</p> : null}
+          {syncHistoryMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{syncHistoryMessage}</p> : null}
+          {!syncHistoryLoading && !syncHistoryMessage && syncHistory.length === 0 ? <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No sync history yet.</p> : null}
+          {syncHistory.length > 0 ? (
+            <div style={{ overflowX: "auto", marginTop: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", color: homeTheme.text }}>
+                <thead><tr>{["Date", "Status", "Duration", "Jobs Updated", "Jobs Closed", "Jobs Reopened", "Needs Review", "Failed", "Warning"].map((heading) => <th key={heading} style={{ textAlign: "left", borderBottom: `1px solid ${homeTheme.border}`, padding: "10px 8px", whiteSpace: "nowrap" }}>{heading}</th>)}</tr></thead>
+                <tbody>{syncHistory.map((row) => (
+                  <tr key={row.id}>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}`, whiteSpace: "nowrap" }}>{formatDashboardTimestamp(row.startedAt)}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}`, fontWeight: 900 }}>{row.status.replaceAll("_", " ")}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{formatDuration(row.startedAt, row.completedAt)}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.updated}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.closed}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.reopened}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.needsReview}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.failed}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.warningMessage ?? "—"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <nav aria-label="Sync history pagination" style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16 }}>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, Math.max(1, syncHistoryPage - 1)); }} disabled={syncHistoryPage === 1 || syncHistoryLoading}>Previous</button>
+                <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Page {syncHistoryPage} of {syncHistoryTotalPages}</p>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, Math.min(syncHistoryTotalPages, syncHistoryPage + 1)); }} disabled={syncHistoryPage >= syncHistoryTotalPages || syncHistoryLoading}>Next</button>
+              </nav>
             </div>
           ) : null}
         </section>
