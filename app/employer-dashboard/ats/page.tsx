@@ -210,6 +210,8 @@ export default function AtsIntegrationPage() {
   const [connectionsMessage, setConnectionsMessage] = useState<string | null>(null);
   const [syncingConnectionIds, setSyncingConnectionIds] = useState<Set<string>>(() => new Set());
   const [syncResults, setSyncResults] = useState<Record<string, SyncResultSummary>>({});
+  const [actingConnectionIds, setActingConnectionIds] = useState<Set<string>>(() => new Set());
+  const [editingSourceById, setEditingSourceById] = useState<Record<string, string>>({});
   const requestInFlightRef = useRef(false);
   const syncingConnectionIdsRef = useRef<Set<string>>(new Set());
 
@@ -491,6 +493,50 @@ export default function AtsIntegrationPage() {
     }
   }
 
+  async function runConnectionAction(connection: AtsConnection, action: "disable" | "enable" | "disconnect" | "update-source") {
+    const labels = { disable: "disable automatic sync for", enable: "enable automatic sync for", disconnect: "disconnect", "update-source": "change the careers page URL for" } as const;
+    if (action !== "enable" && !window.confirm(`Are you sure you want to ${labels[action]} this job source?`)) return;
+    const nextUrl = editingSourceById[connection.id]?.trim();
+    if (action === "update-source" && !nextUrl) {
+      setConnectionsMessage("Enter a replacement careers page URL before updating this connection.");
+      return;
+    }
+    setActingConnectionIds((current) => new Set(current).add(connection.id));
+    setConnectionsMessage(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+      const response = await fetch(`/api/employer/ats/${action}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...employerAccountHeaders(accessToken) },
+        body: JSON.stringify(action === "update-source" ? { connectionId: connection.id, careersPageUrl: nextUrl } : { connectionId: connection.id }),
+      });
+      if (response.status === 401) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+      if (response.status === 403) {
+        setConnectionsMessage("You don’t have permission to manage job sources for this employer account.");
+        return;
+      }
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        setConnectionsMessage(payload?.error ?? "We couldn’t update this job source right now. Please try again.");
+        return;
+      }
+      if (action === "update-source") setEditingSourceById((current) => ({ ...current, [connection.id]: "" }));
+      await loadConnections(accessToken);
+    } catch {
+      setConnectionsMessage("We couldn’t update this job source right now. Please try again.");
+    } finally {
+      setActingConnectionIds((current) => { const next = new Set(current); next.delete(connection.id); return next; });
+    }
+  }
+
   function toggleJobSelection(selectionKey: string) {
     setSelectedJobKeys((currentSelection) => {
       const nextSelection = new Set(currentSelection);
@@ -766,9 +812,24 @@ export default function AtsIntegrationPage() {
                     {connection.lastFailedSyncAt ? <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Last failed sync: {formatDashboardTimestamp(connection.lastFailedSyncAt)}</p> : null}
                     {connection.consecutiveFailureCount > 0 ? <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Consecutive sync failures: {connection.consecutiveFailureCount}</p> : null}
                     <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Imported jobs: {connection.importedJobCount}</p>
-                    <button type="button" className="rn-btn-primary" style={{ ...homePrimaryButton, marginTop: 14, ...(!canSync || isSyncing ? { opacity: 0.55, cursor: "not-allowed" } : {}) }} disabled={!canSync || isSyncing} onClick={() => void syncConnection(connection.id)}>
-                      {isSyncing ? "Syncing..." : "Sync Now"}
-                    </button>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+                      <button type="button" className="rn-btn-primary" style={{ ...homePrimaryButton, ...(!canSync || isSyncing ? { opacity: 0.55, cursor: "not-allowed" } : {}) }} disabled={!canSync || isSyncing} onClick={() => void syncConnection(connection.id)}>
+                        {isSyncing ? "Syncing..." : "Sync Now"}
+                      </button>
+                      {connection.enabled ? (
+                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "disable")}>Disable Sync</button>
+                      ) : (
+                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "enable")}>Enable Sync</button>
+                      )}
+                      <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
+                    </div>
+                    <div style={{ marginTop: 12 }}>
+                      <label style={{ color: homeTheme.text, fontWeight: 900 }}>
+                        Change Careers Page URL
+                        <input type="url" value={editingSourceById[connection.id] ?? ""} onChange={(event) => setEditingSourceById((current) => ({ ...current, [connection.id]: event.target.value }))} placeholder={connection.inputUrl} style={{ ...homeInputStyle, marginTop: 6 }} disabled={actingConnectionIds.has(connection.id)} />
+                      </label>
+                      <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, marginTop: 8 }} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? "").trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update URL</button>
+                    </div>
                     {syncResult ? (
                       <div role="status" aria-live="polite" style={{ marginTop: 12, color: homeTheme.text, fontWeight: 800 }}>
                         <p style={{ margin: 0 }}>{syncResult.message}</p>
