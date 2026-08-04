@@ -5,6 +5,7 @@ import { assertEmployerPermission, getEmployerAccountContext, getSelectedEmploye
 
 const MAX_BODY_BYTES = 4096;
 const MAX_CAREERS_PAGE_URL_LENGTH = 2048;
+const OWNER_ONLY_CONNECTION_MESSAGE = "Only the employer account owner can change or disconnect this job source.";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 type Payload = { connectionId?: unknown; careersPageUrl?: unknown };
 type Deps = { getAuthUserFromRequest: typeof getAuthUserFromRequest; getEmployerAccountContext: typeof getEmployerAccountContext; getSelectedEmployerAccountIdFromRequest: typeof getSelectedEmployerAccountIdFromRequest; assertEmployerPermission: typeof assertEmployerPermission; updateEmployerAtsConnectionState: typeof updateEmployerAtsConnectionState; updateEmployerAtsConnectionSource: typeof updateEmployerAtsConnectionSource };
@@ -34,6 +35,9 @@ export async function handleEmployerAtsConnectionActionPost(request: Request, ac
     const context = await dependencies.getEmployerAccountContext(user, dependencies.getSelectedEmployerAccountIdFromRequest(request));
     if (!context.accountId) return NextResponse.json({ error: "Employer account not found." }, { status: 403 });
     dependencies.assertEmployerPermission(context, "canManageJobs");
+    if ((action === "disconnect" || action === "update-source") && context.role !== "account_owner") {
+      return NextResponse.json({ error: OWNER_ONLY_CONNECTION_MESSAGE }, { status: 403 });
+    }
     const payload = await readPayload(request, action === "update-source");
     if ("error" in payload) return NextResponse.json({ error: payload.error }, { status: 400 });
     const result = action === "update-source"
