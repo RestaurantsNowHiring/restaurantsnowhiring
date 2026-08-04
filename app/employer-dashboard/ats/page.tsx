@@ -86,9 +86,68 @@ type ImportResult = {
   summary: { imported: number; updated: number; skipped: number; failed: number };
   groups: Record<ImportOutcomeName, ImportResultItem[]>;
 };
+type AtsConnection = {
+  id: string;
+  sourceLabel: string;
+  inputUrl: string;
+  enabled: boolean;
+  connectionStatus: string;
+  connectedAt: string | null;
+  lastSyncStartedAt: string | null;
+  lastSuccessfulSyncAt: string | null;
+  lastFailedSyncAt: string | null;
+  consecutiveFailureCount: number;
+  importedJobCount: number;
+};
+type SyncResultSummary = {
+  status: string;
+  message: string | null;
+  counts: string[];
+  warning: string | null;
+};
 
 const MAX_IMPORT_SELECTION = 500;
 const JOBS_PER_PAGE = 25;
+const JOB_SOURCE_LOAD_ERROR = "We couldn’t load or sync your job sources right now. Please try again.";
+
+function pluralize(count: number, singular: string, plural = `${singular}s`) {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
+function formatDashboardTimestamp(value: string | null) {
+  if (!value) return "Not synced yet";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Not synced yet";
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const time = date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  if (startOfDate === startOfToday) return `Today at ${time}`;
+  if (startOfDate === startOfToday - 24 * 60 * 60 * 1000) return `Yesterday at ${time}`;
+  return `${date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} at ${time}`;
+}
+
+function getStatusLabel(connection: AtsConnection) {
+  if (!connection.enabled) return "Disabled";
+  if (connection.connectionStatus === "active") return "Active";
+  if (connection.connectionStatus === "error") return "Needs Attention";
+  if (connection.connectionStatus === "disconnected") return "Disconnected";
+  return "Needs Attention";
+}
+
+function summarizeSyncResult(payload: Record<string, unknown> | null): SyncResultSummary {
+  const status = typeof payload?.status === "string" ? payload.status : "failed";
+  const safeMessage = typeof payload?.message === "string" ? payload.message : null;
+  if (status === "already-running") return { status, message: "A sync is already in progress.", counts: [], warning: null };
+  if (["disabled", "disconnected", "retrieval-failed", "unsupported-provider", "database-failed"].includes(status)) return { status, message: safeMessage ?? JOB_SOURCE_LOAD_ERROR, counts: [], warning: null };
+
+  const sync = payload?.sync && typeof payload.sync === "object" ? payload.sync as Record<string, unknown> : null;
+  const summary = sync?.summary && typeof sync.summary === "object" ? sync.summary as Record<string, unknown> : {};
+  const countSpecs: Array<[string, string, string?]> = [["updated", "updated"], ["closed", "closed"], ["reopened", "reopened"], ["available", "new job available", "new jobs available"], ["needsReview", "needs review", "needs review"], ["failed", "failed"]];
+  const counts = countSpecs.map(([key, singular, plural]) => pluralize(typeof summary[key] === "number" ? summary[key] : 0, singular, plural));
+  if (status === "completed" || status === "completed-with-warning") return { status, message: "Sync completed.", counts, warning: status === "completed-with-warning" ? safeMessage : null };
+  return { status, message: safeMessage ?? JOB_SOURCE_LOAD_ERROR, counts: [], warning: null };
+}
 
 function getDisplayValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -146,7 +205,13 @@ export default function AtsIntegrationPage() {
   const [isImporting, setIsImporting] = useState(false);
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [connections, setConnections] = useState<AtsConnection[]>([]);
+  const [connectionsLoading, setConnectionsLoading] = useState(false);
+  const [connectionsMessage, setConnectionsMessage] = useState<string | null>(null);
+  const [syncingConnectionIds, setSyncingConnectionIds] = useState<Set<string>>(() => new Set());
+  const [syncResults, setSyncResults] = useState<Record<string, SyncResultSummary>>({});
   const requestInFlightRef = useRef(false);
+  const syncingConnectionIdsRef = useRef<Set<string>>(new Set());
 
   const importableItems = useMemo(
     () => preparedResult?.items.filter((item) => item.status !== "unavailable") ?? [],
@@ -214,6 +279,35 @@ export default function AtsIntegrationPage() {
   const rangeStart = filteredJobs.length === 0 ? 0 : (currentPage - 1) * JOBS_PER_PAGE + 1;
   const rangeEnd = Math.min(currentPage * JOBS_PER_PAGE, filteredJobs.length);
 
+  const loadConnections = useCallback(async (token: string) => {
+    setConnectionsLoading(true);
+    setConnectionsMessage(null);
+    try {
+      const response = await fetch("/api/employer/ats/connections", { headers: employerAccountHeaders(token) });
+      if (response.status === 401) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+      if (response.status === 403) {
+        setConnectionsMessage("You don’t have permission to manage job sources for this employer account.");
+        setConnections([]);
+        return;
+      }
+      if (!response.ok) {
+        setConnectionsMessage(JOB_SOURCE_LOAD_ERROR);
+        setConnections([]);
+        return;
+      }
+      const payload = (await response.json().catch(() => null)) as { connections?: AtsConnection[] } | null;
+      setConnections(Array.isArray(payload?.connections) ? payload.connections : []);
+    } catch {
+      setConnectionsMessage(JOB_SOURCE_LOAD_ERROR);
+      setConnections([]);
+    } finally {
+      setConnectionsLoading(false);
+    }
+  }, [router]);
+
   const loadEmployerAccess = useCallback(async (token: string) => {
     const response = await fetch("/api/employer/me", {
       headers: employerAccountHeaders(token),
@@ -233,8 +327,9 @@ export default function AtsIntegrationPage() {
       setRestaurantLocations(Array.isArray(storesPayload?.stores)
         ? storesPayload.stores.filter((store) => Boolean(store.city && store.state)) : []);
     }
+    await loadConnections(token);
     setAuthStatus("allowed");
-  }, []);
+  }, [loadConnections]);
 
   useEffect(() => {
     let mounted = true;
@@ -357,6 +452,42 @@ export default function AtsIntegrationPage() {
     } finally {
       requestInFlightRef.current = false;
       setIsFindingJobs(false);
+    }
+  }
+
+  async function syncConnection(connectionId: string) {
+    if (syncingConnectionIdsRef.current.has(connectionId)) return;
+    syncingConnectionIdsRef.current.add(connectionId);
+    setSyncingConnectionIds((current) => new Set(current).add(connectionId));
+    setSyncResults((current) => { const next = { ...current }; delete next[connectionId]; return next; });
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+      const response = await fetch("/api/employer/ats/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...employerAccountHeaders(accessToken) },
+        body: JSON.stringify({ connectionId }),
+      });
+      if (response.status === 401) {
+        router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+        return;
+      }
+      if (response.status === 403) {
+        setSyncResults((current) => ({ ...current, [connectionId]: { status: "forbidden", message: "You don’t have permission to manage job sources for this employer account.", counts: [], warning: null } }));
+        return;
+      }
+      const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      setSyncResults((current) => ({ ...current, [connectionId]: summarizeSyncResult(response.ok ? payload : null) }));
+      await loadConnections(accessToken);
+    } catch {
+      setSyncResults((current) => ({ ...current, [connectionId]: { status: "failed", message: JOB_SOURCE_LOAD_ERROR, counts: [], warning: null } }));
+    } finally {
+      syncingConnectionIdsRef.current.delete(connectionId);
+      setSyncingConnectionIds((current) => { const next = new Set(current); next.delete(connectionId); return next; });
     }
   }
 
@@ -556,6 +687,7 @@ export default function AtsIntegrationPage() {
         }),
       ) as Record<ImportOutcomeName, ImportResultItem[]>;
       setImportResult({ summary, groups });
+      await loadConnections(accessToken);
       setPreparedResult(null);
       setSelectedJobKeys(new Set());
       setReviewCorrections({});
@@ -600,6 +732,55 @@ export default function AtsIntegrationPage() {
               </Link>
             )}
           </div>
+        </section>
+
+        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
+                Connected Job Sources
+              </h2>
+              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>
+                Review your saved careers-page connections and start a fresh sync when needed.
+              </p>
+            </div>
+          </div>
+          {connectionsLoading ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading connected job sources…</p> : null}
+          {connectionsMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{connectionsMessage}</p> : null}
+          {!connectionsLoading && !connectionsMessage && connections.length === 0 ? (
+            <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No connected job sources yet. Import jobs from a careers page to create a connection.</p>
+          ) : null}
+          {connections.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginTop: 16 }}>
+              {connections.map((connection) => {
+                const isSyncing = syncingConnectionIds.has(connection.id);
+                const canSync = connection.enabled && connection.connectionStatus !== "disconnected";
+                const syncResult = syncResults[connection.id];
+                return (
+                  <article key={connection.id} style={{ padding: 18, border: `1px solid ${homeTheme.border}`, borderRadius: 14, background: homeTheme.bg }}>
+                    <h3 style={{ margin: 0, color: homeTheme.text }}>{connection.sourceLabel}</h3>
+                    <p style={{ margin: "8px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}>Careers URL: {connection.inputUrl}</p>
+                    <p style={{ margin: "12px 0 0", color: homeTheme.text, fontWeight: 900 }}>Status: {getStatusLabel(connection)}</p>
+                    <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>State: {connection.enabled ? "Enabled" : "Disabled"}</p>
+                    <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Last successful sync: {formatDashboardTimestamp(connection.lastSuccessfulSyncAt)}</p>
+                    {connection.lastFailedSyncAt ? <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Last failed sync: {formatDashboardTimestamp(connection.lastFailedSyncAt)}</p> : null}
+                    {connection.consecutiveFailureCount > 0 ? <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Consecutive sync failures: {connection.consecutiveFailureCount}</p> : null}
+                    <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Imported jobs: {connection.importedJobCount}</p>
+                    <button type="button" className="rn-btn-primary" style={{ ...homePrimaryButton, marginTop: 14, ...(!canSync || isSyncing ? { opacity: 0.55, cursor: "not-allowed" } : {}) }} disabled={!canSync || isSyncing} onClick={() => void syncConnection(connection.id)}>
+                      {isSyncing ? "Syncing..." : "Sync Now"}
+                    </button>
+                    {syncResult ? (
+                      <div role="status" aria-live="polite" style={{ marginTop: 12, color: homeTheme.text, fontWeight: 800 }}>
+                        <p style={{ margin: 0 }}>{syncResult.message}</p>
+                        {syncResult.counts.length > 0 ? <p style={{ margin: "6px 0 0" }}>{syncResult.counts.join(", ")}</p> : null}
+                        {syncResult.warning ? <p style={{ margin: "6px 0 0" }}>{syncResult.warning}</p> : null}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
         </section>
 
         {!preparedResult ? <section style={{ ...homeCardStyle, marginBottom: 16 }}>
