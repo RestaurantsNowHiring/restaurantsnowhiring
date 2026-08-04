@@ -16,6 +16,8 @@ export type RunEmployerAtsSyncDatabase = {
   getConnection(connectionId: string): Promise<DbResult<Connection>>;
   markStarted(connectionId: string, previousStartedAt: string | null, payload: Record<string, unknown>): Promise<DbResult<{ id: string }>>;
   updateConnection(connectionId: string, payload: Record<string, unknown>): Promise<DbResult<{ id: string }>>;
+  createHistory?(payload: Record<string, unknown>): Promise<DbResult<{ id: string }>>;
+  updateHistory?(historyId: string, payload: Record<string, unknown>): Promise<DbResult<{ id: string }>>;
 };
 export type RunEmployerAtsSyncDependencies = { database?: RunEmployerAtsSyncDatabase | null; now?: () => Date; sync?: (input: { connectionId: string }) => Promise<EngineResult> };
 export type RunEmployerAtsSyncResult =
@@ -40,7 +42,31 @@ function defaultDatabase(): RunEmployerAtsSyncDatabase | null {
       return await query.select("id").maybeSingle() as DbResult<{ id: string }>;
     },
     async updateConnection(connectionId, payload) { return await client.from("employer_ats_connections").update(payload).eq("id", connectionId).select("id").single() as DbResult<{ id: string }>; },
+    async createHistory(payload) { return await client.from("employer_ats_sync_history").insert(payload).select("id").single() as DbResult<{ id: string }>; },
+    async updateHistory(historyId, payload) { return await client.from("employer_ats_sync_history").update(payload).eq("id", historyId).select("id").single() as DbResult<{ id: string }>; },
   };
+}
+
+function safeHistoryMessage(value: unknown) {
+  if (typeof value !== "string") return null;
+  const trimmed = value.replace(/https?:\/\/\S+/gi, "").replace(/\s+/g, " ").trim();
+  return trimmed ? trimmed.slice(0, 500) : null;
+}
+function syncSummary(sync: EngineResult | { status: "unexpected-failure" }) {
+  const summary = sync.status === "completed" ? sync.summary : null;
+  return {
+    completed: sync.status === "completed" ? 1 : 0,
+    updated: Math.max(0, summary?.updated ?? 0),
+    closed: Math.max(0, summary?.closed ?? 0),
+    reopened: Math.max(0, summary?.reopened ?? 0),
+    new_available: Math.max(0, summary?.newAvailable ?? 0),
+    needs_review: Math.max(0, summary?.needsReview ?? 0),
+    failed: Math.max(0, summary?.failed ?? 0),
+  };
+}
+async function finishHistory(database: RunEmployerAtsSyncDatabase, historyId: string | null, payload: Record<string, unknown>) {
+  if (!historyId || !database.updateHistory) return;
+  try { await database.updateHistory(historyId, payload); } catch {}
 }
 
 function hasRecentUnfinishedRun(connection: Connection, now: Date): boolean {
@@ -75,6 +101,14 @@ export async function runEmployerAtsSync(input: RunEmployerAtsSyncInput, depende
   if (started.error) return { status: "database-failed", message: messages["database-failed"] };
   if (!started.data) return { status: "already-running", message: messages["already-running"] };
 
+  let historyId: string | null = null;
+  if (database.createHistory) {
+    try {
+      const history = await database.createHistory({ connection_id: connection.id, started_at: startedAt, status: "running" });
+      if (!history.error && history.data?.id) historyId = history.data.id;
+    } catch {}
+  }
+
   let sync: EngineResult | { status: "unexpected-failure" };
   try { sync = await (dependencies?.sync ?? syncEmployerAtsConnection)({ connectionId: connection.id }); } catch { sync = { status: "unexpected-failure" }; }
   const completedAt = now().toISOString();
@@ -82,16 +116,29 @@ export async function runEmployerAtsSync(input: RunEmployerAtsSyncInput, depende
     let write: DbResult<{ id: string }>;
     try { write = await database.updateConnection(connection.id, { last_successful_sync_at: completedAt, connection_status: "active", consecutive_failure_count: 0, last_failure_code: null, updated_at: completedAt }); }
     catch { write = { data: null, error: true }; }
-    if (write.error || !write.data) return { status: "completed-with-warning", sync, message: "Your jobs were synchronized, but the connection status could not be updated." };
+    if (write.error || !write.data) {
+      const message = "Your jobs were synchronized, but the connection status could not be updated.";
+      await finishHistory(database, historyId, { completed_at: completedAt, status: "completed_with_warning", ...syncSummary(sync), warning_message: message });
+      return { status: "completed-with-warning", sync, message };
+    }
+    await finishHistory(database, historyId, { completed_at: completedAt, status: "completed", ...syncSummary(sync), warning_message: null });
     return { status: "completed", sync, connection: { status: "active", consecutiveFailureCount: 0, lastSuccessfulSyncAt: completedAt } };
   }
-  if (sync.status === "disabled" || sync.status === "disconnected") return { status: sync.status, message: messages[sync.status] };
+  if (sync.status === "disabled" || sync.status === "disconnected") {
+    await finishHistory(database, historyId, { completed_at: completedAt, status: "failed", ...syncSummary(sync), warning_message: messages[sync.status] });
+    return { status: sync.status, message: messages[sync.status] };
+  }
   const failureCode = { "connection-unavailable": "connection_unavailable", "unsupported-provider": "unsupported_provider", "retrieval-failed": "retrieval_failed", "database-failed": "database_failed", "unexpected-failure": "unexpected_failure" }[sync.status];
   const failureCount = Math.max(0, connection.consecutive_failure_count || 0) + 1;
   let write: DbResult<{ id: string }>;
   try { write = await database.updateConnection(connection.id, { last_failed_sync_at: completedAt, connection_status: "error", consecutive_failure_count: failureCount, last_failure_code: failureCode, updated_at: completedAt }); }
   catch { write = { data: null, error: true }; }
-  if (write.error || !write.data) return { status: "database-failed", message: messages["database-failed"] };
+  if (write.error || !write.data) {
+    await finishHistory(database, historyId, { completed_at: completedAt, status: "failed", ...syncSummary(sync), warning_message: messages["database-failed"] });
+    return { status: "database-failed", message: messages["database-failed"] };
+  }
+  const warningMessage = sync.status === "unexpected-failure" ? messages["database-failed"] : messages[sync.status];
+  await finishHistory(database, historyId, { completed_at: completedAt, status: "failed", ...syncSummary(sync), warning_message: safeHistoryMessage(warningMessage) });
   if (sync.status === "unexpected-failure") return { status: "database-failed", message: messages["database-failed"], consecutiveFailureCount: failureCount };
   return { status: sync.status, message: messages[sync.status], consecutiveFailureCount: failureCount };
 }
