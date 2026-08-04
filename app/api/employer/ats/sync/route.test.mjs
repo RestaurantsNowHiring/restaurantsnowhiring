@@ -116,3 +116,5 @@ test("unexpected route exception returns safe 500", async () => {
   const result = await responseJson(await handleEmployerAtsSyncPost(jsonRequest({ connectionId: validId }), dependencies({ runEmployerAtsSync: async () => { throw new Error("database url stack secret"); } })));
   assert.deepEqual(result, { status: 500, body: { error: "Could not synchronize ATS connection." } });
 });
+
+test("hiring manager may still use Sync Now", async () => { const calls = { runner: [], ownership: [] }; const result = await responseJson(await handleEmployerAtsSyncPost(jsonRequest({ connectionId: validId }), dependencies({ calls, getEmployerAccountContext: async () => ({ accountId: "acct_1", canManageJobs: true, role: "hiring_manager" }) }))); assert.deepEqual(result, { status: 200, body: { status: "completed", sync: { status: "completed", summary: { updated: 1 } } } }); assert.deepEqual(calls.runner, [{ connectionId: validId }]); });

@@ -233,6 +233,7 @@ export default function AtsIntegrationPage() {
   const canImport = Boolean(
     preparedResult && importableItems.length > 0 && !hasUnresolvedReviewIssues && !isImporting,
   );
+  const canManageAtsConnectionSettings = employerAccess?.role === "account_owner";
 
   const filterOptions = useMemo(() => {
     function uniqueSortedValues(field: keyof Pick<PreviewJob, "location" | "department" | "employmentType">) {
@@ -520,7 +521,8 @@ export default function AtsIntegrationPage() {
         return;
       }
       if (response.status === 403) {
-        setConnectionsMessage("You don’t have permission to manage job sources for this employer account.");
+        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+        setConnectionsMessage(payload?.error ?? "You don’t have permission to manage job sources for this employer account.");
         return;
       }
       if (!response.ok) {
@@ -821,15 +823,19 @@ export default function AtsIntegrationPage() {
                       ) : (
                         <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "enable")}>Enable Sync</button>
                       )}
-                      <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
+                      {canManageAtsConnectionSettings ? (
+                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
+                      ) : null}
                     </div>
-                    <div style={{ marginTop: 12 }}>
-                      <label style={{ color: homeTheme.text, fontWeight: 900 }}>
-                        Change Careers Page URL
-                        <input type="url" value={editingSourceById[connection.id] ?? ""} onChange={(event) => setEditingSourceById((current) => ({ ...current, [connection.id]: event.target.value }))} placeholder={connection.inputUrl} style={{ ...homeInputStyle, marginTop: 6 }} disabled={actingConnectionIds.has(connection.id)} />
-                      </label>
-                      <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, marginTop: 8 }} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? "").trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update URL</button>
-                    </div>
+                    {canManageAtsConnectionSettings ? (
+                      <div style={{ marginTop: 12 }}>
+                        <label style={{ color: homeTheme.text, fontWeight: 900 }}>
+                          Change Careers Page URL
+                          <input type="url" value={editingSourceById[connection.id] ?? ""} onChange={(event) => setEditingSourceById((current) => ({ ...current, [connection.id]: event.target.value }))} placeholder={connection.inputUrl} style={{ ...homeInputStyle, marginTop: 6 }} disabled={actingConnectionIds.has(connection.id)} />
+                        </label>
+                        <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, marginTop: 8 }} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? "").trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update URL</button>
+                      </div>
+                    ) : null}
                     {syncResult ? (
                       <div role="status" aria-live="polite" style={{ marginTop: 12, color: homeTheme.text, fontWeight: 800 }}>
                         <p style={{ margin: 0 }}>{syncResult.message}</p>
