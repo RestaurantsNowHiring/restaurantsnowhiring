@@ -5,7 +5,7 @@ import { canUserAccessJob } from "../../../../../lib/employerJobAccess";
 import { getDefaultJobExpirationIso } from "../../../../../lib/jobListingDuration";
 import { getSupabaseAdminClient } from "../../../../../lib/supabaseAdmin";
 
-const JOB_FIELDS = "id,title,restaurant_name,city,state,active,status,created_at,expires_at,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails";
+const JOB_FIELDS = "id,title,restaurant_name,city,state,active,status,source_type,ats_inactive_reason,created_at,expires_at,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails";
 const BILLING_WARNING = "The job status was updated, but we could not confirm the billing update. Please retry billing sync or contact support if the issue continues.";
 
 type Action = "pause" | "resume" | "renew";
@@ -50,10 +50,10 @@ export async function handleEmployerJobAction(request: Request, context: { param
     }
 
     const update = action === "pause"
-      ? { active: false, status: "paused" }
+      ? { active: false, status: "paused", ...(job.source_type === "ats" ? { ats_inactive_reason: "employer_deactivated" } : {}) }
       : action === "resume"
-        ? { active: true, status: "active" }
-        : { active: true, status: "active", expires_at: getDefaultJobExpirationIso() };
+        ? { active: true, status: "active", ...(job.source_type === "ats" ? { ats_inactive_reason: null } : {}) }
+        : { active: true, status: "active", expires_at: getDefaultJobExpirationIso(), ...(job.source_type === "ats" ? { ats_inactive_reason: null } : {}) };
 
     const { data: updatedJob, error: updateError } = await supabaseAdmin.from("jobs").update(update).eq("id", jobId).select(JOB_FIELDS).single();
     if (updateError) throw new Error(updateError.message || "Could not update job status.");
