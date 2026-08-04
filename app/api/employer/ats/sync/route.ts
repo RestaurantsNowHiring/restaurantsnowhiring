@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { runEmployerAtsSync } from "../../../../../lib/ats/sync/runEmployerAtsSync";
+import { handleAtsSyncFailureNotification } from "../../../../../lib/ats/sync/atsSyncFailureNotifications";
+import { runEmployerAtsSync, type RunEmployerAtsSyncResult } from "../../../../../lib/ats/sync/runEmployerAtsSync";
 import { getAuthUserFromRequest } from "../../../../../lib/billing";
 import { assertEmployerPermission, getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../../lib/employerAccounts";
 import { getSupabaseAdminClient } from "../../../../../lib/supabaseAdmin";
@@ -15,6 +16,7 @@ type SyncRouteDependencies = {
   getSelectedEmployerAccountIdFromRequest: typeof getSelectedEmployerAccountIdFromRequest;
   assertEmployerPermission: typeof assertEmployerPermission;
   runEmployerAtsSync: typeof runEmployerAtsSync;
+  notifyAtsSyncFailure: (connectionId: string, result: RunEmployerAtsSyncResult) => Promise<unknown>;
   database?: OwnershipDatabase | null;
 };
 
@@ -34,7 +36,7 @@ function defaultDatabase(): OwnershipDatabase | null {
   };
 }
 
-const defaultDependencies: SyncRouteDependencies = { getAuthUserFromRequest, getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest, assertEmployerPermission, runEmployerAtsSync };
+const defaultDependencies: SyncRouteDependencies = { getAuthUserFromRequest, getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest, assertEmployerPermission, runEmployerAtsSync, notifyAtsSyncFailure: handleAtsSyncFailureNotification };
 
 function permissionStatus(error: unknown) {
   return error instanceof Error && error.name === "EmployerPermissionError" ? 403 : 500;
@@ -89,6 +91,7 @@ export async function handleEmployerAtsSyncPost(request: Request, dependencies: 
     if (ownership.error) return NextResponse.json({ error: "Could not synchronize ATS connection." }, { status: 500 });
     if (!ownership.found) return NextResponse.json({ error: "ATS connection not found." }, { status: 404 });
     const result = await dependencies.runEmployerAtsSync({ connectionId: payload.connectionId });
+    try { await dependencies.notifyAtsSyncFailure(payload.connectionId, result); } catch { /* Notification failures must not fail manual synchronization. */ }
     return NextResponse.json(result, { status: 200 });
   } catch (error) {
     console.error("Employer ATS sync failed", { error });

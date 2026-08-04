@@ -2,6 +2,7 @@ import "server-only";
 
 import { getSupabaseAdminClient } from "../../supabaseAdmin";
 import { runEmployerAtsSync, type RunEmployerAtsSyncResult } from "./runEmployerAtsSync";
+import { handleAtsSyncFailureNotification } from "./atsSyncFailureNotifications";
 
 export const ATS_SYNC_WORKER_CONCURRENCY = 3;
 export const ATS_SYNC_WORKER_PAGE_SIZE = 100;
@@ -34,6 +35,7 @@ export type ScheduledAtsSyncDatabase = {
 export type RunScheduledAtsSyncsDependencies = {
   database?: ScheduledAtsSyncDatabase | null;
   runner?: (input: { connectionId: string }) => Promise<RunEmployerAtsSyncResult>;
+  notifier?: (connectionId: string, result: RunEmployerAtsSyncResult) => Promise<unknown>;
   now?: () => number;
   maxRuntimeMs?: number;
   pageSize?: number;
@@ -120,6 +122,7 @@ function advanceCursor(cursor: PaginationCursor, rows: AtsConnectionRow[], pageW
 export async function runScheduledAtsSyncs(dependencies: RunScheduledAtsSyncsDependencies = {}): Promise<ScheduledAtsSyncResponse | { status: "failed"; message: string }> {
   const database = dependencies.database === undefined ? defaultDatabase() : dependencies.database;
   const runner = dependencies.runner ?? runEmployerAtsSync;
+  const notifier = dependencies.notifier ?? handleAtsSyncFailureNotification;
   const now = dependencies.now ?? Date.now;
   const maxRuntimeMs = dependencies.maxRuntimeMs ?? ATS_SYNC_WORKER_MAX_RUNTIME_MS;
   const pageSize = dependencies.pageSize ?? ATS_SYNC_WORKER_PAGE_SIZE;
@@ -159,6 +162,7 @@ export async function runScheduledAtsSyncs(dependencies: RunScheduledAtsSyncsDep
       try {
         const runnerResult = await runner({ connectionId: row.id });
         classify(runnerResult, summary);
+        try { await notifier(row.id, runnerResult); } catch { /* Notification failures must not stop scheduled synchronization. */ }
       } catch {
         summary.failed += 1;
       }
