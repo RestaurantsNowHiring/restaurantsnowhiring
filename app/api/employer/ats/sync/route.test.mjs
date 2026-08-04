@@ -14,7 +14,7 @@ function loadRoute() {
   const testModule = { exports: {} };
   const require = (specifier) => {
     if (specifier === "next/server") return { NextResponse: { json(body, init = {}) { return Response.json(body, init); } } };
-    if (specifier.endsWith("/lib/ats/sync/runEmployerAtsSync")) return { runEmployerAtsSync: async () => ({ status: "completed" }) };
+    if (specifier.endsWith("/lib/ats/sync/runEmployerAtsSync")) return { runEmployerAtsSync: async () => ({ status: "completed" }) }; if (specifier.endsWith("/lib/ats/sync/atsSyncFailureNotifications")) return { handleAtsSyncFailureNotification: async () => ({ status: "skipped" }) };
     if (specifier.endsWith("/lib/billing")) return { getAuthUserFromRequest: async () => null };
     if (specifier.endsWith("/lib/employerAccounts")) return { getEmployerAccountContext: async () => ({ accountId: "acct_1", canManageJobs: true }), getSelectedEmployerAccountIdFromRequest: () => null, assertEmployerPermission: () => {} };
     if (specifier.endsWith("/lib/supabaseAdmin")) return { getSupabaseAdminClient: () => null };
@@ -36,7 +36,7 @@ function dependencies(overrides = {}) {
     getSelectedEmployerAccountIdFromRequest: () => null,
     assertEmployerPermission: (context, permission) => { assert.equal(permission, "canManageJobs"); if (!context.canManageJobs) { const error = new Error("forbidden secret"); error.name = "EmployerPermissionError"; throw error; } },
     database: { connectionBelongsToEmployer: async (connectionId, employerAccountId) => { calls.ownership.push({ connectionId, employerAccountId }); return { found: true }; } },
-    runEmployerAtsSync: async (input) => { calls.runner.push(input); return { status: "completed", sync: { status: "completed", summary: { updated: 1 } } }; },
+    runEmployerAtsSync: async (input) => { calls.runner.push(input); return { status: "completed", sync: { status: "completed", summary: { updated: 1 } } }; }, notifyAtsSyncFailure: async (connectionId, result) => { calls.notices = calls.notices || []; calls.notices.push({ connectionId, status: result.status }); },
     ...overrides,
   };
 }
@@ -118,3 +118,14 @@ test("unexpected route exception returns safe 500", async () => {
 });
 
 test("hiring manager may still use Sync Now", async () => { const calls = { runner: [], ownership: [] }; const result = await responseJson(await handleEmployerAtsSyncPost(jsonRequest({ connectionId: validId }), dependencies({ calls, getEmployerAccountContext: async () => ({ accountId: "acct_1", canManageJobs: true, role: "hiring_manager" }) }))); assert.deepEqual(result, { status: 200, body: { status: "completed", sync: { status: "completed", summary: { updated: 1 } } } }); assert.deepEqual(calls.runner, [{ connectionId: validId }]); });
+
+// Manual Sync Now shares the same failure-notification/reset handler without letting email failures change the sync response.
+test("manual sync invokes notification handler safely", async () => {
+  const calls = [];
+  const result = await responseJson(await handleEmployerAtsSyncPost(jsonRequest({ connectionId: validId }), dependencies({
+    runEmployerAtsSync: async () => ({ status: "retrieval-failed", message: "safe", consecutiveFailureCount: 3 }),
+    notifyAtsSyncFailure: async (connectionId, syncResult) => { calls.push({ connectionId, status: syncResult.status }); throw new Error("smtp secret"); },
+  })));
+  assert.deepEqual(result, { status: 200, body: { status: "retrieval-failed", message: "safe", consecutiveFailureCount: 3 } });
+  assert.deepEqual(calls, [{ connectionId: validId, status: "retrieval-failed" }]);
+});

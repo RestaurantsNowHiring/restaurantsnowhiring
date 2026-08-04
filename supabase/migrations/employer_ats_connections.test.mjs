@@ -22,6 +22,12 @@ test("creates the service-managed ATS connection table with durable identity", (
   assert.match(sql, /\(employer_account_id, provider_key, source_url_key\)/);
 });
 
+test("failure notification migration is additive and does not backfill", () => {
+  const sql = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), "202608040001_employer_ats_failure_notifications.sql"), "utf8");
+  assert.match(sql, /alter table public\.employer_ats_connections\s+add column failure_notification_sent_at timestamptz/i);
+  assert.doesNotMatch(sql, /update public\.employer_ats_connections/i);
+});
+
 test("adds scheduler lookup, updated-at trigger, and restrictive RLS", () => {
   assert.match(sql, /create index employer_ats_connections_sync_lookup_idx/);
   assert.match(sql, /where enabled = true and connection_status in \('active', 'error'\)/);
