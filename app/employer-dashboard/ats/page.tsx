@@ -242,6 +242,8 @@ export default function AtsIntegrationPage() {
   const [syncHistoryLoading, setSyncHistoryLoading] = useState(false);
   const [syncHistoryMessage, setSyncHistoryMessage] = useState<string | null>(null);
   const requestInFlightRef = useRef(false);
+  const connectionsRequestRef = useRef<{ inFlight: boolean; sequence: number }>({ inFlight: false, sequence: 0 });
+  const syncHistoryRequestRef = useRef<{ inFlightKey: string | null; sequence: number }>({ inFlightKey: null, sequence: 0 });
   const syncingConnectionIdsRef = useRef<Set<string>>(new Set());
 
   const importableItems = useMemo(
@@ -312,32 +314,59 @@ export default function AtsIntegrationPage() {
   const rangeEnd = Math.min(currentPage * JOBS_PER_PAGE, filteredJobs.length);
   const syncHistoryTotalPages = Math.max(1, Math.ceil(syncHistoryTotal / 10));
 
-  const loadSyncHistory = useCallback(async (token: string, nextPage = syncHistoryPage, connectionRows = connections) => {
-    if (connectionRows.length === 0) { setSyncHistory([]); setSyncHistoryTotal(0); return; }
+  const loadSyncHistory = useCallback(async (token: string, connectionId: string | null, nextPage = 1) => {
+    if (!connectionId) {
+      syncHistoryRequestRef.current = {
+        inFlightKey: null,
+        sequence: syncHistoryRequestRef.current.sequence + 1,
+      };
+      setSyncHistory([]);
+      setSyncHistoryTotal(0);
+      setSyncHistoryPage(1);
+      return;
+    }
+
+    const requestKey = `${connectionId}:${nextPage}`;
+    if (syncHistoryRequestRef.current.inFlightKey === requestKey) return;
+
+    const requestSequence = syncHistoryRequestRef.current.sequence + 1;
+    syncHistoryRequestRef.current = { inFlightKey: requestKey, sequence: requestSequence };
     setSyncHistoryLoading(true);
     setSyncHistoryMessage(null);
     try {
-      const params = new URLSearchParams({ connectionId: connectionRows[0].id, page: String(nextPage), pageSize: "10" });
+      const params = new URLSearchParams({ connectionId, page: String(nextPage), pageSize: "10" });
       const response = await fetch(`/api/employer/ats/sync-history?${params.toString()}`, { headers: employerAccountHeaders(token) });
+      if (syncHistoryRequestRef.current.sequence !== requestSequence) return;
       if (response.status === 401) { router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`); return; }
       if (response.status === 403) { setSyncHistoryMessage("You don’t have permission to view sync history for this employer account."); return; }
       if (!response.ok) { setSyncHistoryMessage("We couldn’t load sync history right now."); return; }
       const payload = (await response.json().catch(() => null)) as { history?: AtsSyncHistoryRow[]; total?: number } | null;
+      if (syncHistoryRequestRef.current.sequence !== requestSequence) return;
       setSyncHistory(Array.isArray(payload?.history) ? payload.history : []);
       setSyncHistoryTotal(typeof payload?.total === "number" ? payload.total : 0);
       setSyncHistoryPage(nextPage);
     } catch {
-      setSyncHistoryMessage("We couldn’t load sync history right now.");
+      if (syncHistoryRequestRef.current.sequence === requestSequence) {
+        setSyncHistoryMessage("We couldn’t load sync history right now.");
+      }
     } finally {
-      setSyncHistoryLoading(false);
+      if (syncHistoryRequestRef.current.sequence === requestSequence) {
+        syncHistoryRequestRef.current.inFlightKey = null;
+        setSyncHistoryLoading(false);
+      }
     }
-  }, [connections, router, syncHistoryPage]);
+  }, [router]);
 
   const loadConnections = useCallback(async (token: string) => {
+    if (connectionsRequestRef.current.inFlight) return;
+
+    const requestSequence = connectionsRequestRef.current.sequence + 1;
+    connectionsRequestRef.current = { inFlight: true, sequence: requestSequence };
     setConnectionsLoading(true);
     setConnectionsMessage(null);
     try {
       const response = await fetch("/api/employer/ats/connections", { headers: employerAccountHeaders(token) });
+      if (connectionsRequestRef.current.sequence !== requestSequence) return;
       if (response.status === 401) {
         router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
         return;
@@ -345,22 +374,31 @@ export default function AtsIntegrationPage() {
       if (response.status === 403) {
         setConnectionsMessage("You don’t have permission to manage job sources for this employer account.");
         setConnections([]);
+        await loadSyncHistory(token, null);
         return;
       }
       if (!response.ok) {
         setConnectionsMessage(JOB_SOURCE_LOAD_ERROR);
         setConnections([]);
+        await loadSyncHistory(token, null);
         return;
       }
       const payload = (await response.json().catch(() => null)) as { connections?: AtsConnection[] } | null;
+      if (connectionsRequestRef.current.sequence !== requestSequence) return;
       const nextConnections = Array.isArray(payload?.connections) ? payload.connections : [];
       setConnections(nextConnections);
-      await loadSyncHistory(token, 1, nextConnections);
+      await loadSyncHistory(token, nextConnections[0]?.id ?? null, 1);
     } catch {
-      setConnectionsMessage(JOB_SOURCE_LOAD_ERROR);
-      setConnections([]);
+      if (connectionsRequestRef.current.sequence === requestSequence) {
+        setConnectionsMessage(JOB_SOURCE_LOAD_ERROR);
+        setConnections([]);
+        await loadSyncHistory(token, null);
+      }
     } finally {
-      setConnectionsLoading(false);
+      if (connectionsRequestRef.current.sequence === requestSequence) {
+        connectionsRequestRef.current.inFlight = false;
+        setConnectionsLoading(false);
+      }
     }
   }, [loadSyncHistory, router]);
 
@@ -539,7 +577,6 @@ export default function AtsIntegrationPage() {
       const payload = (await response.json().catch(() => null)) as Record<string, unknown> | null;
       setSyncResults((current) => ({ ...current, [connectionId]: summarizeSyncResult(response.ok ? payload : null) }));
       await loadConnections(accessToken);
-      await loadSyncHistory(accessToken, 1, connections);
     } catch {
       setSyncResults((current) => ({ ...current, [connectionId]: { status: "failed", message: JOB_SOURCE_LOAD_ERROR, counts: [], warning: null } }));
     } finally {
@@ -801,6 +838,9 @@ export default function AtsIntegrationPage() {
     }
   }
 
+  const isInitialConnectionsLoad = connectionsLoading && connections.length === 0;
+  const isInitialHistoryLoad = syncHistoryLoading && syncHistory.length === 0;
+
   if (authStatus === "loading") {
     return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading import jobs…</main>;
   }
@@ -847,9 +887,10 @@ export default function AtsIntegrationPage() {
               </p>
             </div>
           </div>
-          {connectionsLoading ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading connected job sources…</p> : null}
+          {isInitialConnectionsLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading connected job sources...</p> : null}
+          {connectionsLoading && connections.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing connected job sources...</p> : null}
           {connectionsMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{connectionsMessage}</p> : null}
-          {!connectionsLoading && !connectionsMessage && connections.length === 0 ? (
+          {!isInitialConnectionsLoad && !connectionsMessage && connections.length === 0 ? (
             <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No connected job sources yet. Import jobs from a careers page to create a connection.</p>
           ) : null}
           {connections.length > 0 ? (
@@ -911,9 +952,10 @@ export default function AtsIntegrationPage() {
               <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Newest ATS synchronization runs for your connected job source.</p>
             </div>
           </div>
-          {syncHistoryLoading ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading sync history…</p> : null}
+          {isInitialHistoryLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading sync history...</p> : null}
+          {syncHistoryLoading && syncHistory.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing sync history...</p> : null}
           {syncHistoryMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{syncHistoryMessage}</p> : null}
-          {!syncHistoryLoading && !syncHistoryMessage && syncHistory.length === 0 ? <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No sync history yet.</p> : null}
+          {!isInitialHistoryLoad && !syncHistoryMessage && syncHistory.length === 0 ? <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No sync history yet.</p> : null}
           {syncHistory.length > 0 ? (
             <div style={{ overflowX: "auto", marginTop: 16 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", color: homeTheme.text }}>
@@ -933,9 +975,9 @@ export default function AtsIntegrationPage() {
                 ))}</tbody>
               </table>
               <nav aria-label="Sync history pagination" style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16 }}>
-                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, Math.max(1, syncHistoryPage - 1)); }} disabled={syncHistoryPage === 1 || syncHistoryLoading}>Previous</button>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, connections[0]?.id ?? null, Math.max(1, syncHistoryPage - 1)); }} disabled={syncHistoryPage === 1 || syncHistoryLoading}>Previous</button>
                 <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Page {syncHistoryPage} of {syncHistoryTotalPages}</p>
-                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, Math.min(syncHistoryTotalPages, syncHistoryPage + 1)); }} disabled={syncHistoryPage >= syncHistoryTotalPages || syncHistoryLoading}>Next</button>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, connections[0]?.id ?? null, Math.min(syncHistoryTotalPages, syncHistoryPage + 1)); }} disabled={syncHistoryPage >= syncHistoryTotalPages || syncHistoryLoading}>Next</button>
               </nav>
             </div>
           ) : null}
