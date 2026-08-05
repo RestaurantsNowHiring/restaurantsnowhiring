@@ -64,7 +64,7 @@ export async function previewJobImport(
       try {
         const jobs = await provider.parseJobs({
           url: classification.sourceUrl,
-        });
+        }, { detailMode: "listing" });
 
         return {
           status: "ready",

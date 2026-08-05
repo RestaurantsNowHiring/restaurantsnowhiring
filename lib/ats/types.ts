@@ -13,9 +13,21 @@ export type AtsProvider = {
   key: AtsProviderKey;
   displayName: string;
   detect: (careersPage: CareersPage) => Promise<DetectionResult>;
-  parseJobs: (careersPage: CareersPage) => Promise<ImportedJob[]>;
+  parseJobs: (careersPage: CareersPage, options?: ParseJobsOptions) => Promise<ImportedJob[]>;
+  hydrateJobs?: (input: HydrateJobsInput) => Promise<HydratedJobResult[]>;
   syncJobs?: (careersPage: CareersPage) => Promise<ImportedJob[]>;
 };
+
+export type ParseJobsOptions = { detailMode?: "listing" | "full" };
+
+export type HydrateJobsInput = {
+  careersPage: CareersPage;
+  jobs: ImportedJob[];
+};
+
+export type HydratedJobResult =
+  | { status: "ready"; job: ImportedJob }
+  | { status: "unavailable"; providerKey: AtsProviderKey; externalId: string };
 
 export type DetectionResult =
   | {

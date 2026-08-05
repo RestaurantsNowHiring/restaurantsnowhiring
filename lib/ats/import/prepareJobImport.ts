@@ -1,6 +1,7 @@
 import "server-only";
 
 import { previewJobImport } from "./previewJobImport";
+import { getAtsProvider } from "../providers/registry";
 import type { AtsProviderKey, ImportedJob } from "../types";
 import { getSupabaseAdminClient } from "../../supabaseAdmin";
 
@@ -28,6 +29,7 @@ export type AtsLocationMapping = {
 };
 export type PrepareJobImportDependencies = {
   findLocationMappings(accountId: string, provider: string, locationKeys: string[]): Promise<AtsLocationMapping[]>;
+  getProvider?: typeof getAtsProvider;
 };
 
 export function normalizeProviderKey(value: string): string {
@@ -248,13 +250,31 @@ export async function prepareJobImport(input: PrepareJobImportInput, dependencie
   }
   if (preview.status !== "ready") return { status: preview.status, message: SAFE_PREVIEW_MESSAGES[preview.status] };
 
-  const jobs = new Map(preview.jobs.map((job) => [`${normalizeProviderKey(job.providerKey)}\u0000${job.externalId}`, job]));
+  let jobs = new Map(preview.jobs.map((job) => [`${normalizeProviderKey(job.providerKey)}\u0000${job.externalId}`, job]));
   const seen = new Set<string>();
   const matchedJobs = new Map<string, ImportedJob>();
   for (const selected of input.selectedJobKeys) {
     const identity = `${normalizeProviderKey(selected.providerKey)}\u0000${selected.externalId}`;
     const job = jobs.get(identity);
     if (job && normalizeProviderKey(selected.providerKey) === normalizeProviderKey(preview.providerKey)) matchedJobs.set(identity, job);
+  }
+
+  const unavailableHydration = new Set<string>();
+  const provider = (dependencies?.getProvider ?? getAtsProvider)(preview.providerKey);
+  if (provider?.hydrateJobs && matchedJobs.size) {
+    try {
+      const hydrated = await provider.hydrateJobs({ careersPage: { url: preview.sourceUrl }, jobs: [...matchedJobs.values()] });
+      jobs = new Map(jobs);
+      for (const result of hydrated) {
+        const identity = result.status === "ready"
+          ? `${normalizeProviderKey(result.job.providerKey)}\u0000${result.job.externalId}`
+          : `${normalizeProviderKey(result.providerKey)}\u0000${result.externalId}`;
+        if (result.status === "ready") jobs.set(identity, result.job);
+        else unavailableHydration.add(identity);
+      }
+    } catch {
+      return { status: "retrieval-failed", message: SAFE_PREVIEW_MESSAGES["retrieval-failed"] };
+    }
   }
 
   const database = dependencies ?? defaultDependencies();
@@ -283,7 +303,7 @@ export async function prepareJobImport(input: PrepareJobImportInput, dependencie
     seen.add(identity);
     if (normalizeProviderKey(selected.providerKey) !== normalizeProviderKey(preview.providerKey)) return { status: "unavailable", ...selected, message: "This job does not belong to the job system found on the careers page." };
     const job = jobs.get(identity);
-    if (!job) return { status: "unavailable", ...selected, message: "This job is no longer available from the careers page." };
+    if (!job || unavailableHydration.has(identity)) return { status: "unavailable", ...selected, message: "This job is no longer available from the careers page." };
     return prepareJob(job, job.location ? mappings.get(normalizeAtsLocationKey(job.location)) : undefined);
   });
   return {
