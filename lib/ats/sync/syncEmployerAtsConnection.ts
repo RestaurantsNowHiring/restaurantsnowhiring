@@ -73,7 +73,7 @@ export async function syncEmployerAtsConnection(input: SyncEmployerAtsConnection
   if (!safeUrl(connection.source_url)) return { status: "connection-unavailable", message: "The ATS connection source is invalid." };
 
   let remoteJobs: ImportedJob[];
-  try { remoteJobs = await provider.parseJobs({ url: connection.source_url }); }
+  try { remoteJobs = await provider.parseJobs({ url: connection.source_url }, { detailMode: "listing" }); }
   catch { return { status: "retrieval-failed", message: "The ATS jobs could not be retrieved. No jobs were changed." }; }
   if (!Array.isArray(remoteJobs)) return { status: "retrieval-failed", message: "The ATS jobs could not be retrieved. No jobs were changed." };
 
@@ -90,6 +90,22 @@ export async function syncEmployerAtsConnection(input: SyncEmployerAtsConnection
   const remote = new Map<string, ImportedJob>();
   for (const job of remoteJobs) if (job.providerKey === connection.provider_key && typeof job.externalId === "string" && job.externalId) remote.set(identity(job.providerKey, job.externalId), job);
   const importedKeys = new Set(existing.map((job) => identity(connection.provider_key, job.ats_external_job_id)));
+  const failedHydration = new Set<string>();
+  if (provider.hydrateJobs) {
+    const importedStillPresent = existing
+      .map((job) => remote.get(identity(connection.provider_key, job.ats_external_job_id)))
+      .filter((job): job is ImportedJob => Boolean(job));
+    if (importedStillPresent.length) {
+      let hydrated;
+      try { hydrated = await provider.hydrateJobs({ careersPage: { url: connection.source_url }, jobs: importedStillPresent }); }
+      catch { return { status: "retrieval-failed", message: "The ATS jobs could not be retrieved. No jobs were changed." }; }
+      for (const result of hydrated) {
+        const key = result.status === "ready" ? identity(result.job.providerKey, result.job.externalId) : identity(result.providerKey, result.externalId);
+        if (result.status === "ready") remote.set(key, result.job);
+        else failedHydration.add(key);
+      }
+    }
+  }
   const NewAvailable: SyncAvailableJob[] = [];
   for (const job of remote.values()) if (!importedKeys.has(identity(job.providerKey, job.externalId))) NewAvailable.push({ providerKey: job.providerKey, externalId: job.externalId, title: job.title, ...(job.location ? { location: job.location } : {}) });
 
@@ -109,13 +125,18 @@ export async function syncEmployerAtsConnection(input: SyncEmployerAtsConnection
   const result = { status: "completed" as const, connectionId: connection.id, summary: { currentImported: existing.length, updated: 0, closed: 0, reopened: 0, needsReview: 0, newAvailable: NewAvailable.length, unchanged: 0, failed: 0 }, Updated: [] as SyncJobOutcome[], Closed: [] as SyncJobOutcome[], Reopened: [] as SyncJobOutcome[], NeedsReview: [] as SyncJobOutcome[], NewAvailable, Unchanged: [] as SyncJobOutcome[], Failed: [] as SyncJobOutcome[] };
   const syncedAt = (dependencies?.now ?? (() => new Date()))().toISOString();
   for (const current of existing) {
-    const incoming = remote.get(identity(connection.provider_key, current.ats_external_job_id));
+    const currentIdentity = identity(connection.provider_key, current.ats_external_job_id);
+    const incoming = remote.get(currentIdentity);
     if (!incoming) {
       let write: DbResult<{ id: string }>;
       try { write = await database.updateJob(current.id, { active: false, status: "archived", ats_inactive_reason: "closed_in_ats", ats_last_synced_at: syncedAt }); }
       catch { write = { data: null, error: {} }; }
       const bucket = write.error ? result.Failed : result.Closed;
       bucket.push(outcome(connection.provider_key, current, write.error ? "This job could not be deactivated." : "The ATS no longer lists this job; it was deactivated."));
+      continue;
+    }
+    if (failedHydration.has(currentIdentity)) {
+      result.Failed.push(outcome(connection.provider_key, current, "This job could not be synchronized."));
       continue;
     }
     const issues: string[] = [];

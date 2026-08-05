@@ -4,6 +4,7 @@ import type {
   AtsProvider,
   CareersPage,
   DetectionResult,
+  HydratedJobResult,
   ImportedJob,
 } from "../../types";
 
@@ -587,7 +588,7 @@ function getFirstString(...values: unknown[]): string | undefined {
 function normalizeWorkdayJob(
   source: WorkdaySource,
   summary: Record<string, unknown>,
-  detail: Record<string, unknown>,
+  detail: Record<string, unknown> = {},
 ): ImportedJob | null {
   const externalPath = normalizeExternalPath(
     summary.externalPath ?? detail.externalPath,
@@ -788,7 +789,7 @@ export const workdayProvider: AtsProvider = {
       detectedAt,
     };
   },
-  async parseJobs(careersPage: CareersPage): Promise<ImportedJob[]> {
+  async parseJobs(careersPage: CareersPage, options?: { detailMode?: "listing" | "full" }): Promise<ImportedJob[]> {
     const source = getWorkdaySource(careersPage.url);
     if (!source)
       throw new Error(
@@ -802,6 +803,12 @@ export const workdayProvider: AtsProvider = {
     };
     try {
       const listings = await fetchCompleteListings(source, state);
+      if (options?.detailMode === "listing") {
+        state.stage = "normalization";
+        return listings
+          .map((summary) => normalizeWorkdayJob(source, summary))
+          .filter((job): job is ImportedJob => Boolean(job));
+      }
       state.stage = "detail";
       const jobs = await mapWithConcurrency(
         listings,
@@ -819,6 +826,46 @@ export const workdayProvider: AtsProvider = {
         },
       );
       return jobs.filter((job): job is ImportedJob => Boolean(job));
+    } catch (error) {
+      logWorkdayParsingFailure(state.stage, error);
+      throw error;
+    } finally {
+      deadline.abort();
+    }
+  },
+  async hydrateJobs(input: { careersPage: CareersPage; jobs: ImportedJob[] }): Promise<HydratedJobResult[]> {
+    const source = getWorkdaySource(input.careersPage.url);
+    if (!source) throw new Error("Careers page URL is not a recognized Workday careers URL.");
+    const deadline = createOverallDeadline();
+    const state: FetchState = { receivedBytes: 0, deadline: deadline.signal, stage: "listing" };
+    try {
+      const listings = await fetchCompleteListings(source, state);
+      const listingsById = new Map<string, Record<string, unknown>>();
+      for (const listing of listings) {
+        const listingJob = normalizeWorkdayJob(source, listing);
+        if (listingJob) listingsById.set(listingJob.externalId, listing);
+      }
+      const unique = new Map<string, ImportedJob>();
+      for (const job of input.jobs) if (job.providerKey === "workday" && !unique.has(job.externalId)) unique.set(job.externalId, job);
+      const selected = [...unique.values()];
+      state.stage = "detail";
+      return await mapWithConcurrency(selected, WORKDAY_DETAIL_CONCURRENCY, async (job) => {
+        const listing = listingsById.get(job.externalId);
+        if (!listing) return { status: "unavailable", providerKey: "workday", externalId: job.externalId };
+        const externalPath = normalizeExternalPath(listing.externalPath);
+        if (!externalPath) return { status: "unavailable", providerKey: "workday", externalId: job.externalId };
+        try {
+          const detail = await fetchJobDetail(source, externalPath, state);
+          state.stage = "normalization";
+          const hydrated = normalizeWorkdayJob(source, listing, detail);
+          return hydrated ? { status: "ready", job: hydrated } : { status: "unavailable", providerKey: "workday", externalId: job.externalId };
+        } catch (error) {
+          logWorkdayParsingFailure("detail", error);
+          return { status: "unavailable", providerKey: "workday", externalId: job.externalId };
+        } finally {
+          state.stage = "detail";
+        }
+      });
     } catch (error) {
       logWorkdayParsingFailure(state.stage, error);
       throw error;
