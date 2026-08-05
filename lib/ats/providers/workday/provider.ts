@@ -7,10 +7,12 @@ import type {
   ImportedJob,
 } from "../../types";
 
-export const WORKDAY_PAGE_SIZE = 100;
-export const WORKDAY_MAX_PAGES = 200;
+export const WORKDAY_PAGE_SIZE = 20;
 export const WORKDAY_DETAIL_CONCURRENCY = 4;
 export const WORKDAY_MAX_JOBS = 5_000;
+export const WORKDAY_MAX_PAGES = Math.ceil(
+  WORKDAY_MAX_JOBS / WORKDAY_PAGE_SIZE,
+);
 export const WORKDAY_REQUEST_TIMEOUT_MS = 10_000;
 export const WORKDAY_PARSE_TIMEOUT_MS = 30_000;
 export const WORKDAY_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
