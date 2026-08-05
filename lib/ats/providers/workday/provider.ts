@@ -10,12 +10,14 @@ import type {
 
 export const WORKDAY_PAGE_SIZE = 20;
 export const WORKDAY_DETAIL_CONCURRENCY = 4;
+export const WORKDAY_LISTING_CONCURRENCY = 8;
 export const WORKDAY_MAX_JOBS = 5_000;
 export const WORKDAY_MAX_TOTAL_DRIFT = 100;
 export const WORKDAY_MAX_PAGES = Math.ceil(
   WORKDAY_MAX_JOBS / WORKDAY_PAGE_SIZE,
 );
 export const WORKDAY_REQUEST_TIMEOUT_MS = 10_000;
+export const WORKDAY_LISTING_TIMEOUT_MS = 45_000;
 export const WORKDAY_PARSE_TIMEOUT_MS = 30_000;
 export const WORKDAY_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 export const WORKDAY_MAX_CUMULATIVE_BYTES = 40 * 1024 * 1024;
@@ -55,6 +57,9 @@ export type WorkdayFailureCode =
   | "pagination_incomplete"
   | "pagination_non_progressing"
   | "pagination_limit_exceeded"
+  | "listing_page_failed"
+  | "listing_plan_incomplete"
+  | "listing_offset_gap"
   | "detail_failed"
   | "overall_timeout"
   | "unknown_failure";
@@ -304,12 +309,11 @@ function buildPublicApplyUrl(
   return new URL(`${source.publicBaseUrl}${externalPath}`).toString();
 }
 
-function createOverallDeadline(): AbortController {
+function createOverallDeadline(
+  timeoutMs = WORKDAY_PARSE_TIMEOUT_MS,
+): AbortController {
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    WORKDAY_PARSE_TIMEOUT_MS,
-  );
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   timeout.unref?.();
   controller.signal.addEventListener("abort", () => clearTimeout(timeout), {
     once: true,
@@ -672,68 +676,256 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+type WorkdayListingPage = {
+  offset: number;
+  jobs: Record<string, unknown>[];
+  total?: number;
+};
+
+function getAuthoritativeTotal(
+  offset: number,
+  jobs: Record<string, unknown>[],
+  total: number | undefined,
+): number | undefined {
+  return total === 0 && (offset > 0 || jobs.length > 0) ? undefined : total;
+}
+
+function getLastDataOffset(total: number): number {
+  return (
+    Math.floor(Math.max(total - 1, 0) / WORKDAY_PAGE_SIZE) * WORKDAY_PAGE_SIZE
+  );
+}
+
+function addPlannedOffsets(plan: Set<number>, highestTotal: number): void {
+  const lastDataOffset = getLastDataOffset(highestTotal);
+  const sentinelOffset = lastDataOffset + WORKDAY_PAGE_SIZE;
+  if (sentinelOffset / WORKDAY_PAGE_SIZE >= WORKDAY_MAX_PAGES)
+    throw workdayError(
+      "pagination_limit_exceeded",
+      "Workday jobs pagination exceeded the safe page limit.",
+    );
+  for (
+    let offset = WORKDAY_PAGE_SIZE;
+    offset <= sentinelOffset;
+    offset += WORKDAY_PAGE_SIZE
+  )
+    plan.add(offset);
+}
+
+function buildTotalDiagnostic(
+  totals: {
+    firstReportedTotal: number | undefined;
+    minimumReportedTotal: number | undefined;
+    maximumReportedTotal: number | undefined;
+    latestReportedTotal: number | undefined;
+  },
+  pagesRequested: number,
+  rawRowsRetrieved: number,
+): WorkdayPaginationTotalDiagnostic | undefined {
+  if (
+    totals.firstReportedTotal === undefined ||
+    totals.minimumReportedTotal === undefined ||
+    totals.maximumReportedTotal === undefined ||
+    totals.latestReportedTotal === undefined
+  )
+    return undefined;
+  return {
+    firstReportedTotal: totals.firstReportedTotal,
+    minimumReportedTotal: totals.minimumReportedTotal,
+    maximumReportedTotal: totals.maximumReportedTotal,
+    latestReportedTotal: totals.latestReportedTotal,
+    pagesRequested,
+    rawRowsRetrieved,
+  };
+}
+
 async function fetchCompleteListings(
   source: WorkdaySource,
   state: FetchState,
 ): Promise<Record<string, unknown>[]> {
-  const seen = new Set<string>();
-  const listings: Record<string, unknown>[] = [];
-  let firstReportedTotal: number | undefined;
-  let minimumReportedTotal: number | undefined;
-  let maximumReportedTotal: number | undefined;
-  let latestReportedTotal: number | undefined;
-  let rawRowsRetrieved = 0;
-  for (
-    let page = 0, offset = 0;
-    page < WORKDAY_MAX_PAGES;
-    page += 1, offset += WORKDAY_PAGE_SIZE
-  ) {
-    const { jobs, total } = await fetchSearchPage(source, offset, state);
-    const authoritativeTotal =
-      total === 0 && (offset > 0 || jobs.length > 0) ? undefined : total;
-    if (authoritativeTotal !== undefined) {
-      if (authoritativeTotal > WORKDAY_MAX_JOBS)
-        throw workdayError(
-          "reported_total_too_large",
-          "Workday jobs total exceeds the safe import limit.",
-        );
-      firstReportedTotal ??= authoritativeTotal;
-      minimumReportedTotal = Math.min(
-        minimumReportedTotal ?? authoritativeTotal,
-        authoritativeTotal,
+  const first = await fetchSearchPage(source, 0, state);
+  const pages = new Map<number, WorkdayListingPage>();
+  pages.set(0, { offset: 0, jobs: first.jobs, total: first.total });
+  const plannedOffsets = new Set<number>([0]);
+  const requestedOffsets = new Set<number>([0]);
+  const pendingOffsets: number[] = [];
+  let nextPendingIndex = 0;
+  const totals = {
+    firstReportedTotal: undefined as number | undefined,
+    minimumReportedTotal: undefined as number | undefined,
+    maximumReportedTotal: undefined as number | undefined,
+    latestReportedTotal: undefined as number | undefined,
+  };
+  let rawRowsObserved = first.jobs.length;
+  const firstPageAuthoritativeTotal = getAuthoritativeTotal(
+    0,
+    first.jobs,
+    first.total,
+  );
+  if (firstPageAuthoritativeTotal === 0 && first.jobs.length === 0) return [];
+  const observeTotal = (
+    offset: number,
+    jobs: Record<string, unknown>[],
+    total: number | undefined,
+  ) => {
+    const authoritativeTotal = getAuthoritativeTotal(offset, jobs, total);
+    if (authoritativeTotal === undefined) return;
+    if (authoritativeTotal > WORKDAY_MAX_JOBS)
+      throw workdayError(
+        "reported_total_too_large",
+        "Workday jobs total exceeds the safe import limit.",
       );
-      maximumReportedTotal = Math.max(
-        maximumReportedTotal ?? authoritativeTotal,
-        authoritativeTotal,
-      );
-      latestReportedTotal = authoritativeTotal;
-      if (maximumReportedTotal - minimumReportedTotal > WORKDAY_MAX_TOTAL_DRIFT)
-        throw workdayError(
-          "pagination_total_unstable",
-          "Workday jobs pagination total changed beyond the safe drift limit.",
-          {
-            firstReportedTotal,
-            minimumReportedTotal,
-            maximumReportedTotal,
-            latestReportedTotal,
-            pagesRequested: page + 1,
-            rawRowsRetrieved: rawRowsRetrieved + jobs.length,
-          },
-        );
-    }
+    totals.firstReportedTotal ??= authoritativeTotal;
+    totals.minimumReportedTotal = Math.min(
+      totals.minimumReportedTotal ?? authoritativeTotal,
+      authoritativeTotal,
+    );
+    totals.maximumReportedTotal = Math.max(
+      totals.maximumReportedTotal ?? authoritativeTotal,
+      authoritativeTotal,
+    );
+    totals.latestReportedTotal = authoritativeTotal;
     if (
-      latestReportedTotal !== undefined &&
-      offset >= latestReportedTotal &&
-      jobs.length > 0
+      (totals.maximumReportedTotal ?? 0) - (totals.minimumReportedTotal ?? 0) >
+      WORKDAY_MAX_TOTAL_DRIFT
     )
       throw workdayError(
-        "pagination_non_progressing",
-        "Workday jobs pagination did not progress consistently.",
+        "pagination_total_unstable",
+        "Workday jobs pagination total changed beyond the safe drift limit.",
+        buildTotalDiagnostic(totals, requestedOffsets.size, rawRowsObserved),
       );
-    rawRowsRetrieved += jobs.length;
-    for (const job of jobs) {
+    const before = plannedOffsets.size;
+    addPlannedOffsets(plannedOffsets, totals.maximumReportedTotal);
+    if (plannedOffsets.size > before) {
+      for (const plannedOffset of [...plannedOffsets].sort((a, b) => a - b)) {
+        if (!requestedOffsets.has(plannedOffset) && plannedOffset !== 0) {
+          requestedOffsets.add(plannedOffset);
+          pendingOffsets.push(plannedOffset);
+        }
+      }
+    }
+  };
+  observeTotal(0, first.jobs, first.total);
+  if (firstPageAuthoritativeTotal === undefined) {
+    if (first.jobs.length < WORKDAY_PAGE_SIZE) {
+      // Fall through to the common validation and deduplication path so even
+      // single-page boards enforce listing identity and external path safety.
+    } else {
+      requestedOffsets.add(WORKDAY_PAGE_SIZE);
+      plannedOffsets.add(WORKDAY_PAGE_SIZE);
+      pendingOffsets.push(WORKDAY_PAGE_SIZE);
+    }
+  }
+  const nextOffset = () => pendingOffsets[nextPendingIndex++];
+  async function worker(): Promise<void> {
+    while (!state.deadline.aborted) {
+      const offset = nextOffset();
+      if (offset === undefined) return;
+      try {
+        const page = await fetchSearchPage(source, offset, state);
+        if (pages.has(offset))
+          throw workdayError(
+            "listing_offset_gap",
+            "Workday jobs pagination requested a duplicate offset.",
+          );
+        pages.set(offset, { offset, jobs: page.jobs, total: page.total });
+        rawRowsObserved += page.jobs.length;
+        observeTotal(offset, page.jobs, page.total);
+        if (
+          firstPageAuthoritativeTotal === undefined &&
+          page.jobs.length === WORKDAY_PAGE_SIZE
+        ) {
+          const following = offset + WORKDAY_PAGE_SIZE;
+          if (following / WORKDAY_PAGE_SIZE >= WORKDAY_MAX_PAGES)
+            throw workdayError(
+              "pagination_limit_exceeded",
+              "Workday jobs pagination exceeded the safe page limit.",
+            );
+          if (!requestedOffsets.has(following)) {
+            plannedOffsets.add(following);
+            requestedOffsets.add(following);
+            pendingOffsets.push(following);
+          }
+        }
+      } catch (error) {
+        if (error instanceof WorkdayParserError) throw error;
+        throw workdayError(
+          "listing_page_failed",
+          "Workday jobs listing page failed.",
+        );
+      }
+    }
+  }
+  await Promise.all(
+    Array.from(
+      { length: Math.min(WORKDAY_LISTING_CONCURRENCY, pendingOffsets.length) },
+      () => worker(),
+    ),
+  );
+  if (state.deadline.aborted)
+    throw workdayError("overall_timeout", "Workday jobs listing timed out.");
+  const sortedOffsets = [...plannedOffsets].sort((a, b) => a - b);
+  for (let i = 0; i < sortedOffsets.length; i += 1) {
+    if (sortedOffsets[i] !== i * WORKDAY_PAGE_SIZE)
+      throw workdayError(
+        "listing_offset_gap",
+        "Workday jobs pagination had a gap.",
+      );
+    if (!pages.has(sortedOffsets[i]))
+      throw workdayError(
+        "listing_plan_incomplete",
+        "Workday jobs pagination plan did not complete.",
+      );
+  }
+  const highestRequiredOffset =
+    totals.maximumReportedTotal === undefined
+      ? (sortedOffsets.at(-1) ?? 0)
+      : getLastDataOffset(totals.maximumReportedTotal);
+  const completionPage = sortedOffsets.some((offset) => {
+    const page = pages.get(offset);
+    return Boolean(
+      page &&
+      offset >= highestRequiredOffset &&
+      page.jobs.length < WORKDAY_PAGE_SIZE,
+    );
+  });
+  if (!completionPage)
+    throw workdayError(
+      "pagination_incomplete",
+      "Workday jobs listing ended before completion was established.",
+    );
+  if (
+    totals.latestReportedTotal !== undefined &&
+    totals.latestReportedTotal > rawRowsObserved &&
+    (rawRowsObserved === 0 ||
+      totals.latestReportedTotal - rawRowsObserved > WORKDAY_MAX_TOTAL_DRIFT)
+  )
+    throw workdayError(
+      "pagination_incomplete",
+      "Workday jobs listing ended before the reported total was retrieved.",
+    );
+  const seen = new Set<string>();
+  const listings: Record<string, unknown>[] = [];
+  const maximumDataOffset =
+    totals.maximumReportedTotal === undefined
+      ? undefined
+      : getLastDataOffset(totals.maximumReportedTotal);
+  for (const offset of [...pages.keys()].sort((a, b) => a - b)) {
+    const page = pages.get(offset);
+    if (!page) continue;
+    for (const job of page.jobs) {
       const identity = getListingIdentity(job);
-      if (!identity || seen.has(identity)) continue;
+      if (!identity) continue;
+      if (
+        maximumDataOffset !== undefined &&
+        offset > maximumDataOffset &&
+        !seen.has(identity)
+      )
+        throw workdayError(
+          "pagination_non_progressing",
+          "Workday jobs pagination did not progress consistently.",
+        );
+      if (seen.has(identity)) continue;
       seen.add(identity);
       listings.push(job);
       if (listings.length > WORKDAY_MAX_JOBS)
@@ -742,25 +934,8 @@ async function fetchCompleteListings(
           "Workday jobs total exceeds the safe import limit.",
         );
     }
-    if (jobs.length < WORKDAY_PAGE_SIZE) {
-      void firstReportedTotal;
-      if (
-        latestReportedTotal !== undefined &&
-        latestReportedTotal > rawRowsRetrieved &&
-        (rawRowsRetrieved === 0 ||
-          latestReportedTotal - rawRowsRetrieved > WORKDAY_MAX_TOTAL_DRIFT)
-      )
-        throw workdayError(
-          "pagination_incomplete",
-          "Workday jobs listing ended before the reported total was retrieved.",
-        );
-      return listings;
-    }
   }
-  throw workdayError(
-    "pagination_limit_exceeded",
-    "Workday jobs pagination exceeded the safe page limit.",
-  );
+  return listings;
 }
 
 export const workdayProvider: AtsProvider = {
@@ -789,13 +964,16 @@ export const workdayProvider: AtsProvider = {
       detectedAt,
     };
   },
-  async parseJobs(careersPage: CareersPage, options?: { detailMode?: "listing" | "full" }): Promise<ImportedJob[]> {
+  async parseJobs(
+    careersPage: CareersPage,
+    options?: { detailMode?: "listing" | "full" },
+  ): Promise<ImportedJob[]> {
     const source = getWorkdaySource(careersPage.url);
     if (!source)
       throw new Error(
         "Careers page URL is not a recognized Workday careers URL.",
       );
-    const deadline = createOverallDeadline();
+    const deadline = createOverallDeadline(WORKDAY_LISTING_TIMEOUT_MS);
     const state: FetchState = {
       receivedBytes: 0,
       deadline: deadline.signal,
@@ -833,11 +1011,21 @@ export const workdayProvider: AtsProvider = {
       deadline.abort();
     }
   },
-  async hydrateJobs(input: { careersPage: CareersPage; jobs: ImportedJob[] }): Promise<HydratedJobResult[]> {
+  async hydrateJobs(input: {
+    careersPage: CareersPage;
+    jobs: ImportedJob[];
+  }): Promise<HydratedJobResult[]> {
     const source = getWorkdaySource(input.careersPage.url);
-    if (!source) throw new Error("Careers page URL is not a recognized Workday careers URL.");
-    const deadline = createOverallDeadline();
-    const state: FetchState = { receivedBytes: 0, deadline: deadline.signal, stage: "listing" };
+    if (!source)
+      throw new Error(
+        "Careers page URL is not a recognized Workday careers URL.",
+      );
+    const deadline = createOverallDeadline(WORKDAY_LISTING_TIMEOUT_MS);
+    const state: FetchState = {
+      receivedBytes: 0,
+      deadline: deadline.signal,
+      stage: "listing",
+    };
     try {
       const listings = await fetchCompleteListings(source, state);
       const listingsById = new Map<string, Record<string, unknown>>();
@@ -846,26 +1034,52 @@ export const workdayProvider: AtsProvider = {
         if (listingJob) listingsById.set(listingJob.externalId, listing);
       }
       const unique = new Map<string, ImportedJob>();
-      for (const job of input.jobs) if (job.providerKey === "workday" && !unique.has(job.externalId)) unique.set(job.externalId, job);
+      for (const job of input.jobs)
+        if (job.providerKey === "workday" && !unique.has(job.externalId))
+          unique.set(job.externalId, job);
       const selected = [...unique.values()];
       state.stage = "detail";
-      return await mapWithConcurrency(selected, WORKDAY_DETAIL_CONCURRENCY, async (job) => {
-        const listing = listingsById.get(job.externalId);
-        if (!listing) return { status: "unavailable", providerKey: "workday", externalId: job.externalId };
-        const externalPath = normalizeExternalPath(listing.externalPath);
-        if (!externalPath) return { status: "unavailable", providerKey: "workday", externalId: job.externalId };
-        try {
-          const detail = await fetchJobDetail(source, externalPath, state);
-          state.stage = "normalization";
-          const hydrated = normalizeWorkdayJob(source, listing, detail);
-          return hydrated ? { status: "ready", job: hydrated } : { status: "unavailable", providerKey: "workday", externalId: job.externalId };
-        } catch (error) {
-          logWorkdayParsingFailure("detail", error);
-          return { status: "unavailable", providerKey: "workday", externalId: job.externalId };
-        } finally {
-          state.stage = "detail";
-        }
-      });
+      return await mapWithConcurrency(
+        selected,
+        WORKDAY_DETAIL_CONCURRENCY,
+        async (job) => {
+          const listing = listingsById.get(job.externalId);
+          if (!listing)
+            return {
+              status: "unavailable",
+              providerKey: "workday",
+              externalId: job.externalId,
+            };
+          const externalPath = normalizeExternalPath(listing.externalPath);
+          if (!externalPath)
+            return {
+              status: "unavailable",
+              providerKey: "workday",
+              externalId: job.externalId,
+            };
+          try {
+            const detail = await fetchJobDetail(source, externalPath, state);
+            state.stage = "normalization";
+            const hydrated = normalizeWorkdayJob(source, listing, detail);
+            return hydrated
+              ? { status: "ready", job: hydrated }
+              : {
+                  status: "unavailable",
+                  providerKey: "workday",
+                  externalId: job.externalId,
+                };
+          } catch (error) {
+            logWorkdayParsingFailure("detail", error);
+            return {
+              status: "unavailable",
+              providerKey: "workday",
+              externalId: job.externalId,
+            };
+          } finally {
+            state.stage = "detail";
+          }
+        },
+      );
     } catch (error) {
       logWorkdayParsingFailure(state.stage, error);
       throw error;
