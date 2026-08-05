@@ -688,16 +688,24 @@ async function fetchCompleteListings(
     page += 1, offset += WORKDAY_PAGE_SIZE
   ) {
     const { jobs, total } = await fetchSearchPage(source, offset, state);
-    if (total !== undefined) {
-      if (total > WORKDAY_MAX_JOBS)
+    const authoritativeTotal =
+      total === 0 && (offset > 0 || jobs.length > 0) ? undefined : total;
+    if (authoritativeTotal !== undefined) {
+      if (authoritativeTotal > WORKDAY_MAX_JOBS)
         throw workdayError(
           "reported_total_too_large",
           "Workday jobs total exceeds the safe import limit.",
         );
-      firstReportedTotal ??= total;
-      minimumReportedTotal = Math.min(minimumReportedTotal ?? total, total);
-      maximumReportedTotal = Math.max(maximumReportedTotal ?? total, total);
-      latestReportedTotal = total;
+      firstReportedTotal ??= authoritativeTotal;
+      minimumReportedTotal = Math.min(
+        minimumReportedTotal ?? authoritativeTotal,
+        authoritativeTotal,
+      );
+      maximumReportedTotal = Math.max(
+        maximumReportedTotal ?? authoritativeTotal,
+        authoritativeTotal,
+      );
+      latestReportedTotal = authoritativeTotal;
       if (maximumReportedTotal - minimumReportedTotal > WORKDAY_MAX_TOTAL_DRIFT)
         throw workdayError(
           "pagination_total_unstable",
