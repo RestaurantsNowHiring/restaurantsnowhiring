@@ -108,7 +108,7 @@ test("supported ATS platform guidance is honest and limited to available provide
   assert.match(source, /Available Today/);
   assert.match(source, /Greenhouse/);
   assert.match(source, /Workday/);
-  assert.match(source, /More ATS integrations are coming soon\./);
+  assert.match(source, /More Integrations Coming Soon/);
   assert.match(source, /We only access jobs available on your public careers page\./);
   assert.doesNotMatch(source, /All ATS platforms supported|Universal ATS integration|credentials (are )?(stored|accessed|secure)/i);
 });
@@ -128,7 +128,7 @@ test("connection guidance renders before management, history, and imported job s
   const supportedIndex = source.indexOf("Supported ATS Platforms");
   const connectedIndex = source.indexOf("Connected Job Sources");
   const historyIndex = source.indexOf("Sync History");
-  const importedIndex = source.indexOf("Imported Jobs");
+  const importedIndex = source.lastIndexOf("Imported Jobs");
   assert.ok(connectIndex > -1, "connection form heading should be present");
   assert.ok(supportedIndex > connectIndex, "supported ATS card should sit beside/after the form");
   assert.ok(connectedIndex > supportedIndex, "connected sources should follow connection guidance");
@@ -152,8 +152,8 @@ test("connection form keeps existing request flow while updating ATS-specific co
   assert.match(source, /Careers Page URL/);
   assert.match(source, /Find My Jobs/);
   assert.match(source, /isFindingJobs \? "Finding Jobs\.\.\." : "Find My Jobs"/);
-  assert.match(source, /Paste the URL of your ATS careers page to find and import your open jobs\./);
-  assert.match(source, /https:\/\/company\.greenhouse\.io\/\.\.\. or https:\/\/company\.wd1\.myworkdayjobs\.com\/\.\.\./);
+  assert.match(source, /Paste the URL of your public ATS careers page\./);
+  assert.match(source, /https:\/\/boards\.greenhouse\.io\/company or https:\/\/company\.wd1\.myworkdayjobs\.com\/\.\.\./);
   assert.match(source, /fetch\("\/api\/employer\/ats\/preview"/);
 });
 
@@ -164,6 +164,42 @@ test("connected sources, sync history, and imported jobs functionality remains p
   for (const heading of ["Date", "Status", "Duration", "Jobs Updated", "Jobs Closed", "Jobs Reopened", "Needs Review", "Failed", "Warning"]) {
     assert.match(source, new RegExp(`"${heading}"`));
   }
+});
+
+
+test("coming soon ATS providers are visually separate from supported providers", () => {
+  const availableTodayStart = source.indexOf('aria-label="ATS platforms available today"');
+  const availableTodayEnd = source.indexOf("More Integrations Coming Soon", availableTodayStart);
+  const comingSoonStart = source.indexOf('aria-label="ATS integrations coming soon"');
+  assert.ok(comingSoonStart > availableTodayEnd);
+  const comingSoonBlock = source.slice(comingSoonStart, source.indexOf("Don’t see your ATS?", comingSoonStart));
+  for (const provider of ["Lever", "iCIMS", "Taleo", "SmartRecruiters", "JazzHR", "Ashby"]) {
+    assert.match(comingSoonBlock, new RegExp(provider));
+  }
+  assert.doesNotMatch(comingSoonBlock, /Supported/);
+});
+
+test("connected source hierarchy keeps statuses near the top and required metric cards", () => {
+  const cardStart = source.indexOf("<article key={connection.id}");
+  const cardEnd = source.indexOf("{syncResult ?", cardStart);
+  const card = source.slice(cardStart, cardEnd);
+  assert.ok(card.indexOf("getStatusLabel(connection)") < card.indexOf("Connected Job Source"));
+  assert.match(card, /Careers URL:/);
+  for (const metric of ["Imported Jobs", "Last Successful Sync", "Last Failed Sync", "Consecutive Failures"]) {
+    assert.match(card, new RegExp(metric));
+  }
+});
+
+test("retrieval and loading messages use accessible status and alert containers", () => {
+  assert.match(source, /id="ats-import-note"/);
+  assert.match(source, /role=\{resultMessage \? "status" : undefined\}/);
+  assert.match(source, /connectionsMessage \? <div role="alert"/);
+  assert.match(source, /syncHistoryMessage \? <div role="alert"/);
+});
+
+test("imported jobs empty state explains how to start synchronization", () => {
+  assert.match(source, /No jobs imported yet\./);
+  assert.match(source, /Import jobs from Greenhouse or Workday above to begin automatic synchronization\./);
 });
 
 test("responsive ATS support layout uses existing classes and no new dependencies", () => {

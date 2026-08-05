@@ -894,7 +894,7 @@ export default function AtsIntegrationPage() {
                 Import Jobs
               </h1>
               <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 700, maxWidth: 780 }}>
-                Automatically import jobs from your Applicant Tracking System (ATS). Connect your careers page once and we’ll help keep your job postings up to date.
+                Automatically import jobs from your Applicant Tracking System (ATS). Connect your public careers page once and we’ll keep your jobs synchronized.
               </p>
             </div>
             {isImporting ? (
@@ -915,9 +915,14 @@ export default function AtsIntegrationPage() {
               <h2 id="ats-connect-heading" style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
                 Connect Your Applicant Tracking System (ATS)
               </h2>
-              <p style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
-                Paste the URL of your ATS careers page to find and import your open jobs.
+              <p style={{ margin: "0 0 12px", color: homeTheme.muted, fontWeight: 800 }}>
+                Paste the URL of your public ATS careers page.
               </p>
+              <div style={{ margin: "0 0 16px", display: "grid", gap: 6, color: homeTheme.muted, fontWeight: 700, overflowWrap: "anywhere" }}>
+                <p style={{ margin: 0, color: homeTheme.text, fontWeight: 900 }}>Examples:</p>
+                <p style={{ margin: 0 }}><strong style={{ color: homeTheme.text }}>Greenhouse:</strong> https://boards.greenhouse.io/company</p>
+                <p style={{ margin: 0 }}><strong style={{ color: homeTheme.text }}>Workday:</strong> https://company.wd1.myworkdayjobs.com/...</p>
+              </div>
               <form className="rn-ats-import-form" onSubmit={findJobs}>
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
               Careers Page URL
@@ -925,7 +930,7 @@ export default function AtsIntegrationPage() {
                 type="url"
                 value={careersPageUrl}
                 onChange={(event) => setCareersPageUrl(event.target.value)}
-                placeholder="https://company.greenhouse.io/... or https://company.wd1.myworkdayjobs.com/..."
+                placeholder="https://boards.greenhouse.io/company or https://company.wd1.myworkdayjobs.com/..."
                 style={{ ...homeInputStyle, marginTop: 6 }}
                 aria-describedby="ats-import-note"
                 disabled={isFindingJobs}
@@ -951,7 +956,7 @@ export default function AtsIntegrationPage() {
               role={resultMessage ? "status" : undefined}
               style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}
             >
-              {resultMessage ?? "Paste the URL of your ATS careers page to find and import your open jobs."}
+              {resultMessage ?? "We only access jobs available on your public careers page."}
             </p>
               </form>
             </div>
@@ -967,9 +972,14 @@ export default function AtsIntegrationPage() {
                   </li>
                 ))}
               </ul>
-              <h3 style={{ margin: "18px 0 6px", color: homeTheme.text, fontSize: 18 }}>More Integrations Coming Soon</h3>
-              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>More ATS integrations are coming soon.</p>
-              <p style={{ margin: "14px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Don’t see your ATS? We’re adding support based on employer demand.</p>
+              <h3 style={{ margin: "18px 0 8px", color: homeTheme.text, fontSize: 18 }}>More Integrations Coming Soon</h3>
+              <ul aria-label="ATS integrations coming soon" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, color: homeTheme.muted, fontWeight: 800 }}>
+                {['Lever', 'iCIMS', 'Taleo', 'SmartRecruiters', 'JazzHR', 'Ashby'].map((provider) => (
+                  <li key={provider}>{provider}</li>
+                ))}
+              </ul>
+              <p style={{ margin: "16px 0 0", color: homeTheme.text, fontWeight: 900 }}>Don’t see your ATS?</p>
+              <p style={{ margin: "4px 0 0", color: homeTheme.muted, fontWeight: 800 }}>We’re adding support based on employer demand.</p>
               <p style={{ margin: "14px 0 0", color: homeTheme.muted, fontWeight: 800 }}>We only access jobs available on your public careers page.</p>
             </aside>
           </div>
@@ -1386,7 +1396,7 @@ export default function AtsIntegrationPage() {
           </div>
           {isInitialConnectionsLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading connected job sources...</p> : null}
           {connectionsLoading && connections.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing connected job sources...</p> : null}
-          {connectionsMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{connectionsMessage}</p> : null}
+          {connectionsMessage ? <div role="alert" style={{ marginTop: 14, padding: 14, border: "1px solid #e8cf92", borderRadius: 12, background: "#fffcf3", color: homeTheme.text, fontWeight: 800 }}>{connectionsMessage}</div> : null}
           {!isInitialConnectionsLoad && !connectionsMessage && connections.length === 0 ? (
             <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No connected job sources yet. Import jobs from a careers page to create a connection.</p>
           ) : null}
@@ -1398,18 +1408,19 @@ export default function AtsIntegrationPage() {
                 const syncResult = syncResults[connection.id];
                 return (
                   <article key={connection.id} style={{ padding: 18, border: `1px solid ${homeTheme.border}`, borderRadius: 14, background: homeTheme.bg }}>
-                    <h3 style={{ margin: 0, color: homeTheme.text }}>{connection.sourceLabel}</h3>
-                    <p style={{ margin: "8px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}>Careers URL: {connection.inputUrl}</p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }} aria-label={`Connection status: ${getStatusLabel(connection)}. Sync state: ${connection.enabled ? "Enabled" : "Disabled"}.`}>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }} aria-label={`Connection status: ${getStatusLabel(connection)}. Sync state: ${connection.enabled ? "Enabled" : "Disabled"}.`}>
                       <span style={statusBadgeStyle(getConnectionStatusTone(connection))}>{getStatusLabel(connection)}</span>
                       <span style={statusBadgeStyle(connection.enabled ? "success" : "neutral")}>{connection.enabled ? "Sync Enabled" : "Sync Disabled"}</span>
                     </div>
+                    <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>{connection.sourceLabel}</p>
+                    <h3 style={{ margin: "6px 0 0", color: homeTheme.text }}>Connected Job Source</h3>
+                    <p style={{ margin: "10px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}><strong style={{ color: homeTheme.text }}>Careers URL:</strong> {connection.inputUrl}</p>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 14 }}>
                       {[
-                        ["Imported jobs", String(connection.importedJobCount)],
-                        ["Last successful sync", formatDashboardTimestamp(connection.lastSuccessfulSyncAt)],
-                        ...(connection.lastFailedSyncAt ? [["Last failed sync", formatDashboardTimestamp(connection.lastFailedSyncAt)]] : []),
-                        ...(connection.consecutiveFailureCount > 0 ? [["Consecutive failures", String(connection.consecutiveFailureCount)]] : []),
+                        ["Imported Jobs", String(connection.importedJobCount)],
+                        ["Last Successful Sync", formatDashboardTimestamp(connection.lastSuccessfulSyncAt)],
+                        ["Last Failed Sync", formatDashboardTimestamp(connection.lastFailedSyncAt)],
+                        ["Consecutive Failures", String(connection.consecutiveFailureCount)],
                       ].map(([label, value]) => (
                         <div key={label} style={{ padding: 12, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#ffffff" }}>
                           <p style={{ margin: 0, color: homeTheme.muted, fontSize: 13, fontWeight: 800 }}>{label}</p>
@@ -1462,7 +1473,7 @@ export default function AtsIntegrationPage() {
           </div>
           {isInitialHistoryLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading sync history...</p> : null}
           {syncHistoryLoading && syncHistory.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing sync history...</p> : null}
-          {syncHistoryMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{syncHistoryMessage}</p> : null}
+          {syncHistoryMessage ? <div role="alert" style={{ marginTop: 14, padding: 14, border: "1px solid #e8cf92", borderRadius: 12, background: "#fffcf3", color: homeTheme.text, fontWeight: 800 }}>{syncHistoryMessage}</div> : null}
           {!isInitialHistoryLoad && !syncHistoryMessage && syncHistory.length === 0 ? <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No sync history yet.</p> : null}
           {syncHistory.length > 0 ? (
             <div style={{ overflowX: "auto", marginTop: 16 }}>
@@ -1478,7 +1489,7 @@ export default function AtsIntegrationPage() {
                     <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.reopened}</td>
                     <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.needsReview}</td>
                     <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.failed}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.warningMessage ?? "—"}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}`, color: homeTheme.muted, fontSize: 14 }}>{row.warningMessage ?? "—"}</td>
                   </tr>
                 ))}</tbody>
               </table>
@@ -1496,7 +1507,7 @@ export default function AtsIntegrationPage() {
           {importResult ? (
             <p style={{ marginBottom: 0, color: homeTheme.muted, fontWeight: 800 }}>Latest import: {importResult.summary.imported} imported, {importResult.summary.updated} updated, {importResult.summary.skipped} skipped, and {importResult.summary.failed} failed.</p>
           ) : (
-            <p style={{ marginBottom: 0, color: homeTheme.muted, fontWeight: 800 }}>No jobs have been imported yet.</p>
+            <div style={{ marginTop: 8, padding: 16, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: homeTheme.bg }}><p style={{ margin: 0, color: homeTheme.text, fontWeight: 900 }}>No jobs imported yet.</p><p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Import jobs from Greenhouse or Workday above to begin automatic synchronization.</p></div>
           )}
         </section>
 
