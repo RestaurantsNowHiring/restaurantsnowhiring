@@ -72,10 +72,20 @@ type RequestOptions = {
   headers?: Record<string, string>;
 };
 
+type WorkdayPaginationTotalDiagnostic = {
+  firstReportedTotal: number;
+  minimumReportedTotal: number;
+  maximumReportedTotal: number;
+  latestReportedTotal: number;
+  pagesRequested: number;
+  rawRowsRetrieved: number;
+};
+
 class WorkdayParserError extends Error {
   constructor(
     readonly failureCode: WorkdayFailureCode,
     message: string,
+    readonly paginationTotalDiagnostic?: WorkdayPaginationTotalDiagnostic,
   ) {
     super(message);
     this.name = "WorkdayParserError";
@@ -85,8 +95,13 @@ class WorkdayParserError extends Error {
 function workdayError(
   failureCode: WorkdayFailureCode,
   message: string,
+  paginationTotalDiagnostic?: WorkdayPaginationTotalDiagnostic,
 ): WorkdayParserError {
-  return new WorkdayParserError(failureCode, message);
+  return new WorkdayParserError(
+    failureCode,
+    message,
+    paginationTotalDiagnostic,
+  );
 }
 
 function classifyHttpFailureStatus(status: number): WorkdayFailureCode {
@@ -110,13 +125,28 @@ function logWorkdayParsingFailure(
   error: unknown,
 ): void {
   const failureCode = classifyWorkdayFailure(error);
+  const loggedFailureCode =
+    stage === "detail" && failureCode !== "overall_timeout"
+      ? "detail_failed"
+      : failureCode;
+  if (
+    stage === "listing" &&
+    loggedFailureCode === "pagination_total_unstable" &&
+    error instanceof WorkdayParserError &&
+    error.paginationTotalDiagnostic
+  ) {
+    console.error({
+      provider: "workday",
+      stage,
+      failureCode: loggedFailureCode,
+      ...error.paginationTotalDiagnostic,
+    });
+    return;
+  }
   console.error({
     provider: "workday",
     stage,
-    failureCode:
-      stage === "detail" && failureCode !== "overall_timeout"
-        ? "detail_failed"
-        : failureCode,
+    failureCode: loggedFailureCode,
   });
 }
 
@@ -672,6 +702,14 @@ async function fetchCompleteListings(
         throw workdayError(
           "pagination_total_unstable",
           "Workday jobs pagination total changed beyond the safe drift limit.",
+          {
+            firstReportedTotal,
+            minimumReportedTotal,
+            maximumReportedTotal,
+            latestReportedTotal,
+            pagesRequested: page + 1,
+            rawRowsRetrieved: rawRowsRetrieved + jobs.length,
+          },
         );
     }
     if (
