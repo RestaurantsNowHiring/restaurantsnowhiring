@@ -101,3 +101,75 @@ test("stale responses cannot overwrite newer state", () => {
   assert.match(source, /connectionsRequestRef\.current\.sequence !== requestSequence/);
   assert.match(source, /syncHistoryRequestRef\.current\.sequence !== requestSequence/);
 });
+
+
+test("supported ATS platform guidance is honest and limited to available providers", () => {
+  assert.match(source, /Supported ATS Platforms/);
+  assert.match(source, /Available Today/);
+  assert.match(source, /Greenhouse/);
+  assert.match(source, /Workday/);
+  assert.match(source, /More ATS integrations are coming soon\./);
+  assert.match(source, /We only access jobs available on your public careers page\./);
+  assert.doesNotMatch(source, /All ATS platforms supported|Universal ATS integration|credentials (are )?(stored|accessed|secure)/i);
+});
+
+test("Greenhouse and Workday are the only ATS platforms presented as available today", () => {
+  const availableTodayStart = source.indexOf('aria-label="ATS platforms available today"');
+  assert.notEqual(availableTodayStart, -1, "available today list should exist");
+  const availableTodayEnd = source.indexOf("More Integrations Coming Soon", availableTodayStart);
+  assert.notEqual(availableTodayEnd, -1, "available today list should end before coming soon copy");
+  const availableTodayBlock = source.slice(availableTodayStart, availableTodayEnd);
+  assert.match(availableTodayBlock, /\{\['Greenhouse', 'Workday'\]\.map/);
+  assert.doesNotMatch(availableTodayBlock, /Lever|iCIMS|UKG|Taleo|JazzHR|BambooHR/i);
+});
+
+test("connection guidance renders before management, history, and imported job sections", () => {
+  const connectIndex = source.indexOf("Connect Your Applicant Tracking System (ATS)");
+  const supportedIndex = source.indexOf("Supported ATS Platforms");
+  const connectedIndex = source.indexOf("Connected Job Sources");
+  const historyIndex = source.indexOf("Sync History");
+  const importedIndex = source.indexOf("Imported Jobs");
+  assert.ok(connectIndex > -1, "connection form heading should be present");
+  assert.ok(supportedIndex > connectIndex, "supported ATS card should sit beside/after the form");
+  assert.ok(connectedIndex > supportedIndex, "connected sources should follow connection guidance");
+  assert.ok(historyIndex > connectedIndex, "sync history should follow connected sources");
+  assert.ok(importedIndex > historyIndex, "imported jobs should remain after sync history");
+});
+
+test("preview, review, and import result flows remain near the connection area", () => {
+  const connectIndex = source.indexOf("Connect Your Applicant Tracking System (ATS)");
+  const jobsFoundIndex = source.indexOf("Jobs Found");
+  const reviewIndex = source.indexOf("Review Selected Jobs");
+  const importCompleteIndex = source.indexOf("Import complete");
+  const connectedIndex = source.indexOf("Connected Job Sources");
+  assert.ok(jobsFoundIndex > connectIndex && jobsFoundIndex < connectedIndex);
+  assert.ok(reviewIndex > jobsFoundIndex && reviewIndex < connectedIndex);
+  assert.ok(importCompleteIndex > reviewIndex && importCompleteIndex < connectedIndex);
+});
+
+test("connection form keeps existing request flow while updating ATS-specific copy", () => {
+  assert.match(source, /onSubmit=\{findJobs\}/);
+  assert.match(source, /Careers Page URL/);
+  assert.match(source, /Find My Jobs/);
+  assert.match(source, /isFindingJobs \? "Finding Jobs\.\.\." : "Find My Jobs"/);
+  assert.match(source, /Paste the URL of your ATS careers page to find and import your open jobs\./);
+  assert.match(source, /https:\/\/company\.greenhouse\.io\/\.\.\. or https:\/\/company\.wd1\.myworkdayjobs\.com\/\.\.\./);
+  assert.match(source, /fetch\("\/api\/employer\/ats\/preview"/);
+});
+
+test("connected sources, sync history, and imported jobs functionality remains present", () => {
+  for (const text of ["Sync Now", "Disable Sync", "Enable Sync", "Disconnect", "Change Careers Page URL", "Update URL", "Connected Job Sources", "Sync History", "Imported Jobs"]) {
+    assert.match(source, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  for (const heading of ["Date", "Status", "Duration", "Jobs Updated", "Jobs Closed", "Jobs Reopened", "Needs Review", "Failed", "Warning"]) {
+    assert.match(source, new RegExp(`"${heading}"`));
+  }
+});
+
+test("responsive ATS support layout uses existing classes and no new dependencies", () => {
+  assert.match(source, /rn-ats-connect-grid/);
+  assert.match(source, /gridTemplateColumns: "minmax\(0, 1\.7fr\) minmax\(280px, 1fr\)"/);
+  assert.match(source, /@media \(max-width: 900px\)/);
+  assert.match(source, /homeCardStyle|homeInputStyle|homePrimaryButton|homeSecondaryButton|homeTheme/);
+  assert.doesNotMatch(source, /from ["'](?:lucide-react|react-icons|@heroicons\/react|@fortawesome\/)/);
+});

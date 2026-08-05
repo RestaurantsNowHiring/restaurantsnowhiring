@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type React from "react";
 import type { FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../../lib/supabase";
@@ -206,6 +207,38 @@ function employerAccountHeaders(token: string) {
       ? { "X-Employer-Account-Id": selectedEmployerAccountId }
       : {}),
   };
+}
+
+function statusBadgeStyle(tone: "success" | "warning" | "neutral"): React.CSSProperties {
+  const toneStyles = {
+    success: { borderColor: "rgba(53, 128, 110, 0.28)", backgroundColor: "rgba(53, 128, 110, 0.10)", color: homeTheme.green },
+    warning: { borderColor: "#e8cf92", backgroundColor: "#fffcf3", color: homeTheme.text },
+    neutral: { borderColor: homeTheme.border, backgroundColor: "#ffffff", color: homeTheme.muted },
+  }[tone];
+
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    border: `1px solid ${toneStyles.borderColor}`,
+    borderRadius: 999,
+    padding: "5px 10px",
+    backgroundColor: toneStyles.backgroundColor,
+    color: toneStyles.color,
+    fontSize: 13,
+    fontWeight: 900,
+    whiteSpace: "nowrap",
+  };
+}
+
+function getConnectionStatusTone(connection: AtsConnection): "success" | "warning" | "neutral" {
+  if (!connection.enabled || connection.connectionStatus === "disconnected") return "neutral";
+  return connection.connectionStatus === "active" ? "success" : "warning";
+}
+
+function getHistoryStatusTone(status: string): "success" | "warning" | "neutral" {
+  if (status === "completed") return "success";
+  if (status.includes("warning") || status.includes("failed") || status.includes("error")) return "warning";
+  return "neutral";
 }
 
 export default function AtsIntegrationPage() {
@@ -861,7 +894,7 @@ export default function AtsIntegrationPage() {
                 Import Jobs
               </h1>
               <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 700, maxWidth: 780 }}>
-                Import jobs directly from your public careers page. Paste your careers page below and we’ll find your open jobs automatically.
+                Automatically import jobs from your Applicant Tracking System (ATS). Connect your careers page once and we’ll help keep your job postings up to date.
               </p>
             </div>
             {isImporting ? (
@@ -876,125 +909,23 @@ export default function AtsIntegrationPage() {
           </div>
         </section>
 
-        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
-                Connected Job Sources
+        {!preparedResult ? <section aria-labelledby="ats-connect-heading" style={{ marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(280px, 1fr)", gap: 16, alignItems: "stretch" }} className="rn-ats-connect-grid">
+            <div style={homeCardStyle}>
+              <h2 id="ats-connect-heading" style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
+                Connect Your Applicant Tracking System (ATS)
               </h2>
-              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>
-                Review your saved careers-page connections and start a fresh sync when needed.
+              <p style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
+                Paste the URL of your ATS careers page to find and import your open jobs.
               </p>
-            </div>
-          </div>
-          {isInitialConnectionsLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading connected job sources...</p> : null}
-          {connectionsLoading && connections.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing connected job sources...</p> : null}
-          {connectionsMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{connectionsMessage}</p> : null}
-          {!isInitialConnectionsLoad && !connectionsMessage && connections.length === 0 ? (
-            <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No connected job sources yet. Import jobs from a careers page to create a connection.</p>
-          ) : null}
-          {connections.length > 0 ? (
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginTop: 16 }}>
-              {connections.map((connection) => {
-                const isSyncing = syncingConnectionIds.has(connection.id);
-                const canSync = connection.enabled && connection.connectionStatus !== "disconnected";
-                const syncResult = syncResults[connection.id];
-                return (
-                  <article key={connection.id} style={{ padding: 18, border: `1px solid ${homeTheme.border}`, borderRadius: 14, background: homeTheme.bg }}>
-                    <h3 style={{ margin: 0, color: homeTheme.text }}>{connection.sourceLabel}</h3>
-                    <p style={{ margin: "8px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}>Careers URL: {connection.inputUrl}</p>
-                    <p style={{ margin: "12px 0 0", color: homeTheme.text, fontWeight: 900 }}>Status: {getStatusLabel(connection)}</p>
-                    <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>State: {connection.enabled ? "Enabled" : "Disabled"}</p>
-                    <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Last successful sync: {formatDashboardTimestamp(connection.lastSuccessfulSyncAt)}</p>
-                    {connection.lastFailedSyncAt ? <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Last failed sync: {formatDashboardTimestamp(connection.lastFailedSyncAt)}</p> : null}
-                    {connection.consecutiveFailureCount > 0 ? <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Consecutive sync failures: {connection.consecutiveFailureCount}</p> : null}
-                    <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Imported jobs: {connection.importedJobCount}</p>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
-                      <button type="button" className="rn-btn-primary" style={{ ...homePrimaryButton, ...(!canSync || isSyncing ? { opacity: 0.55, cursor: "not-allowed" } : {}) }} disabled={!canSync || isSyncing} onClick={() => void syncConnection(connection.id)}>
-                        {isSyncing ? "Syncing..." : "Sync Now"}
-                      </button>
-                      {connection.enabled ? (
-                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "disable")}>Disable Sync</button>
-                      ) : (
-                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "enable")}>Enable Sync</button>
-                      )}
-                      {canManageAtsConnectionSettings ? (
-                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
-                      ) : null}
-                    </div>
-                    {canManageAtsConnectionSettings ? (
-                      <div style={{ marginTop: 12 }}>
-                        <label style={{ color: homeTheme.text, fontWeight: 900 }}>
-                          Change Careers Page URL
-                          <input type="url" value={editingSourceById[connection.id] ?? ""} onChange={(event) => setEditingSourceById((current) => ({ ...current, [connection.id]: event.target.value }))} placeholder={connection.inputUrl} style={{ ...homeInputStyle, marginTop: 6 }} disabled={actingConnectionIds.has(connection.id)} />
-                        </label>
-                        <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, marginTop: 8 }} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? "").trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update URL</button>
-                      </div>
-                    ) : null}
-                    {syncResult ? (
-                      <div role="status" aria-live="polite" style={{ marginTop: 12, color: homeTheme.text, fontWeight: 800 }}>
-                        <p style={{ margin: 0 }}>{syncResult.message}</p>
-                        {syncResult.counts.length > 0 ? <p style={{ margin: "6px 0 0" }}>{syncResult.counts.join(", ")}</p> : null}
-                        {syncResult.warning ? <p style={{ margin: "6px 0 0" }}>{syncResult.warning}</p> : null}
-                      </div>
-                    ) : null}
-                  </article>
-                );
-              })}
-            </div>
-          ) : null}
-        </section>
-
-        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
-            <div>
-              <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Sync History</h2>
-              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Newest ATS synchronization runs for your connected job source.</p>
-            </div>
-          </div>
-          {isInitialHistoryLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading sync history...</p> : null}
-          {syncHistoryLoading && syncHistory.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing sync history...</p> : null}
-          {syncHistoryMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{syncHistoryMessage}</p> : null}
-          {!isInitialHistoryLoad && !syncHistoryMessage && syncHistory.length === 0 ? <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No sync history yet.</p> : null}
-          {syncHistory.length > 0 ? (
-            <div style={{ overflowX: "auto", marginTop: 16 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", color: homeTheme.text }}>
-                <thead><tr>{["Date", "Status", "Duration", "Jobs Updated", "Jobs Closed", "Jobs Reopened", "Needs Review", "Failed", "Warning"].map((heading) => <th key={heading} style={{ textAlign: "left", borderBottom: `1px solid ${homeTheme.border}`, padding: "10px 8px", whiteSpace: "nowrap" }}>{heading}</th>)}</tr></thead>
-                <tbody>{syncHistory.map((row) => (
-                  <tr key={row.id}>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}`, whiteSpace: "nowrap" }}>{formatDashboardTimestamp(row.startedAt)}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}`, fontWeight: 900 }}>{row.status.replaceAll("_", " ")}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{formatDuration(row.startedAt, row.completedAt)}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.updated}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.closed}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.reopened}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.needsReview}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.failed}</td>
-                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.warningMessage ?? "—"}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-              <nav aria-label="Sync history pagination" style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16 }}>
-                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, connections[0]?.id ?? null, Math.max(1, syncHistoryPage - 1)); }} disabled={syncHistoryPage === 1 || syncHistoryLoading}>Previous</button>
-                <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Page {syncHistoryPage} of {syncHistoryTotalPages}</p>
-                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, connections[0]?.id ?? null, Math.min(syncHistoryTotalPages, syncHistoryPage + 1)); }} disabled={syncHistoryPage >= syncHistoryTotalPages || syncHistoryLoading}>Next</button>
-              </nav>
-            </div>
-          ) : null}
-        </section>
-
-        {!preparedResult ? <section style={{ ...homeCardStyle, marginBottom: 16 }}>
-          <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
-            Connect Your Careers Page
-          </h2>
-          <form className="rn-ats-import-form" onSubmit={findJobs}>
+              <form className="rn-ats-import-form" onSubmit={findJobs}>
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
               Careers Page URL
               <input
                 type="url"
                 value={careersPageUrl}
                 onChange={(event) => setCareersPageUrl(event.target.value)}
-                placeholder="https://company.com/careers"
+                placeholder="https://company.greenhouse.io/... or https://company.wd1.myworkdayjobs.com/..."
                 style={{ ...homeInputStyle, marginTop: 6 }}
                 aria-describedby="ats-import-note"
                 disabled={isFindingJobs}
@@ -1020,9 +951,28 @@ export default function AtsIntegrationPage() {
               role={resultMessage ? "status" : undefined}
               style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}
             >
-              {resultMessage ?? "We’ll search your public careers page for open jobs."}
+              {resultMessage ?? "Paste the URL of your ATS careers page to find and import your open jobs."}
             </p>
-          </form>
+              </form>
+            </div>
+            <aside aria-labelledby="supported-ats-heading" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+              <h2 id="supported-ats-heading" style={{ marginTop: 0, marginBottom: 12, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Supported ATS Platforms</h2>
+              <p style={{ margin: "0 0 10px", color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>Available Today</p>
+              <ul aria-label="ATS platforms available today" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
+                {['Greenhouse', 'Workday'].map((provider) => (
+                  <li key={provider} style={{ display: "flex", alignItems: "center", gap: 8, color: homeTheme.text, fontWeight: 900 }}>
+                    <span aria-hidden="true" style={{ color: homeTheme.green, fontWeight: 900 }}>✓</span>
+                    <span>{provider}</span>
+                    <span style={statusBadgeStyle("success")}>Supported</span>
+                  </li>
+                ))}
+              </ul>
+              <h3 style={{ margin: "18px 0 6px", color: homeTheme.text, fontSize: 18 }}>More Integrations Coming Soon</h3>
+              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>More ATS integrations are coming soon.</p>
+              <p style={{ margin: "14px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Don’t see your ATS? We’re adding support based on employer demand.</p>
+              <p style={{ margin: "14px 0 0", color: homeTheme.muted, fontWeight: 800 }}>We only access jobs available on your public careers page.</p>
+            </aside>
+          </div>
         </section> : null}
 
         {!preparedResult && previewJobs && previewJobs.length > 0 ? (
@@ -1389,7 +1339,7 @@ export default function AtsIntegrationPage() {
         ) : null}
 
         {importResult ? (
-          <section aria-labelledby="import-result-heading" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+          <section aria-labelledby="import-result-heading" style={{ ...homeCardStyle, marginBottom: 16, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
             <h2 id="import-result-heading" style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
               Import complete
             </h2>
@@ -1421,12 +1371,142 @@ export default function AtsIntegrationPage() {
               View My Jobs
             </Link>
           </section>
-        ) : (
-          <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
-            <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Imported Jobs</h2>
+        ) : null}
+
+        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
+                Connected Job Sources
+              </h2>
+              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>
+                Review your saved careers-page connections and start a fresh sync when needed.
+              </p>
+            </div>
+          </div>
+          {isInitialConnectionsLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading connected job sources...</p> : null}
+          {connectionsLoading && connections.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing connected job sources...</p> : null}
+          {connectionsMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{connectionsMessage}</p> : null}
+          {!isInitialConnectionsLoad && !connectionsMessage && connections.length === 0 ? (
+            <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No connected job sources yet. Import jobs from a careers page to create a connection.</p>
+          ) : null}
+          {connections.length > 0 ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginTop: 16 }}>
+              {connections.map((connection) => {
+                const isSyncing = syncingConnectionIds.has(connection.id);
+                const canSync = connection.enabled && connection.connectionStatus !== "disconnected";
+                const syncResult = syncResults[connection.id];
+                return (
+                  <article key={connection.id} style={{ padding: 18, border: `1px solid ${homeTheme.border}`, borderRadius: 14, background: homeTheme.bg }}>
+                    <h3 style={{ margin: 0, color: homeTheme.text }}>{connection.sourceLabel}</h3>
+                    <p style={{ margin: "8px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}>Careers URL: {connection.inputUrl}</p>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 12 }} aria-label={`Connection status: ${getStatusLabel(connection)}. Sync state: ${connection.enabled ? "Enabled" : "Disabled"}.`}>
+                      <span style={statusBadgeStyle(getConnectionStatusTone(connection))}>{getStatusLabel(connection)}</span>
+                      <span style={statusBadgeStyle(connection.enabled ? "success" : "neutral")}>{connection.enabled ? "Sync Enabled" : "Sync Disabled"}</span>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 14 }}>
+                      {[
+                        ["Imported jobs", String(connection.importedJobCount)],
+                        ["Last successful sync", formatDashboardTimestamp(connection.lastSuccessfulSyncAt)],
+                        ...(connection.lastFailedSyncAt ? [["Last failed sync", formatDashboardTimestamp(connection.lastFailedSyncAt)]] : []),
+                        ...(connection.consecutiveFailureCount > 0 ? [["Consecutive failures", String(connection.consecutiveFailureCount)]] : []),
+                      ].map(([label, value]) => (
+                        <div key={label} style={{ padding: 12, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: "#ffffff" }}>
+                          <p style={{ margin: 0, color: homeTheme.muted, fontSize: 13, fontWeight: 800 }}>{label}</p>
+                          <p style={{ margin: "4px 0 0", color: homeTheme.text, fontWeight: 900 }}>{value}</p>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+                      <button type="button" className="rn-btn-primary" style={{ ...homePrimaryButton, ...(!canSync || isSyncing ? { opacity: 0.55, cursor: "not-allowed" } : {}) }} disabled={!canSync || isSyncing} onClick={() => void syncConnection(connection.id)}>
+                        {isSyncing ? "Syncing..." : "Sync Now"}
+                      </button>
+                      {connection.enabled ? (
+                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "disable")}>Disable Sync</button>
+                      ) : (
+                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "enable")}>Enable Sync</button>
+                      )}
+                      {canManageAtsConnectionSettings ? (
+                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
+                      ) : null}
+                    </div>
+                    {canManageAtsConnectionSettings ? (
+                      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${homeTheme.border}` }}>
+                        <label style={{ color: homeTheme.text, fontWeight: 900 }}>
+                          Change Careers Page URL
+                          <input type="url" value={editingSourceById[connection.id] ?? ""} onChange={(event) => setEditingSourceById((current) => ({ ...current, [connection.id]: event.target.value }))} placeholder={connection.inputUrl} style={{ ...homeInputStyle, marginTop: 6 }} disabled={actingConnectionIds.has(connection.id)} />
+                        </label>
+                        <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, marginTop: 8 }} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? "").trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update URL</button>
+                      </div>
+                    ) : null}
+                    {syncResult ? (
+                      <div role="status" aria-live="polite" style={{ marginTop: 12, color: homeTheme.text, fontWeight: 800 }}>
+                        <p style={{ margin: 0 }}>{syncResult.message}</p>
+                        {syncResult.counts.length > 0 ? <p style={{ margin: "6px 0 0" }}>{syncResult.counts.join(", ")}</p> : null}
+                        {syncResult.warning ? <p style={{ margin: "6px 0 0" }}>{syncResult.warning}</p> : null}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+
+        <section style={{ ...homeCardStyle, marginBottom: 16 }}>
+          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+            <div>
+              <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Sync History</h2>
+              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Newest ATS synchronization runs for your connected job source.</p>
+            </div>
+          </div>
+          {isInitialHistoryLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading sync history...</p> : null}
+          {syncHistoryLoading && syncHistory.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing sync history...</p> : null}
+          {syncHistoryMessage ? <p role="alert" style={{ color: "#8a1f1f", fontWeight: 900 }}>{syncHistoryMessage}</p> : null}
+          {!isInitialHistoryLoad && !syncHistoryMessage && syncHistory.length === 0 ? <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No sync history yet.</p> : null}
+          {syncHistory.length > 0 ? (
+            <div style={{ overflowX: "auto", marginTop: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", color: homeTheme.text }}>
+                <thead><tr>{["Date", "Status", "Duration", "Jobs Updated", "Jobs Closed", "Jobs Reopened", "Needs Review", "Failed", "Warning"].map((heading) => <th key={heading} style={{ textAlign: "left", borderBottom: `1px solid ${homeTheme.border}`, padding: "10px 8px", whiteSpace: "nowrap" }}>{heading}</th>)}</tr></thead>
+                <tbody>{syncHistory.map((row) => (
+                  <tr key={row.id}>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}`, whiteSpace: "nowrap" }}>{formatDashboardTimestamp(row.startedAt)}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}><span style={statusBadgeStyle(getHistoryStatusTone(row.status))}>{row.status.replaceAll("_", " ")}</span></td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{formatDuration(row.startedAt, row.completedAt)}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.updated}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.closed}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.reopened}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.needsReview}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.failed}</td>
+                    <td style={{ padding: "10px 8px", borderBottom: `1px solid ${homeTheme.border}` }}>{row.warningMessage ?? "—"}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <nav aria-label="Sync history pagination" style={{ display: "flex", justifyContent: "space-between", gap: 12, marginTop: 16 }}>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, connections[0]?.id ?? null, Math.max(1, syncHistoryPage - 1)); }} disabled={syncHistoryPage === 1 || syncHistoryLoading}>Previous</button>
+                <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Page {syncHistoryPage} of {syncHistoryTotalPages}</p>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={async () => { const { data } = await supabase.auth.getSession(); if (data.session?.access_token) await loadSyncHistory(data.session.access_token, connections[0]?.id ?? null, Math.min(syncHistoryTotalPages, syncHistoryPage + 1)); }} disabled={syncHistoryPage >= syncHistoryTotalPages || syncHistoryLoading}>Next</button>
+              </nav>
+            </div>
+          ) : null}
+        </section>
+
+        <section style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
+          <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Imported Jobs</h2>
+          {importResult ? (
+            <p style={{ marginBottom: 0, color: homeTheme.muted, fontWeight: 800 }}>Latest import: {importResult.summary.imported} imported, {importResult.summary.updated} updated, {importResult.summary.skipped} skipped, and {importResult.summary.failed} failed.</p>
+          ) : (
             <p style={{ marginBottom: 0, color: homeTheme.muted, fontWeight: 800 }}>No jobs have been imported yet.</p>
-          </section>
-        )}
+          )}
+        </section>
+
+        <style jsx>{`
+          @media (max-width: 900px) {
+            .rn-ats-connect-grid {
+              grid-template-columns: 1fr !important;
+            }
+          }
+        `}</style>
       </div>
     </main>
   );
