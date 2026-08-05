@@ -10,6 +10,7 @@ import type {
 export const WORKDAY_PAGE_SIZE = 20;
 export const WORKDAY_DETAIL_CONCURRENCY = 4;
 export const WORKDAY_MAX_JOBS = 5_000;
+export const WORKDAY_MAX_TOTAL_DRIFT = 100;
 export const WORKDAY_MAX_PAGES = Math.ceil(
   WORKDAY_MAX_JOBS / WORKDAY_PAGE_SIZE,
 );
@@ -49,7 +50,7 @@ export type WorkdayFailureCode =
   | "malformed_listing"
   | "reported_total_too_large"
   | "invalid_external_path"
-  | "pagination_total_changed"
+  | "pagination_total_unstable"
   | "pagination_incomplete"
   | "pagination_non_progressing"
   | "pagination_limit_exceeded"
@@ -646,7 +647,11 @@ async function fetchCompleteListings(
 ): Promise<Record<string, unknown>[]> {
   const seen = new Set<string>();
   const listings: Record<string, unknown>[] = [];
-  let expectedTotal: number | undefined;
+  let firstReportedTotal: number | undefined;
+  let minimumReportedTotal: number | undefined;
+  let maximumReportedTotal: number | undefined;
+  let latestReportedTotal: number | undefined;
+  let rawRowsRetrieved = 0;
   for (
     let page = 0, offset = 0;
     page < WORKDAY_MAX_PAGES;
@@ -659,22 +664,26 @@ async function fetchCompleteListings(
           "reported_total_too_large",
           "Workday jobs total exceeds the safe import limit.",
         );
-      if (expectedTotal !== undefined && total !== expectedTotal)
+      firstReportedTotal ??= total;
+      minimumReportedTotal = Math.min(minimumReportedTotal ?? total, total);
+      maximumReportedTotal = Math.max(maximumReportedTotal ?? total, total);
+      latestReportedTotal = total;
+      if (maximumReportedTotal - minimumReportedTotal > WORKDAY_MAX_TOTAL_DRIFT)
         throw workdayError(
-          "pagination_total_changed",
-          "Workday jobs pagination total changed during retrieval.",
+          "pagination_total_unstable",
+          "Workday jobs pagination total changed beyond the safe drift limit.",
         );
-      expectedTotal = total;
     }
     if (
-      expectedTotal !== undefined &&
-      offset >= expectedTotal &&
+      latestReportedTotal !== undefined &&
+      offset >= latestReportedTotal &&
       jobs.length > 0
     )
       throw workdayError(
         "pagination_non_progressing",
         "Workday jobs pagination did not progress consistently.",
       );
+    rawRowsRetrieved += jobs.length;
     for (const job of jobs) {
       const identity = getListingIdentity(job);
       if (!identity || seen.has(identity)) continue;
@@ -687,15 +696,19 @@ async function fetchCompleteListings(
         );
     }
     if (jobs.length < WORKDAY_PAGE_SIZE) {
-      if (expectedTotal !== undefined && offset + jobs.length < expectedTotal)
+      void firstReportedTotal;
+      if (
+        latestReportedTotal !== undefined &&
+        latestReportedTotal > rawRowsRetrieved &&
+        (rawRowsRetrieved === 0 ||
+          latestReportedTotal - rawRowsRetrieved > WORKDAY_MAX_TOTAL_DRIFT)
+      )
         throw workdayError(
           "pagination_incomplete",
           "Workday jobs listing ended before the reported total was retrieved.",
         );
       return listings;
     }
-    if (expectedTotal !== undefined && offset + jobs.length >= expectedTotal)
-      return listings;
   }
   throw workdayError(
     "pagination_limit_exceeded",
