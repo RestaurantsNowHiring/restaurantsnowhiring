@@ -31,7 +31,15 @@ type WorkdaySource = {
 };
 
 export type WorkdayFailureCode =
-  | "request_failed"
+  | "http_400"
+  | "http_401"
+  | "http_403"
+  | "http_404"
+  | "http_429"
+  | "http_5xx"
+  | "http_other"
+  | "network_failure"
+  | "malformed_json"
   | "request_timeout"
   | "non_json_response"
   | "response_too_large"
@@ -76,6 +84,16 @@ function workdayError(
   message: string,
 ): WorkdayParserError {
   return new WorkdayParserError(failureCode, message);
+}
+
+function classifyHttpFailureStatus(status: number): WorkdayFailureCode {
+  if (status === 400) return "http_400";
+  if (status === 401) return "http_401";
+  if (status === 403) return "http_403";
+  if (status === 404) return "http_404";
+  if (status === 429) return "http_429";
+  if (status >= 500 && status < 600) return "http_5xx";
+  return "http_other";
 }
 
 function classifyWorkdayFailure(error: unknown): WorkdayFailureCode {
@@ -381,16 +399,24 @@ async function fetchJsonWithSafety(
       await response.body?.cancel();
       if (redirects >= WORKDAY_MAX_REDIRECTS)
         throw workdayError(
-          "request_failed",
+          "http_other",
           "Workday jobs request redirected too many times.",
         );
       const location = response.headers.get("location");
       if (!location)
         throw workdayError(
-          "request_failed",
+          "http_other",
           "Workday jobs request redirected without a location.",
         );
-      const redirected = new URL(location, url);
+      let redirected: URL;
+      try {
+        redirected = new URL(location, url);
+      } catch {
+        throw workdayError(
+          "http_other",
+          "Workday jobs request redirected to an unsupported host.",
+        );
+      }
       if (
         (redirected.protocol !== "http:" && redirected.protocol !== "https:") ||
         redirected.username ||
@@ -398,7 +424,7 @@ async function fetchJsonWithSafety(
         redirected.hostname.toLowerCase().replace(/\.$/, "") !== source.hostname
       )
         throw workdayError(
-          "request_failed",
+          "http_other",
           "Workday jobs request redirected to an unsupported host.",
         );
       return fetchJsonWithSafety(
@@ -412,13 +438,20 @@ async function fetchJsonWithSafety(
     if (!response.ok) {
       await response.body?.cancel();
       throw workdayError(
-        "request_failed",
-        `Workday jobs request failed with status ${response.status}.`,
+        classifyHttpFailureStatus(response.status),
+        "Workday jobs request failed.",
       );
     }
     validateJsonContentType(response);
     const text = await readBoundedResponseBody(response, state);
-    return JSON.parse(text);
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw workdayError(
+        "malformed_json",
+        "Workday jobs response JSON was malformed.",
+      );
+    }
   } catch (error) {
     if (
       state.deadline.aborted ||
@@ -432,7 +465,7 @@ async function fetchJsonWithSafety(
         "Workday jobs request timed out.",
       );
     if (error instanceof WorkdayParserError) throw error;
-    throw workdayError("request_failed", "Workday jobs request failed.");
+    throw workdayError("network_failure", "Workday jobs request failed.");
   } finally {
     clearTimeout(timeout);
     state.deadline.removeEventListener("abort", abortRequest);
