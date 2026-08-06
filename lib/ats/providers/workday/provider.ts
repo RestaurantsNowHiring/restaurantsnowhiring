@@ -102,7 +102,68 @@ type WorkdayListingTimingDiagnostic = {
   numberOfPages: number;
   numberOfListingRequests: number;
   maximumConcurrentRequestsObserved: number;
+  averageConcurrentRequests: number;
+  underfilledDurationMs: number;
+  fullUtilizationDurationMs: number;
+  singleRequestDurationMs: number;
+  initialPlannedPageCount: number;
+  dynamicallyPlannedPageCount: number;
+  authoritativeTotalExtensionCount: number;
+  sentinelExtensionCount: number;
+  stableDrainCycleCount: number;
+  numberOfRetryAttempts: number;
+  numberOfRetriedRequests: number;
 };
+
+export class WorkdayListingUtilizationTracker {
+  private startedAt: number | undefined;
+  private lastChangedAt: number | undefined;
+  private active = 0;
+  private activeRequestMilliseconds = 0;
+  private underfilledMilliseconds = 0;
+  private fullMilliseconds = 0;
+  private singleMilliseconds = 0;
+
+  constructor(private readonly now: () => number = () => performance.now()) {}
+
+  start(active: number): void {
+    const now = this.now();
+    this.startedAt = now;
+    this.lastChangedAt = now;
+    this.active = active;
+  }
+
+  setActive(active: number): void {
+    if (this.lastChangedAt === undefined) return;
+    this.record(this.now());
+    this.active = active;
+  }
+
+  snapshot() {
+    const now = this.now();
+    this.record(now);
+    const elapsed = Math.max(0, now - (this.startedAt ?? now));
+    return {
+      averageConcurrentRequests:
+        elapsed === 0 ? 0 : this.activeRequestMilliseconds / elapsed,
+      underfilledDurationMs: this.underfilledMilliseconds,
+      fullUtilizationDurationMs: this.fullMilliseconds,
+      singleRequestDurationMs: this.singleMilliseconds,
+    };
+  }
+
+  private record(now: number): void {
+    if (this.lastChangedAt === undefined) return;
+    const duration = Math.max(0, now - this.lastChangedAt);
+    this.activeRequestMilliseconds += duration * this.active;
+    if (this.active > 0 && this.active < WORKDAY_LISTING_CONCURRENCY)
+      this.underfilledMilliseconds += duration;
+    if (this.active === WORKDAY_LISTING_CONCURRENCY)
+      this.fullMilliseconds += duration;
+    if (this.active === 1) this.singleMilliseconds += duration;
+    this.lastChangedAt = now;
+  }
+}
 
 class WorkdayParserError extends Error {
   constructor(
@@ -819,6 +880,15 @@ async function fetchCompleteListings(
   let maximumConcurrentRequestsObserved = 0;
   let idleStartedAt: number | undefined;
   let idleGapDurationMs = 0;
+  const utilization = new WorkdayListingUtilizationTracker();
+  let utilizationStarted = false;
+  let initialPlannedPageCount = 0;
+  let dynamicallyPlannedPageCount = 0;
+  let authoritativeTotalExtensionCount = 0;
+  let sentinelExtensionCount = 0;
+  let stableDrainCycleCount = 0;
+  let numberOfRetryAttempts = 0;
+  const retriedOffsets = new Set<number>();
   type OffsetState =
     | { status: "planned" }
     | { status: "in_flight" }
@@ -860,6 +930,7 @@ async function fetchCompleteListings(
   const buildTimingDiagnostic = (): WorkdayListingTimingDiagnostic => {
     const now = performance.now();
     finishIdleGap(now);
+    const utilizationDiagnostic = utilization.snapshot();
     return {
       firstPageDurationMs: Math.round(firstPageDurationMs),
       pageSchedulingDurationMs: Math.round(pageSchedulingDurationMs),
@@ -868,11 +939,31 @@ async function fetchCompleteListings(
       validationDurationMs: Math.round(validationDurationMs),
       idleGapDurationMs: Math.round(idleGapDurationMs),
       totalListingDurationMs: Math.round(now - listingStartedAt),
+      // Pages are unique offsets that completed successfully; requests are all
+      // HTTP attempts, including transient retries.
       numberOfPages: [...offsets.values()].filter(
         (entry) => entry.status === "completed",
       ).length,
       numberOfListingRequests,
       maximumConcurrentRequestsObserved,
+      averageConcurrentRequests:
+        Math.round(utilizationDiagnostic.averageConcurrentRequests * 100) / 100,
+      underfilledDurationMs: Math.round(
+        utilizationDiagnostic.underfilledDurationMs,
+      ),
+      fullUtilizationDurationMs: Math.round(
+        utilizationDiagnostic.fullUtilizationDurationMs,
+      ),
+      singleRequestDurationMs: Math.round(
+        utilizationDiagnostic.singleRequestDurationMs,
+      ),
+      initialPlannedPageCount,
+      dynamicallyPlannedPageCount,
+      authoritativeTotalExtensionCount,
+      sentinelExtensionCount,
+      stableDrainCycleCount,
+      numberOfRetryAttempts,
+      numberOfRetriedRequests: retriedOffsets.size,
     };
   };
 
@@ -880,6 +971,7 @@ async function fetchCompleteListings(
     if (offsets.has(offset)) return false;
     offsets.set(offset, { status: "planned" });
     planVersion += 1;
+    if (initialPlannedPageCount > 0) dynamicallyPlannedPageCount += 1;
     return true;
   };
   const planThroughTotal = (highestTotal: number): void => {
@@ -904,6 +996,7 @@ async function fetchCompleteListings(
       totals.minimumReportedTotal ?? authoritativeTotal,
       authoritativeTotal,
     );
+    const previousMaximum = totals.maximumReportedTotal;
     totals.maximumReportedTotal = Math.max(
       totals.maximumReportedTotal ?? authoritativeTotal,
       authoritativeTotal,
@@ -918,7 +1011,14 @@ async function fetchCompleteListings(
         "Workday jobs pagination total changed beyond the safe drift limit.",
         buildTotalDiagnostic(totals, offsets.size, rawRowsObserved),
       );
+    const sizeBeforePlanning = offsets.size;
     planThroughTotal(totals.maximumReportedTotal);
+    if (
+      previousMaximum !== undefined &&
+      authoritativeTotal > previousMaximum &&
+      offsets.size > sizeBeforePlanning
+    )
+      authoritativeTotalExtensionCount += 1;
   };
 
   const completePage = (
@@ -952,7 +1052,7 @@ async function fetchCompleteListings(
           "pagination_limit_exceeded",
           "Workday jobs pagination exceeded the safe page limit.",
         );
-      planOffset(following);
+      if (planOffset(following)) sentinelExtensionCount += 1;
     }
     validationDurationMs += performance.now() - validationStartedAt;
   };
@@ -962,6 +1062,7 @@ async function fetchCompleteListings(
     finishIdleGap(requestStartedAt);
     numberOfListingRequests += 1;
     activeRequests += 1;
+    if (utilizationStarted) utilization.setActive(activeRequests);
     maximumConcurrentRequestsObserved = Math.max(
       maximumConcurrentRequestsObserved,
       activeRequests,
@@ -972,6 +1073,7 @@ async function fetchCompleteListings(
       const requestFinishedAt = performance.now();
       cumulativeRequestDurationMs += requestFinishedAt - requestStartedAt;
       activeRequests -= 1;
+      if (utilizationStarted) utilization.setActive(activeRequests);
       if (activeRequests === 0) idleStartedAt = requestFinishedAt;
     }
   };
@@ -983,6 +1085,10 @@ async function fetchCompleteListings(
       attempt <= WORKDAY_LISTING_MAX_ATTEMPTS;
       attempt += 1
     ) {
+      if (attempt > 1) {
+        numberOfRetryAttempts += 1;
+        retriedOffsets.add(offset);
+      }
       if (listingController.signal.aborted)
         throw workdayError(
           "overall_timeout",
@@ -1021,6 +1127,11 @@ async function fetchCompleteListings(
       pageFetchDurationMs += firstPageDurationMs;
     }
 
+    initialPlannedPageCount = offsets.size;
+    dynamicallyPlannedPageCount = 0;
+    utilizationStarted = true;
+    utilization.start(activeRequests);
+
     const claimPlannedOffset = (): number | undefined => {
       const schedulingStartedAt = performance.now();
       const offset = [...offsets.entries()]
@@ -1052,6 +1163,7 @@ async function fetchCompleteListings(
       while (!listingController.signal.aborted) {
         replenish();
         if (active.size === 0) {
+          stableDrainCycleCount += 1;
           if (stableVersion === planVersion) break;
           stableVersion = planVersion;
           continue;
