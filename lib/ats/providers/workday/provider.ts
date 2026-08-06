@@ -74,6 +74,15 @@ export type WorkdayFailureCode =
 
 type WorkdayFailureStage = "listing" | "detail" | "normalization";
 
+type WorkdayPaginationLimitReason =
+  | "authoritative_total_over_limit"
+  | "required_data_offset_over_limit"
+  | "required_sentinel_over_limit"
+  | "full_page_at_hard_limit"
+  | "no_terminal_page_before_limit"
+  | "speculative_planning_error"
+  | "unknown_limit_path";
+
 type FetchState = {
   receivedBytes: number;
   deadline: AbortSignal;
@@ -120,6 +129,7 @@ class WorkdayParserError extends Error {
     message: string,
     readonly paginationTotalDiagnostic?: WorkdayPaginationTotalDiagnostic,
     public listingTimingDiagnostic?: WorkdayListingTimingDiagnostic,
+    readonly paginationLimitReason?: WorkdayPaginationLimitReason,
   ) {
     super(message);
     this.name = "WorkdayParserError";
@@ -130,11 +140,14 @@ function workdayError(
   failureCode: WorkdayFailureCode,
   message: string,
   paginationTotalDiagnostic?: WorkdayPaginationTotalDiagnostic,
+  paginationLimitReason?: WorkdayPaginationLimitReason,
 ): WorkdayParserError {
   return new WorkdayParserError(
     failureCode,
     message,
     paginationTotalDiagnostic,
+    undefined,
+    paginationLimitReason,
   );
 }
 
@@ -196,6 +209,20 @@ function logWorkdayParsingFailure(
     stage === "detail" && failureCode !== "overall_timeout"
       ? "detail_failed"
       : failureCode;
+  if (
+    stage === "listing" &&
+    loggedFailureCode === "pagination_limit_exceeded" &&
+    error instanceof WorkdayParserError
+  ) {
+    console.error({
+      provider: "workday",
+      stage,
+      failureCode: loggedFailureCode,
+      paginationLimitReason:
+        error.paginationLimitReason ?? "unknown_limit_path",
+    });
+    return;
+  }
   if (
     stage === "listing" &&
     loggedFailureCode === "pagination_total_unstable" &&
@@ -924,6 +951,10 @@ async function fetchCompleteListings(
       throw workdayError(
         "pagination_limit_exceeded",
         "Workday jobs pagination exceeded the safe page limit.",
+        undefined,
+        highestTotal % WORKDAY_PAGE_SIZE === 0
+          ? "required_sentinel_over_limit"
+          : "required_data_offset_over_limit",
       );
     for (
       let offset = 0;
@@ -1006,17 +1037,18 @@ async function fetchCompleteListings(
       highestObservedRequiredOffset !== undefined &&
       offset > highestObservedRequiredOffset &&
       page.jobs.length > 0;
+    const completedEarlierShortPage = [...offsets.entries()].some(
+      ([earlierOffset, entry]) =>
+        earlierOffset < offset &&
+        entry.status === "completed" &&
+        entry.page.jobs.length < WORKDAY_PAGE_SIZE,
+    );
     if (
+      !completedEarlierShortPage &&
       (totals.firstReportedTotal === undefined || rowBearingSentinel) &&
       page.jobs.length === WORKDAY_PAGE_SIZE
-    ) {
-      if (offset === getMaximumSafeOffset())
-        throw workdayError(
-          "pagination_limit_exceeded",
-          "Workday jobs pagination exceeded the safe page limit.",
-        );
+    )
       planSentinelLookahead(offset);
-    }
     validationDurationMs += performance.now() - validationStartedAt;
   };
 
@@ -1221,10 +1253,20 @@ async function fetchCompleteListings(
       );
     });
     if (shortPageOffset === undefined)
-      throw workdayError(
-        "pagination_incomplete",
-        "Workday jobs listing ended before completion was established.",
-      );
+      if (
+        pages.get(getMaximumSafeOffset())?.jobs.length === WORKDAY_PAGE_SIZE
+      )
+        throw workdayError(
+          "pagination_limit_exceeded",
+          "Workday jobs pagination exceeded the safe page limit.",
+          undefined,
+          "full_page_at_hard_limit",
+        );
+      else
+        throw workdayError(
+          "pagination_incomplete",
+          "Workday jobs listing ended before completion was established.",
+        );
     const laterRowOffset = sortedOffsets.find((offset) => {
       const page = pages.get(offset);
       return Boolean(page && offset > shortPageOffset && page.jobs.length > 0);
