@@ -1,13 +1,18 @@
 import { NextResponse } from "next/server";
 import { previewJobImport } from "../../../../../lib/ats/import/previewJobImport";
 import { getAuthUserFromRequest } from "../../../../../lib/billing";
-import { assertEmployerPermission, getEmployerAccountContext, getSelectedEmployerAccountIdFromRequest } from "../../../../../lib/employerAccounts";
+import {
+  assertEmployerPermission,
+  getEmployerAccountContext,
+  getSelectedEmployerAccountIdFromRequest,
+} from "../../../../../lib/employerAccounts";
 
 const MAX_BODY_BYTES = 4096;
 const MAX_CAREERS_PAGE_URL_LENGTH = 2048;
 
 type PreviewRequestPayload = {
   careersPageUrl?: unknown;
+  offset?: unknown;
 };
 
 type PreviewRouteDependencies = {
@@ -27,7 +32,9 @@ const defaultDependencies: PreviewRouteDependencies = {
 };
 
 function permissionStatus(error: unknown) {
-  return error instanceof Error && error.name === "EmployerPermissionError" ? 403 : 500;
+  return error instanceof Error && error.name === "EmployerPermissionError"
+    ? 403
+    : 500;
 }
 
 function validateBodySize(request: Request) {
@@ -39,36 +46,67 @@ function validateBodySize(request: Request) {
 }
 
 async function readPayload(request: Request) {
-  if (!validateBodySize(request)) return { error: "Request body is too large." as const };
+  if (!validateBodySize(request))
+    return { error: "Request body is too large." as const };
 
-  const payload = (await request.json().catch(() => null)) as PreviewRequestPayload | null;
+  const payload = (await request
+    .json()
+    .catch(() => null)) as PreviewRequestPayload | null;
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return { error: "Request body must be valid JSON." as const };
   }
 
-  const careersPageUrl = typeof payload.careersPageUrl === "string" ? payload.careersPageUrl.trim() : "";
+  const careersPageUrl =
+    typeof payload.careersPageUrl === "string"
+      ? payload.careersPageUrl.trim()
+      : "";
   if (!careersPageUrl) return { error: "careersPageUrl is required." as const };
   if (careersPageUrl.length > MAX_CAREERS_PAGE_URL_LENGTH) {
     return { error: "careersPageUrl is too long." as const };
   }
 
-  return { careersPageUrl };
+  const offset = payload.offset === undefined ? 0 : payload.offset;
+  if (
+    !Number.isSafeInteger(offset) ||
+    (offset as number) < 0 ||
+    (offset as number) % 20 !== 0 ||
+    (offset as number) >= 10_000
+  ) {
+    return { error: "offset must be a valid job page offset." as const };
+  }
+  return { careersPageUrl, offset: offset as number };
 }
 
-export async function handleAtsPreviewPost(request: Request, dependencies: PreviewRouteDependencies = defaultDependencies) {
+export async function handleAtsPreviewPost(
+  request: Request,
+  dependencies: PreviewRouteDependencies = defaultDependencies,
+) {
   try {
     const user = await dependencies.getAuthUserFromRequest(request);
-    if (!user) return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    if (!user)
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
 
-    const selectedAccountId = dependencies.getSelectedEmployerAccountIdFromRequest(request);
-    const context = await dependencies.getEmployerAccountContext(user, selectedAccountId);
-    if (!context.accountId) return NextResponse.json({ error: "Employer account not found." }, { status: 403 });
+    const selectedAccountId =
+      dependencies.getSelectedEmployerAccountIdFromRequest(request);
+    const context = await dependencies.getEmployerAccountContext(
+      user,
+      selectedAccountId,
+    );
+    if (!context.accountId)
+      return NextResponse.json(
+        { error: "Employer account not found." },
+        { status: 403 },
+      );
     dependencies.assertEmployerPermission(context, "canManageJobs");
 
     const payload = await readPayload(request);
-    if ("error" in payload) return NextResponse.json({ error: payload.error }, { status: 400 });
+    if ("error" in payload)
+      return NextResponse.json({ error: payload.error }, { status: 400 });
 
-    const result = await dependencies.previewJobImport(payload.careersPageUrl);
+    const result = await dependencies.previewJobImport(
+      payload.careersPageUrl,
+      payload.offset,
+    );
 
     switch (result.status) {
       case "ready":
@@ -77,11 +115,16 @@ export async function handleAtsPreviewPost(request: Request, dependencies: Previ
           providerKey: result.providerKey,
           sourceUrl: result.sourceUrl,
           jobs: result.jobs,
+          nextOffset: result.nextOffset,
+          hasMore: result.hasMore,
         });
       case "discovery-failed":
       case "no-job-links":
       case "unsupported":
-        return NextResponse.json({ status: result.status, message: result.message });
+        return NextResponse.json({
+          status: result.status,
+          message: result.message,
+        });
       case "retrieval-failed":
         return NextResponse.json({
           status: result.status,

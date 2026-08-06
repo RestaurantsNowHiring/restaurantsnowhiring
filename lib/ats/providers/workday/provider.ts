@@ -6,6 +6,7 @@ import type {
   DetectionResult,
   HydratedJobResult,
   ImportedJob,
+  ListJobsPageResult,
 } from "../../types";
 
 export const WORKDAY_PAGE_SIZE = 20;
@@ -675,6 +676,7 @@ async function fetchSearchPage(
   source: WorkdaySource,
   offset: number,
   state: FetchState,
+  searchText = "",
 ): Promise<{ jobs: Record<string, unknown>[]; total?: number }> {
   const json = await fetchJsonWithSafety(
     buildWorkdaySearchApiUrl(source),
@@ -685,7 +687,7 @@ async function fetchSearchPage(
         appliedFacets: {},
         limit: WORKDAY_PAGE_SIZE,
         offset,
-        searchText: "",
+        searchText,
       }),
     },
     source,
@@ -1396,6 +1398,48 @@ export const workdayProvider: AtsProvider = {
       detectedAt,
     };
   },
+  async listJobsPage({
+    careersPage,
+    offset,
+    limit,
+  }): Promise<ListJobsPageResult> {
+    const source = getWorkdaySource(careersPage.url);
+    if (
+      !source ||
+      limit !== WORKDAY_PAGE_SIZE ||
+      !Number.isSafeInteger(offset) ||
+      offset < 0 ||
+      offset % WORKDAY_PAGE_SIZE !== 0 ||
+      offset >= WORKDAY_MAX_JOBS
+    )
+      throw new Error("Invalid Workday listing page request.");
+    const deadline = createOverallDeadline(WORKDAY_PARSE_TIMEOUT_MS);
+    const state: FetchState = {
+      receivedBytes: 0,
+      deadline: deadline.signal,
+      stage: "listing",
+    };
+    try {
+      const page = await fetchSearchPage(source, offset, state);
+      const jobs = page.jobs
+        .map((summary) => normalizeWorkdayJob(source, summary))
+        .filter((job): job is ImportedJob => Boolean(job));
+      const hasMore =
+        page.jobs.length === WORKDAY_PAGE_SIZE &&
+        offset + WORKDAY_PAGE_SIZE < WORKDAY_MAX_JOBS;
+      return {
+        jobs,
+        nextOffset: hasMore ? offset + WORKDAY_PAGE_SIZE : null,
+        hasMore,
+        providerKey: "workday",
+      };
+    } catch (error) {
+      logWorkdayParsingFailure("listing", error);
+      throw error;
+    } finally {
+      deadline.abort();
+    }
+  },
   async parseJobs(
     careersPage: CareersPage,
     options?: { detailMode?: "listing" | "full" },
@@ -1466,17 +1510,29 @@ export const workdayProvider: AtsProvider = {
       stage: "listing",
     };
     try {
-      const listings = await fetchCompleteListings(source, state);
       const listingsById = new Map<string, Record<string, unknown>>();
-      for (const listing of listings) {
-        const listingJob = normalizeWorkdayJob(source, listing);
-        if (listingJob) listingsById.set(listingJob.externalId, listing);
-      }
       const unique = new Map<string, ImportedJob>();
       for (const job of input.jobs)
         if (job.providerKey === "workday" && !unique.has(job.externalId))
           unique.set(job.externalId, job);
       const selected = [...unique.values()];
+      // Re-query each selected identity instead of trusting preview fields or
+      // enumerating the board. Workday search is only used to find an exact
+      // identity; non-matching results are never accepted.
+      await mapWithConcurrency(
+        selected,
+        WORKDAY_DETAIL_CONCURRENCY,
+        async (job) => {
+          const page = await fetchSearchPage(source, 0, state, job.externalId);
+          for (const listing of page.jobs) {
+            const listingJob = normalizeWorkdayJob(source, listing);
+            if (listingJob?.externalId === job.externalId) {
+              listingsById.set(job.externalId, listing);
+              break;
+            }
+          }
+        },
+      );
       state.stage = "detail";
       // Preview discovery and later selected-job hydration have independent,
       // bounded cumulative response budgets.
