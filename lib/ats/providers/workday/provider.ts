@@ -16,7 +16,11 @@ export const WORKDAY_LISTING_CONCURRENCY = 8;
 // explicitly bounded if either tuning value changes.
 export const WORKDAY_SENTINEL_LOOKAHEAD_PAGES = 8;
 export const WORKDAY_LISTING_MAX_ATTEMPTS = 3;
-export const WORKDAY_MAX_JOBS = 5_000;
+// Bounded provider safety limit, not an expected Workday board size. With the
+// fixed 20-row page size this permits 500 data pages (offsets 0 through 9,980).
+// A full final page is still rejected because offset 10,000 is outside this
+// boundary and completeness cannot be proven without a terminal short page.
+export const WORKDAY_MAX_JOBS = 10_000;
 export const WORKDAY_MAX_TOTAL_DRIFT = 100;
 export const WORKDAY_MAX_PAGES = Math.ceil(
   WORKDAY_MAX_JOBS / WORKDAY_PAGE_SIZE,
@@ -27,6 +31,9 @@ export const WORKDAY_REQUEST_TIMEOUT_MS = 10_000;
 export const WORKDAY_LISTING_TIMEOUT_MS = 90_000;
 export const WORKDAY_PARSE_TIMEOUT_MS = 30_000;
 export const WORKDAY_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+// This allows an average of more than 80 KiB per listing response at the
+// 500-page boundary (over 4 KiB per row), while every response remains subject
+// to its separate 2 MiB cap. Keep the cumulative retrieval budget bounded.
 export const WORKDAY_MAX_CUMULATIVE_BYTES = 40 * 1024 * 1024;
 export const WORKDAY_MAX_REDIRECTS = 3;
 
