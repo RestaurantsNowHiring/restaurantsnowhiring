@@ -11,6 +11,10 @@ import type {
 export const WORKDAY_PAGE_SIZE = 20;
 export const WORKDAY_DETAIL_CONCURRENCY = 4;
 export const WORKDAY_LISTING_CONCURRENCY = 8;
+// Number of speculative pages kept available after a full sentinel page. This
+// is deliberately separate from the worker count so pagination remains
+// explicitly bounded if either tuning value changes.
+export const WORKDAY_SENTINEL_LOOKAHEAD_PAGES = 8;
 export const WORKDAY_LISTING_MAX_ATTEMPTS = 3;
 export const WORKDAY_MAX_JOBS = 5_000;
 export const WORKDAY_MAX_TOTAL_DRIFT = 100;
@@ -102,6 +106,12 @@ type WorkdayListingTimingDiagnostic = {
   numberOfPages: number;
   numberOfListingRequests: number;
   maximumConcurrentRequestsObserved: number;
+  initialPlannedPageCount: number;
+  dynamicallyPlannedPageCount: number;
+  authoritativeTotalExtensionCount: number;
+  sentinelExtensionCount: number;
+  numberOfRetryAttempts: number;
+  numberOfRetriedRequests: number;
 };
 
 class WorkdayParserError extends Error {
@@ -817,6 +827,12 @@ async function fetchCompleteListings(
   let numberOfListingRequests = 0;
   let activeRequests = 0;
   let maximumConcurrentRequestsObserved = 0;
+  let initialPlannedPageCount = 0;
+  let dynamicallyPlannedPageCount = 0;
+  let authoritativeTotalExtensionCount = 0;
+  let sentinelExtensionCount = 0;
+  let numberOfRetryAttempts = 0;
+  const retriedOffsets = new Set<number>();
   let idleStartedAt: number | undefined;
   let idleGapDurationMs = 0;
   type OffsetState =
@@ -851,6 +867,7 @@ async function fetchCompleteListings(
   };
   let rawRowsObserved = 0;
   let planVersion = 0;
+  let buildingInitialPlan = true;
 
   const finishIdleGap = (now: number): void => {
     if (idleStartedAt === undefined) return;
@@ -873,12 +890,19 @@ async function fetchCompleteListings(
       ).length,
       numberOfListingRequests,
       maximumConcurrentRequestsObserved,
+      initialPlannedPageCount,
+      dynamicallyPlannedPageCount,
+      authoritativeTotalExtensionCount,
+      sentinelExtensionCount,
+      numberOfRetryAttempts,
+      numberOfRetriedRequests: retriedOffsets.size,
     };
   };
 
   const planOffset = (offset: number): boolean => {
     if (offsets.has(offset)) return false;
     offsets.set(offset, { status: "planned" });
+    if (!buildingInitialPlan) dynamicallyPlannedPageCount += 1;
     planVersion += 1;
     return true;
   };
@@ -899,6 +923,7 @@ async function fetchCompleteListings(
         "reported_total_too_large",
         "Workday jobs total exceeds the safe import limit.",
       );
+    const previousMaximum = totals.maximumReportedTotal;
     totals.firstReportedTotal ??= authoritativeTotal;
     totals.minimumReportedTotal = Math.min(
       totals.minimumReportedTotal ?? authoritativeTotal,
@@ -918,7 +943,30 @@ async function fetchCompleteListings(
         "Workday jobs pagination total changed beyond the safe drift limit.",
         buildTotalDiagnostic(totals, offsets.size, rawRowsObserved),
       );
+    if (
+      !buildingInitialPlan &&
+      previousMaximum !== undefined &&
+      authoritativeTotal > previousMaximum
+    )
+      authoritativeTotalExtensionCount += 1;
     planThroughTotal(totals.maximumReportedTotal);
+  };
+
+  const planSentinelLookahead = (offset: number): void => {
+    let planned = 0;
+    for (let page = 1; page <= WORKDAY_SENTINEL_LOOKAHEAD_PAGES; page += 1) {
+      const following = offset + page * WORKDAY_PAGE_SIZE;
+      if (following / WORKDAY_PAGE_SIZE >= WORKDAY_MAX_PAGES) break;
+      if (planOffset(following)) planned += 1;
+    }
+    if (planned > 0) {
+      sentinelExtensionCount += 1;
+      return;
+    }
+    throw workdayError(
+      "pagination_limit_exceeded",
+      "Workday jobs pagination exceeded the safe page limit.",
+    );
   };
 
   const completePage = (
@@ -945,15 +993,8 @@ async function fetchCompleteListings(
     if (
       (totals.firstReportedTotal === undefined || rowBearingSentinel) &&
       page.jobs.length === WORKDAY_PAGE_SIZE
-    ) {
-      const following = offset + WORKDAY_PAGE_SIZE;
-      if (following / WORKDAY_PAGE_SIZE >= WORKDAY_MAX_PAGES)
-        throw workdayError(
-          "pagination_limit_exceeded",
-          "Workday jobs pagination exceeded the safe page limit.",
-        );
-      planOffset(following);
-    }
+    )
+      planSentinelLookahead(offset);
     validationDurationMs += performance.now() - validationStartedAt;
   };
 
@@ -997,6 +1038,8 @@ async function fetchCompleteListings(
           listingController.signal.aborted
         )
           throw error;
+        numberOfRetryAttempts += 1;
+        retriedOffsets.add(offset);
         await waitForListingRetry(
           retryDelaysMs[attempt - 1],
           listingController.signal,
@@ -1012,6 +1055,8 @@ async function fetchCompleteListings(
     const firstFetchStartedAt = performance.now();
     try {
       completePage(0, await requestOffsetWithRetry(0));
+      initialPlannedPageCount = offsets.size;
+      buildingInitialPlan = false;
     } catch (error) {
       offsets.set(0, { status: "failed", error });
       throw error;
@@ -1115,9 +1160,28 @@ async function fetchCompleteListings(
       totals.maximumReportedTotal === undefined
         ? (sortedOffsets.at(-1) ?? 0)
         : getLastDataOffset(totals.maximumReportedTotal);
+    const sparseShortPageOffset = sortedOffsets.find((offset) => {
+      const page = pages.get(offset);
+      if (!page || page.jobs.length === WORKDAY_PAGE_SIZE) return false;
+      return sortedOffsets.some((laterOffset) => {
+        const laterPage = pages.get(laterOffset);
+        return Boolean(
+          laterPage && laterOffset > offset && laterPage.jobs.length > 0,
+        );
+      });
+    });
+    if (sparseShortPageOffset !== undefined)
+      throw workdayError(
+        "pagination_sparse",
+        "Workday jobs pagination returned rows after an early short page.",
+      );
     const shortPageOffset = sortedOffsets.find((offset) => {
       const page = pages.get(offset);
-      return Boolean(page && page.jobs.length < WORKDAY_PAGE_SIZE);
+      return Boolean(
+        page &&
+          offset >= highestRequiredOffset &&
+          page.jobs.length < WORKDAY_PAGE_SIZE,
+      );
     });
     if (shortPageOffset === undefined)
       throw workdayError(
@@ -1128,7 +1192,7 @@ async function fetchCompleteListings(
       const page = pages.get(offset);
       return Boolean(page && offset > shortPageOffset && page.jobs.length > 0);
     });
-    if (laterRowOffset !== undefined && shortPageOffset < highestRequiredOffset)
+    if (laterRowOffset !== undefined)
       throw workdayError(
         "pagination_sparse",
         "Workday jobs pagination returned rows after an early short page.",
@@ -1142,16 +1206,10 @@ async function fetchCompleteListings(
         "pagination_incomplete",
         "Workday jobs listing ended before completion was established.",
       );
-    const shortPageCanBeTerminal =
-      shortPageOffset >= highestRequiredOffset || laterRowOffset === undefined;
-    if (!shortPageCanBeTerminal)
-      throw workdayError(
-        "pagination_incomplete",
-        "Workday jobs listing ended before completion was established.",
-      );
     const seen = new Set<string>();
     const listings: Record<string, unknown>[] = [];
     for (const offset of [...pages.keys()].sort((a, b) => a - b)) {
+      if (offset > shortPageOffset) break;
       const page = pages.get(offset);
       if (!page) continue;
       for (const job of page.jobs) {
