@@ -255,6 +255,7 @@ export default function AtsIntegrationPage() {
   const [selectedEmploymentType, setSelectedEmploymentType] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [resultMessage, setResultMessage] = useState<string | null>(null);
+  const [resultMessageIsError, setResultMessageIsError] = useState(false);
   const [preparedResult, setPreparedResult] = useState<PreparedResult | null>(null);
   const [isPreparing, setIsPreparing] = useState(false);
   const [reviewCorrections, setReviewCorrections] = useState<Record<string, ReviewCorrections>>({});
@@ -265,6 +266,7 @@ export default function AtsIntegrationPage() {
   const [connections, setConnections] = useState<AtsConnection[]>([]);
   const [connectionsLoading, setConnectionsLoading] = useState(false);
   const [connectionsMessage, setConnectionsMessage] = useState<string | null>(null);
+  const [connectionActionMessages, setConnectionActionMessages] = useState<Record<string, string>>({});
   const [syncingConnectionIds, setSyncingConnectionIds] = useState<Set<string>>(() => new Set());
   const [syncResults, setSyncResults] = useState<Record<string, SyncResultSummary>>({});
   const [actingConnectionIds, setActingConnectionIds] = useState<Set<string>>(() => new Set());
@@ -420,6 +422,13 @@ export default function AtsIntegrationPage() {
       if (connectionsRequestRef.current.sequence !== requestSequence) return;
       const nextConnections = Array.isArray(payload?.connections) ? payload.connections : [];
       setConnections(nextConnections);
+      setEditingSourceById((current) => {
+        const next = { ...current };
+        for (const connection of nextConnections) {
+          if (next[connection.id] === undefined) next[connection.id] = connection.inputUrl;
+        }
+        return next;
+      });
       await loadSyncHistory(token, nextConnections[0]?.id ?? null, 1);
     } catch {
       if (connectionsRequestRef.current.sequence === requestSequence) {
@@ -504,6 +513,7 @@ export default function AtsIntegrationPage() {
     setSelectedEmploymentType("");
     setCurrentPage(1);
     setResultMessage(null);
+    setResultMessageIsError(false);
     setPreparedResult(null);
     setReviewCorrections({});
     setImportResult(null);
@@ -533,16 +543,19 @@ export default function AtsIntegrationPage() {
       }
 
       if (response.status === 400) {
+        setResultMessageIsError(true);
         setResultMessage("Please enter a valid careers page URL and try again.");
         return;
       }
 
       if (response.status === 403) {
+        setResultMessageIsError(true);
         setResultMessage("You don’t have permission to find jobs for this employer account.");
         return;
       }
 
       if (!response.ok) {
+        setResultMessageIsError(true);
         setResultMessage("We couldn’t find your jobs right now. Please try again.");
         return;
       }
@@ -568,13 +581,16 @@ export default function AtsIntegrationPage() {
           payload?.status === "retrieval-failed") &&
         typeof payload.message === "string"
       ) {
+        setResultMessageIsError(true);
         setResultMessage(payload.message);
         return;
       }
 
+      setResultMessageIsError(true);
       setResultMessage("We couldn’t find your jobs right now. Please try again.");
     } catch {
       setPreviewJobs(null);
+      setResultMessageIsError(true);
       setResultMessage("We couldn’t find your jobs right now. Please try again.");
     } finally {
       requestInFlightRef.current = false;
@@ -587,6 +603,7 @@ export default function AtsIntegrationPage() {
     syncingConnectionIdsRef.current.add(connectionId);
     setSyncingConnectionIds((current) => new Set(current).add(connectionId));
     setSyncResults((current) => { const next = { ...current }; delete next[connectionId]; return next; });
+    setConnectionActionMessages((current) => { const next = { ...current }; delete next[connectionId]; return next; });
     try {
       const { data } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
@@ -623,11 +640,12 @@ export default function AtsIntegrationPage() {
     if (action !== "enable" && !window.confirm(`Are you sure you want to ${labels[action]} this job source?`)) return;
     const nextUrl = editingSourceById[connection.id]?.trim();
     if (action === "update-source" && !nextUrl) {
-      setConnectionsMessage("Enter a replacement careers page URL before updating this connection.");
+      setConnectionActionMessages((current) => ({ ...current, [connection.id]: "Enter a replacement careers page URL before updating this connection." }));
       return;
     }
     setActingConnectionIds((current) => new Set(current).add(connection.id));
-    setConnectionsMessage(null);
+    setConnectionActionMessages((current) => { const next = { ...current }; delete next[connection.id]; return next; });
+    setSyncResults((current) => { const next = { ...current }; delete next[connection.id]; return next; });
     try {
       const { data } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
@@ -646,18 +664,18 @@ export default function AtsIntegrationPage() {
       }
       if (response.status === 403) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setConnectionsMessage(payload?.error ?? "You don’t have permission to manage job sources for this employer account.");
+        setConnectionActionMessages((current) => ({ ...current, [connection.id]: payload?.error ?? "You don’t have permission to manage job sources for this employer account." }));
         return;
       }
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        setConnectionsMessage(payload?.error ?? "We couldn’t update this job source right now. Please try again.");
+        setConnectionActionMessages((current) => ({ ...current, [connection.id]: payload?.error ?? "We couldn’t update this job source right now. Please try again." }));
         return;
       }
-      if (action === "update-source") setEditingSourceById((current) => ({ ...current, [connection.id]: "" }));
+      if (action === "update-source" && nextUrl) setEditingSourceById((current) => ({ ...current, [connection.id]: nextUrl }));
       await loadConnections(accessToken);
     } catch {
-      setConnectionsMessage("We couldn’t update this job source right now. Please try again.");
+      setConnectionActionMessages((current) => ({ ...current, [connection.id]: "We couldn’t update this job source right now. Please try again." }));
     } finally {
       setActingConnectionIds((current) => { const next = new Set(current); next.delete(connection.id); return next; });
     }
@@ -913,10 +931,15 @@ export default function AtsIntegrationPage() {
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(280px, 1fr)", gap: 16, alignItems: "stretch" }} className="rn-ats-connect-grid">
             <div style={homeCardStyle}>
               <h2 id="ats-connect-heading" style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
-                Connect Your Applicant Tracking System (ATS)
+                Import Jobs from a Careers Page
               </h2>
               <p style={{ margin: "0 0 12px", color: homeTheme.muted, fontWeight: 800 }}>
-                Paste the URL of your public ATS careers page.
+                Paste a public Greenhouse or Workday careers-page URL to preview available jobs before importing them.
+              </p>
+              <p style={{ margin: "0 0 12px", color: homeTheme.muted, fontWeight: 700 }}>
+                {connections.length === 0
+                  ? "Find jobs first. A saved source will be created after a successful import."
+                  : "Already have a saved source? Use Saved Job Sources below to sync it or change its URL."}
               </p>
               <div style={{ margin: "0 0 16px", display: "grid", gap: 6, color: homeTheme.muted, fontWeight: 700, overflowWrap: "anywhere" }}>
                 <p style={{ margin: 0, color: homeTheme.text, fontWeight: 900 }}>Examples:</p>
@@ -925,14 +948,14 @@ export default function AtsIntegrationPage() {
               </div>
               <form className="rn-ats-import-form" onSubmit={findJobs}>
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
-              Careers Page URL
+              Careers Page to Search
               <input
                 type="url"
                 value={careersPageUrl}
                 onChange={(event) => setCareersPageUrl(event.target.value)}
                 placeholder="https://boards.greenhouse.io/company or https://company.wd1.myworkdayjobs.com/..."
                 style={{ ...homeInputStyle, marginTop: 6 }}
-                aria-describedby="ats-import-note"
+                aria-describedby="ats-import-helper ats-public-access-note"
                 disabled={isFindingJobs}
               />
             </label>
@@ -948,16 +971,16 @@ export default function AtsIntegrationPage() {
                 }}
                 disabled={!careersPageUrl.trim() || isFindingJobs}
               >
-                {isFindingJobs ? "Finding Jobs..." : "Find My Jobs"}
+                {isFindingJobs ? "Finding Jobs..." : "Find Jobs"}
               </button>
             </div>
-            <p
-              id="ats-import-note"
-              role={resultMessage ? "status" : undefined}
-              style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}
-            >
-              {resultMessage ?? "We only access jobs available on your public careers page."}
+            <p id="ats-import-helper" style={{ margin: 0, color: homeTheme.text, fontWeight: 800 }}>
+              This searches the careers page and does not change your saved job source.
             </p>
+            <p id="ats-public-access-note" style={{ margin: 0, color: homeTheme.muted, fontWeight: 700 }}>
+              We only read jobs published on the public careers page.
+            </p>
+            {resultMessage ? <p role={resultMessageIsError ? "alert" : "status"} style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>{resultMessage}</p> : null}
               </form>
             </div>
             <aside aria-labelledby="supported-ats-heading" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
@@ -980,7 +1003,6 @@ export default function AtsIntegrationPage() {
               </ul>
               <p style={{ margin: "16px 0 0", color: homeTheme.text, fontWeight: 900 }}>Don’t see your ATS?</p>
               <p style={{ margin: "4px 0 0", color: homeTheme.muted, fontWeight: 800 }}>We’re adding support based on employer demand.</p>
-              <p style={{ margin: "14px 0 0", color: homeTheme.muted, fontWeight: 800 }}>We only access jobs available on your public careers page.</p>
             </aside>
           </div>
         </section> : null}
@@ -1387,18 +1409,18 @@ export default function AtsIntegrationPage() {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
               <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
-                Connected Job Sources
+                Saved Job Sources
               </h2>
               <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>
-                Review your saved careers-page connections and start a fresh sync when needed.
+                These are the careers pages currently saved for automatic synchronization.
               </p>
             </div>
           </div>
-          {isInitialConnectionsLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading connected job sources...</p> : null}
-          {connectionsLoading && connections.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing connected job sources...</p> : null}
+          {isInitialConnectionsLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading saved job sources...</p> : null}
+          {connectionsLoading && connections.length > 0 ? <p role="status" aria-live="polite" style={{ color: homeTheme.muted, fontWeight: 800 }}>Refreshing saved job sources...</p> : null}
           {connectionsMessage ? <div role="alert" style={{ marginTop: 14, padding: 14, border: "1px solid #e8cf92", borderRadius: 12, background: "#fffcf3", color: homeTheme.text, fontWeight: 800 }}>{connectionsMessage}</div> : null}
           {!isInitialConnectionsLoad && !connectionsMessage && connections.length === 0 ? (
-            <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No connected job sources yet. Import jobs from a careers page to create a connection.</p>
+            <p style={{ color: homeTheme.muted, fontWeight: 800 }}>No saved job sources yet. Import jobs from a careers page to create one.</p>
           ) : null}
           {connections.length > 0 ? (
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, marginTop: 16 }}>
@@ -1406,6 +1428,7 @@ export default function AtsIntegrationPage() {
                 const isSyncing = syncingConnectionIds.has(connection.id);
                 const canSync = connection.enabled && connection.connectionStatus !== "disconnected";
                 const syncResult = syncResults[connection.id];
+                const actionMessage = connectionActionMessages[connection.id];
                 return (
                   <article key={connection.id} style={{ padding: 18, border: `1px solid ${homeTheme.border}`, borderRadius: 14, background: homeTheme.bg }}>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }} aria-label={`Connection status: ${getStatusLabel(connection)}. Sync state: ${connection.enabled ? "Enabled" : "Disabled"}.`}>
@@ -1413,8 +1436,10 @@ export default function AtsIntegrationPage() {
                       <span style={statusBadgeStyle(connection.enabled ? "success" : "neutral")}>{connection.enabled ? "Sync Enabled" : "Sync Disabled"}</span>
                     </div>
                     <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>{connection.sourceLabel}</p>
-                    <h3 style={{ margin: "6px 0 0", color: homeTheme.text }}>Connected Job Source</h3>
-                    <p style={{ margin: "10px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}><strong style={{ color: homeTheme.text }}>Careers URL:</strong> {connection.inputUrl}</p>
+                    <h3 style={{ margin: "6px 0 0", color: homeTheme.text }}>Saved {connection.sourceLabel} Job Source</h3>
+                    <p style={{ margin: "10px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}><strong style={{ color: homeTheme.text }}>Current Saved Careers Page:</strong> {connection.inputUrl}</p>
+                    {!connection.enabled ? <p style={{ margin: "10px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Automatic and manual synchronization are currently paused for this source.</p> : null}
+                    {connection.connectionStatus === "disconnected" ? <p style={{ margin: "10px 0 0", color: homeTheme.muted, fontWeight: 800 }}>This source is no longer synchronized. An account owner can reconnect it by updating the saved careers page.</p> : null}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 14 }}>
                       {[
                         ["Imported Jobs", String(connection.importedJobCount)],
@@ -1428,7 +1453,9 @@ export default function AtsIntegrationPage() {
                         </div>
                       ))}
                     </div>
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 14 }}>
+                    <div aria-label="Synchronization actions" style={{ marginTop: 16 }}>
+                      <h4 style={{ margin: "0 0 8px", color: homeTheme.text }}>Synchronization actions</h4>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                       <button type="button" className="rn-btn-primary" style={{ ...homePrimaryButton, ...(!canSync || isSyncing ? { opacity: 0.55, cursor: "not-allowed" } : {}) }} disabled={!canSync || isSyncing} onClick={() => void syncConnection(connection.id)}>
                         {isSyncing ? "Syncing..." : "Sync Now"}
                       </button>
@@ -1437,17 +1464,22 @@ export default function AtsIntegrationPage() {
                       ) : (
                         <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "enable")}>Enable Sync</button>
                       )}
-                      {canManageAtsConnectionSettings ? (
-                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
-                      ) : null}
+                      </div>
                     </div>
                     {canManageAtsConnectionSettings ? (
-                      <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${homeTheme.border}` }}>
-                        <label style={{ color: homeTheme.text, fontWeight: 900 }}>
-                          Change Careers Page URL
-                          <input type="url" value={editingSourceById[connection.id] ?? ""} onChange={(event) => setEditingSourceById((current) => ({ ...current, [connection.id]: event.target.value }))} placeholder={connection.inputUrl} style={{ ...homeInputStyle, marginTop: 6 }} disabled={actingConnectionIds.has(connection.id)} />
+                      <div aria-label="Connection settings" style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${homeTheme.border}` }}>
+                        <h4 style={{ margin: "0 0 8px", color: homeTheme.text }}>Connection settings</h4>
+                        <h5 style={{ margin: "0 0 6px", color: homeTheme.text, fontSize: 15 }}>Change Saved Careers Page</h5>
+                        <p id={`saved-source-help-${connection.id}`} style={{ margin: "0 0 10px", color: homeTheme.muted, fontWeight: 700 }}>Updating this changes the careers page used for future automatic synchronization.</p>
+                        <label htmlFor={`saved-source-url-${connection.id}`} style={{ color: homeTheme.text, fontWeight: 900 }}>
+                          New Saved Careers Page URL
+                          <input id={`saved-source-url-${connection.id}`} type="url" value={editingSourceById[connection.id] ?? connection.inputUrl} onChange={(event) => { setEditingSourceById((current) => ({ ...current, [connection.id]: event.target.value })); setConnectionActionMessages((current) => { const next = { ...current }; delete next[connection.id]; return next; }); }} aria-describedby={`saved-source-help-${connection.id}`} style={{ ...homeInputStyle, marginTop: 6 }} disabled={actingConnectionIds.has(connection.id)} />
                         </label>
-                        <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, marginTop: 8 }} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? "").trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update URL</button>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+                          <button type="button" className="rn-btn-primary" style={homePrimaryButton} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? connection.inputUrl).trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update Saved Source</button>
+                          <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, borderColor: "#b45b4d", color: "#8b3f35" }} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
+                        </div>
+                        {actionMessage ? <p role="alert" style={{ margin: "10px 0 0", color: homeTheme.text, fontWeight: 800 }}>{actionMessage}</p> : null}
                       </div>
                     ) : null}
                     {syncResult ? (
@@ -1468,7 +1500,8 @@ export default function AtsIntegrationPage() {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
               <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Sync History</h2>
-              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Newest ATS synchronization runs for your connected job source.</p>
+              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Recent synchronization runs for this saved job source.</p>
+              {connections[0] ? <p style={{ margin: "6px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}><strong style={{ color: homeTheme.text }}>History source:</strong> {connections[0].sourceLabel} — {connections[0].inputUrl}</p> : null}
             </div>
           </div>
           {isInitialHistoryLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading sync history...</p> : null}

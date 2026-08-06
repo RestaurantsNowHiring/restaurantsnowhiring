@@ -25,7 +25,7 @@ function callbackDeps(name) {
 test("UI gates owner-only connection controls by account_owner role", () => {
   assert.match(source, /const canManageAtsConnectionSettings = employerAccess\?\.role === "account_owner";/);
   assert.match(source, /\{canManageAtsConnectionSettings \? \([\s\S]*Disconnect[\s\S]*\) : null\}/);
-  assert.match(source, /\{canManageAtsConnectionSettings \? \([\s\S]*Change Careers Page URL[\s\S]*Update URL[\s\S]*\) : null\}/);
+  assert.match(source, /\{canManageAtsConnectionSettings \? \([\s\S]*Change Saved Careers Page[\s\S]*Update Saved Source[\s\S]*\) : null\}/);
 });
 
 test("UI leaves job-management sync controls outside owner-only gate", () => {
@@ -77,7 +77,7 @@ test("explicit refresh still occurs after connection actions", () => {
 
 test("existing connection cards remain rendered while a background refresh is active", () => {
   assert.match(source, /const isInitialConnectionsLoad = connectionsLoading && connections\.length === 0;/);
-  assert.match(source, /connectionsLoading && connections\.length > 0 \? <p role="status"[^>]*>Refreshing connected job sources\.\.\.<\/p> : null/);
+  assert.match(source, /connectionsLoading && connections\.length > 0 \? <p role="status"[^>]*>Refreshing saved job sources\.\.\.<\/p> : null/);
   assert.match(source, /connections\.length > 0 \? \([\s\S]*connections\.map\(\(connection\) =>/);
 });
 
@@ -88,7 +88,7 @@ test("existing history rows remain rendered while a background refresh is active
 });
 
 test("initial empty loads still show full loading messages", () => {
-  assert.match(source, /isInitialConnectionsLoad \? <p role="status"[^>]*>Loading connected job sources\.\.\.<\/p> : null/);
+  assert.match(source, /isInitialConnectionsLoad \? <p role="status"[^>]*>Loading saved job sources\.\.\.<\/p> : null/);
   assert.match(source, /isInitialHistoryLoad \? <p role="status"[^>]*>Loading sync history\.\.\.<\/p> : null/);
 });
 
@@ -109,7 +109,7 @@ test("supported ATS platform guidance is honest and limited to available provide
   assert.match(source, /Greenhouse/);
   assert.match(source, /Workday/);
   assert.match(source, /More Integrations Coming Soon/);
-  assert.match(source, /We only access jobs available on your public careers page\./);
+  assert.match(source, /We only read jobs published on the public careers page\./);
   assert.doesNotMatch(source, /All ATS platforms supported|Universal ATS integration|credentials (are )?(stored|accessed|secure)/i);
 });
 
@@ -124,9 +124,9 @@ test("Greenhouse and Workday are the only ATS platforms presented as available t
 });
 
 test("connection guidance renders before management, history, and imported job sections", () => {
-  const connectIndex = source.indexOf("Connect Your Applicant Tracking System (ATS)");
+  const connectIndex = source.indexOf("Import Jobs from a Careers Page");
   const supportedIndex = source.indexOf("Supported ATS Platforms");
-  const connectedIndex = source.indexOf("Connected Job Sources");
+  const connectedIndex = source.indexOf("<h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: \"var(--font-heading)\", color: homeTheme.text }}>\n                Saved Job Sources");
   const historyIndex = source.indexOf("Sync History");
   const importedIndex = source.lastIndexOf("Imported Jobs");
   assert.ok(connectIndex > -1, "connection form heading should be present");
@@ -137,11 +137,11 @@ test("connection guidance renders before management, history, and imported job s
 });
 
 test("preview, review, and import result flows remain near the connection area", () => {
-  const connectIndex = source.indexOf("Connect Your Applicant Tracking System (ATS)");
+  const connectIndex = source.indexOf("Import Jobs from a Careers Page");
   const jobsFoundIndex = source.indexOf("Jobs Found");
   const reviewIndex = source.indexOf("Review Selected Jobs");
   const importCompleteIndex = source.indexOf("Import complete");
-  const connectedIndex = source.indexOf("Connected Job Sources");
+  const connectedIndex = source.indexOf("<h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: \"var(--font-heading)\", color: homeTheme.text }}>\n                Saved Job Sources");
   assert.ok(jobsFoundIndex > connectIndex && jobsFoundIndex < connectedIndex);
   assert.ok(reviewIndex > jobsFoundIndex && reviewIndex < connectedIndex);
   assert.ok(importCompleteIndex > reviewIndex && importCompleteIndex < connectedIndex);
@@ -149,16 +149,16 @@ test("preview, review, and import result flows remain near the connection area",
 
 test("connection form keeps existing request flow while updating ATS-specific copy", () => {
   assert.match(source, /onSubmit=\{findJobs\}/);
-  assert.match(source, /Careers Page URL/);
-  assert.match(source, /Find My Jobs/);
-  assert.match(source, /isFindingJobs \? "Finding Jobs\.\.\." : "Find My Jobs"/);
-  assert.match(source, /Paste the URL of your public ATS careers page\./);
+  assert.match(source, /Careers Page to Search/);
+  assert.match(source, /Find Jobs/);
+  assert.match(source, /isFindingJobs \? "Finding Jobs\.\.\." : "Find Jobs"/);
+  assert.match(source, /Paste a public Greenhouse or Workday careers-page URL to preview available jobs before importing them\./);
   assert.match(source, /https:\/\/boards\.greenhouse\.io\/company or https:\/\/company\.wd1\.myworkdayjobs\.com\/\.\.\./);
   assert.match(source, /fetch\("\/api\/employer\/ats\/preview"/);
 });
 
 test("connected sources, sync history, and imported jobs functionality remains present", () => {
-  for (const text of ["Sync Now", "Disable Sync", "Enable Sync", "Disconnect", "Change Careers Page URL", "Update URL", "Connected Job Sources", "Sync History", "Imported Jobs"]) {
+  for (const text of ["Sync Now", "Disable Sync", "Enable Sync", "Disconnect", "Change Saved Careers Page", "Update Saved Source", "Saved Job Sources", "Sync History", "Imported Jobs"]) {
     assert.match(source, new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   for (const heading of ["Date", "Status", "Duration", "Jobs Updated", "Jobs Closed", "Jobs Reopened", "Needs Review", "Failed", "Warning"]) {
@@ -183,16 +183,16 @@ test("connected source hierarchy keeps statuses near the top and required metric
   const cardStart = source.indexOf("<article key={connection.id}");
   const cardEnd = source.indexOf("{syncResult ?", cardStart);
   const card = source.slice(cardStart, cardEnd);
-  assert.ok(card.indexOf("getStatusLabel(connection)") < card.indexOf("Connected Job Source"));
-  assert.match(card, /Careers URL:/);
+  assert.ok(card.indexOf("getStatusLabel(connection)") < card.indexOf("Saved {connection.sourceLabel} Job Source"));
+  assert.match(card, /Current Saved Careers Page:/);
   for (const metric of ["Imported Jobs", "Last Successful Sync", "Last Failed Sync", "Consecutive Failures"]) {
     assert.match(card, new RegExp(metric));
   }
 });
 
 test("retrieval and loading messages use accessible status and alert containers", () => {
-  assert.match(source, /id="ats-import-note"/);
-  assert.match(source, /role=\{resultMessage \? "status" : undefined\}/);
+  assert.match(source, /id="ats-import-helper"/);
+  assert.match(source, /role=\{resultMessageIsError \? "alert" : "status"\}/);
   assert.match(source, /connectionsMessage \? <div role="alert"/);
   assert.match(source, /syncHistoryMessage \? <div role="alert"/);
 });
@@ -208,4 +208,39 @@ test("responsive ATS support layout uses existing classes and no new dependencie
   assert.match(source, /@media \(max-width: 900px\)/);
   assert.match(source, /homeCardStyle|homeInputStyle|homePrimaryButton|homeSecondaryButton|homeTheme/);
   assert.doesNotMatch(source, /from ["'](?:lucide-react|react-icons|@heroicons\/react|@fortawesome\/)/);
+});
+
+test("import search and saved-source settings use distinct contextual labels", () => {
+  assert.match(source, /Careers Page to Search/);
+  assert.match(source, /This searches the careers page and does not change your saved job source\./);
+  assert.match(source, /Current Saved Careers Page:/);
+  assert.match(source, /New Saved Careers Page URL/);
+  assert.match(source, /Update Saved Source/);
+});
+
+test("saved source controls are structurally grouped by purpose", () => {
+  assert.match(source, /aria-label="Synchronization actions"[\s\S]*Sync Now[\s\S]*(?:Disable Sync|Enable Sync)/);
+  assert.match(source, /aria-label="Connection settings"[\s\S]*Change Saved Careers Page[\s\S]*Disconnect/);
+});
+
+test("search state never writes to the saved source editor", () => {
+  const findJobsBody = source.slice(source.indexOf("async function findJobs"), source.indexOf("async function syncConnection"));
+  assert.doesNotMatch(findJobsBody, /setEditingSourceById/);
+  assert.match(source, /if \(next\[connection\.id\] === undefined\) next\[connection\.id\] = connection\.inputUrl/);
+  assert.match(source, /value=\{editingSourceById\[connection\.id\] \?\? connection\.inputUrl\}/);
+});
+
+test("workflow errors remain associated with the action that caused them", () => {
+  assert.match(source, /resultMessage \? <p role=\{resultMessageIsError \? "alert" : "status"\}/);
+  assert.match(source, /connectionActionMessages\[connection\.id\]/);
+  assert.match(source, /actionMessage \? <p role="alert"/);
+  assert.match(source, /syncResult \? \([\s\S]*<div role="status" aria-live="polite"/);
+});
+
+test("connection-aware guidance and paused states remain explicit", () => {
+  assert.match(source, /Find jobs first\. A saved source will be created after a successful import\./);
+  assert.match(source, /Already have a saved source\? Use Saved Job Sources below to sync it or change its URL\./);
+  assert.match(source, /Automatic and manual synchronization are currently paused for this source\./);
+  assert.match(source, /This source is no longer synchronized\. An account owner can reconnect it by updating the saved careers page\./);
+  assert.match(source, /const canSync = connection\.enabled && connection\.connectionStatus !== "disconnected"/);
 });
