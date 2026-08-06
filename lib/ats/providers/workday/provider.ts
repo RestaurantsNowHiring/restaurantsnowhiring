@@ -18,7 +18,9 @@ export const WORKDAY_MAX_PAGES = Math.ceil(
   WORKDAY_MAX_JOBS / WORKDAY_PAGE_SIZE,
 );
 export const WORKDAY_REQUEST_TIMEOUT_MS = 10_000;
-export const WORKDAY_LISTING_TIMEOUT_MS = 45_000;
+// Maximum budget for retrieving and validating a complete Workday listing
+// board, including bounded retries.
+export const WORKDAY_LISTING_TIMEOUT_MS = 90_000;
 export const WORKDAY_PARSE_TIMEOUT_MS = 30_000;
 export const WORKDAY_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
 export const WORKDAY_MAX_CUMULATIVE_BYTES = 40 * 1024 * 1024;
