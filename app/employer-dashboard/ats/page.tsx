@@ -269,6 +269,7 @@ export default function AtsIntegrationPage() {
   const [syncResults, setSyncResults] = useState<Record<string, SyncResultSummary>>({});
   const [actingConnectionIds, setActingConnectionIds] = useState<Set<string>>(() => new Set());
   const [editingSourceById, setEditingSourceById] = useState<Record<string, string>>({});
+  const [managedSourceId, setManagedSourceId] = useState<string | null>(null);
   const [syncHistory, setSyncHistory] = useState<AtsSyncHistoryRow[]>([]);
   const [syncHistoryPage, setSyncHistoryPage] = useState(1);
   const [syncHistoryTotal, setSyncHistoryTotal] = useState(0);
@@ -873,6 +874,7 @@ export default function AtsIntegrationPage() {
 
   const isInitialConnectionsLoad = connectionsLoading && connections.length === 0;
   const isInitialHistoryLoad = syncHistoryLoading && syncHistory.length === 0;
+  const importedJobCount = connections.reduce((total, connection) => total + connection.importedJobCount, 0);
 
   if (authStatus === "loading") {
     return <main style={{ minHeight: "100vh", paddingTop: 100, backgroundColor: homeTheme.bg }}>Loading import jobs…</main>;
@@ -894,7 +896,7 @@ export default function AtsIntegrationPage() {
                 Import Jobs
               </h1>
               <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 700, maxWidth: 780 }}>
-                Automatically import jobs from your Applicant Tracking System (ATS). Connect your public careers page once and we’ll keep your jobs synchronized.
+                Search, review, and import jobs from your careers page.
               </p>
             </div>
             {isImporting ? (
@@ -913,16 +915,11 @@ export default function AtsIntegrationPage() {
           <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1.7fr) minmax(280px, 1fr)", gap: 16, alignItems: "stretch" }} className="rn-ats-connect-grid">
             <div style={homeCardStyle}>
               <h2 id="ats-connect-heading" style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
-                Connect Your Applicant Tracking System (ATS)
+                Import Jobs
               </h2>
               <p style={{ margin: "0 0 12px", color: homeTheme.muted, fontWeight: 800 }}>
-                Paste the URL of your public ATS careers page.
+                Paste your Greenhouse or Workday careers page to preview jobs before importing them.
               </p>
-              <div style={{ margin: "0 0 16px", display: "grid", gap: 6, color: homeTheme.muted, fontWeight: 700, overflowWrap: "anywhere" }}>
-                <p style={{ margin: 0, color: homeTheme.text, fontWeight: 900 }}>Examples:</p>
-                <p style={{ margin: 0 }}><strong style={{ color: homeTheme.text }}>Greenhouse:</strong> https://boards.greenhouse.io/company</p>
-                <p style={{ margin: 0 }}><strong style={{ color: homeTheme.text }}>Workday:</strong> https://company.wd1.myworkdayjobs.com/...</p>
-              </div>
               <form className="rn-ats-import-form" onSubmit={findJobs}>
             <label style={{ fontWeight: 900, color: homeTheme.text }}>
               Careers Page URL
@@ -930,7 +927,7 @@ export default function AtsIntegrationPage() {
                 type="url"
                 value={careersPageUrl}
                 onChange={(event) => setCareersPageUrl(event.target.value)}
-                placeholder="https://boards.greenhouse.io/company or https://company.wd1.myworkdayjobs.com/..."
+                placeholder={"https://boards.greenhouse.io/company\nor\nhttps://company.wd1.myworkdayjobs.com/..."}
                 style={{ ...homeInputStyle, marginTop: 6 }}
                 aria-describedby="ats-import-note"
                 disabled={isFindingJobs}
@@ -948,7 +945,7 @@ export default function AtsIntegrationPage() {
                 }}
                 disabled={!careersPageUrl.trim() || isFindingJobs}
               >
-                {isFindingJobs ? "Finding Jobs..." : "Find My Jobs"}
+                {isFindingJobs ? "Finding Jobs..." : "Find Jobs"}
               </button>
             </div>
             <p
@@ -956,31 +953,22 @@ export default function AtsIntegrationPage() {
               role={resultMessage ? "status" : undefined}
               style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}
             >
-              {resultMessage ?? "We only access jobs available on your public careers page."}
+              {resultMessage ?? "Searching here does not change your saved job source."}
             </p>
               </form>
             </div>
             <aside aria-labelledby="supported-ats-heading" style={{ ...homeCardStyle, boxShadow: "0 12px 26px rgba(0,0,0,.08)" }}>
-              <h2 id="supported-ats-heading" style={{ marginTop: 0, marginBottom: 12, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Supported ATS Platforms</h2>
-              <p style={{ margin: "0 0 10px", color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>Available Today</p>
+              <h2 id="supported-ats-heading" style={{ marginTop: 0, marginBottom: 12, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Supported ATS</h2>
+              <p style={{ margin: "0 0 10px", color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>Supported today</p>
               <ul aria-label="ATS platforms available today" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
                 {['Greenhouse', 'Workday'].map((provider) => (
                   <li key={provider} style={{ display: "flex", alignItems: "center", gap: 8, color: homeTheme.text, fontWeight: 900 }}>
                     <span aria-hidden="true" style={{ color: homeTheme.green, fontWeight: 900 }}>✓</span>
                     <span>{provider}</span>
-                    <span style={statusBadgeStyle("success")}>Supported</span>
                   </li>
                 ))}
               </ul>
-              <h3 style={{ margin: "18px 0 8px", color: homeTheme.text, fontSize: 18 }}>More Integrations Coming Soon</h3>
-              <ul aria-label="ATS integrations coming soon" style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 8, color: homeTheme.muted, fontWeight: 800 }}>
-                {['Lever', 'iCIMS', 'Taleo', 'SmartRecruiters', 'JazzHR', 'Ashby'].map((provider) => (
-                  <li key={provider}>{provider}</li>
-                ))}
-              </ul>
-              <p style={{ margin: "16px 0 0", color: homeTheme.text, fontWeight: 900 }}>Don’t see your ATS?</p>
-              <p style={{ margin: "4px 0 0", color: homeTheme.muted, fontWeight: 800 }}>We’re adding support based on employer demand.</p>
-              <p style={{ margin: "14px 0 0", color: homeTheme.muted, fontWeight: 800 }}>We only access jobs available on your public careers page.</p>
+              <p style={{ margin: "18px 0 0", color: homeTheme.muted, fontWeight: 800 }}>More integrations coming soon.</p>
             </aside>
           </div>
         </section> : null}
@@ -1387,11 +1375,8 @@ export default function AtsIntegrationPage() {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
               <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>
-                Connected Job Sources
+                Saved Job Sources
               </h2>
-              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>
-                Review your saved careers-page connections and start a fresh sync when needed.
-              </p>
             </div>
           </div>
           {isInitialConnectionsLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading connected job sources...</p> : null}
@@ -1412,9 +1397,9 @@ export default function AtsIntegrationPage() {
                       <span style={statusBadgeStyle(getConnectionStatusTone(connection))}>{getStatusLabel(connection)}</span>
                       <span style={statusBadgeStyle(connection.enabled ? "success" : "neutral")}>{connection.enabled ? "Sync Enabled" : "Sync Disabled"}</span>
                     </div>
-                    <p style={{ margin: 0, color: homeTheme.green, fontSize: 12, fontWeight: 900, letterSpacing: 0.4, textTransform: "uppercase" }}>{connection.sourceLabel}</p>
-                    <h3 style={{ margin: "6px 0 0", color: homeTheme.text }}>Connected Job Source</h3>
-                    <p style={{ margin: "10px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}><strong style={{ color: homeTheme.text }}>Careers URL:</strong> {connection.inputUrl}</p>
+                    <h3 style={{ margin: 0, color: homeTheme.text }}>{connection.sourceLabel} Job Source</h3>
+                    <p style={{ margin: "10px 0 0", color: homeTheme.muted, overflowWrap: "anywhere" }}><strong style={{ color: homeTheme.text }}>Current URL:</strong> {connection.inputUrl}</p>
+                    {connection.connectionStatus === "disconnected" ? <p role="status" style={{ margin: "10px 0 0", color: homeTheme.muted, fontWeight: 800 }}>This source is disconnected.</p> : !connection.enabled ? <p role="status" style={{ margin: "10px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Synchronization is paused.</p> : null}
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 14 }}>
                       {[
                         ["Imported Jobs", String(connection.importedJobCount)],
@@ -1437,17 +1422,18 @@ export default function AtsIntegrationPage() {
                       ) : (
                         <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id)} onClick={() => void runConnectionAction(connection, "enable")}>Enable Sync</button>
                       )}
-                      {canManageAtsConnectionSettings ? (
-                        <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
-                      ) : null}
+                      {canManageAtsConnectionSettings ? <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => setManagedSourceId((current) => current === connection.id ? null : connection.id)}>{managedSourceId === connection.id ? "Close" : "Manage Source"}</button> : null}
                     </div>
-                    {canManageAtsConnectionSettings ? (
+                    {canManageAtsConnectionSettings && managedSourceId === connection.id ? (
                       <div style={{ marginTop: 14, paddingTop: 14, borderTop: `1px solid ${homeTheme.border}` }}>
                         <label style={{ color: homeTheme.text, fontWeight: 900 }}>
-                          Change Careers Page URL
+                          Change URL
                           <input type="url" value={editingSourceById[connection.id] ?? ""} onChange={(event) => setEditingSourceById((current) => ({ ...current, [connection.id]: event.target.value }))} placeholder={connection.inputUrl} style={{ ...homeInputStyle, marginTop: 6 }} disabled={actingConnectionIds.has(connection.id)} />
                         </label>
-                        <button type="button" className="rn-btn-secondary" style={{ ...homeSecondaryButton, marginTop: 8 }} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? "").trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update URL</button>
+                        <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginTop: 8 }}>
+                          <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || !(editingSourceById[connection.id] ?? "").trim()} onClick={() => void runConnectionAction(connection, "update-source")}>Update Saved Source</button>
+                          <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} disabled={actingConnectionIds.has(connection.id) || connection.connectionStatus === "disconnected"} onClick={() => void runConnectionAction(connection, "disconnect")}>Disconnect</button>
+                        </div>
                       </div>
                     ) : null}
                     {syncResult ? (
@@ -1468,7 +1454,6 @@ export default function AtsIntegrationPage() {
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
             <div>
               <h2 style={{ marginTop: 0, marginBottom: 8, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Sync History</h2>
-              <p style={{ margin: 0, color: homeTheme.muted, fontWeight: 800 }}>Newest ATS synchronization runs for your connected job source.</p>
             </div>
           </div>
           {isInitialHistoryLoad ? <p role="status" style={{ color: homeTheme.muted, fontWeight: 800 }}>Loading sync history...</p> : null}
@@ -1506,6 +1491,8 @@ export default function AtsIntegrationPage() {
           <h2 style={{ marginTop: 0, fontFamily: "var(--font-heading)", color: homeTheme.text }}>Imported Jobs</h2>
           {importResult ? (
             <p style={{ marginBottom: 0, color: homeTheme.muted, fontWeight: 800 }}>Latest import: {importResult.summary.imported} imported, {importResult.summary.updated} updated, {importResult.summary.skipped} skipped, and {importResult.summary.failed} failed.</p>
+          ) : importedJobCount > 0 ? (
+            <p style={{ marginBottom: 0, color: homeTheme.muted, fontWeight: 800 }}>{pluralize(importedJobCount, "job")} imported.</p>
           ) : (
             <div style={{ marginTop: 8, padding: 16, border: `1px solid ${homeTheme.border}`, borderRadius: 12, background: homeTheme.bg }}><p style={{ margin: 0, color: homeTheme.text, fontWeight: 900 }}>No jobs imported yet.</p><p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 800 }}>Import jobs from Greenhouse or Workday above to begin automatic synchronization.</p></div>
           )}
