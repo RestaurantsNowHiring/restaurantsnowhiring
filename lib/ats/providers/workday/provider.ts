@@ -771,20 +771,22 @@ function getLastDataOffset(total: number): number {
   );
 }
 
-function addPlannedOffsets(plan: Set<number>, highestTotal: number): void {
-  const lastDataOffset = getLastDataOffset(highestTotal);
+function getMaximumSafeOffset(): number {
+  return Math.min(
+    (WORKDAY_MAX_PAGES - 1) * WORKDAY_PAGE_SIZE,
+    getLastDataOffset(WORKDAY_MAX_JOBS),
+  );
+}
+
+function getRequiredCompletionOffset(total: number): number {
+  const lastDataOffset = getLastDataOffset(total);
   const sentinelOffset = lastDataOffset + WORKDAY_PAGE_SIZE;
-  if (sentinelOffset / WORKDAY_PAGE_SIZE >= WORKDAY_MAX_PAGES)
-    throw workdayError(
-      "pagination_limit_exceeded",
-      "Workday jobs pagination exceeded the safe page limit.",
-    );
-  for (
-    let offset = WORKDAY_PAGE_SIZE;
-    offset <= sentinelOffset;
-    offset += WORKDAY_PAGE_SIZE
-  )
-    plan.add(offset);
+  if (sentinelOffset <= getMaximumSafeOffset()) return sentinelOffset;
+  // A non-multiple total can prove completion with its short final data page.
+  // An exact multiple still requires a sentinel beyond that full page.
+  return total > 0 && total % WORKDAY_PAGE_SIZE !== 0
+    ? lastDataOffset
+    : sentinelOffset;
 }
 
 function buildTotalDiagnostic(
@@ -835,11 +837,16 @@ async function fetchCompleteListings(
   const retriedOffsets = new Set<number>();
   let idleStartedAt: number | undefined;
   let idleGapDurationMs = 0;
+  type OffsetPurpose = "required" | "speculative";
   type OffsetState =
-    | { status: "planned" }
-    | { status: "in_flight" }
-    | { status: "completed"; page: WorkdayListingPage }
-    | { status: "failed"; error: unknown };
+    | { status: "planned"; purpose: OffsetPurpose }
+    | { status: "in_flight"; purpose: OffsetPurpose }
+    | {
+        status: "completed";
+        purpose: OffsetPurpose;
+        page: WorkdayListingPage;
+      }
+    | { status: "failed"; purpose: OffsetPurpose; error: unknown };
   type ActiveRequest = {
     offset: number;
     promise: Promise<{
@@ -899,17 +906,31 @@ async function fetchCompleteListings(
     };
   };
 
-  const planOffset = (offset: number): boolean => {
-    if (offsets.has(offset)) return false;
-    offsets.set(offset, { status: "planned" });
+  const planOffset = (offset: number, purpose: OffsetPurpose): boolean => {
+    const existing = offsets.get(offset);
+    if (existing) {
+      if (purpose === "required" && existing.purpose === "speculative")
+        offsets.set(offset, { ...existing, purpose });
+      return false;
+    }
+    offsets.set(offset, { status: "planned", purpose });
     if (!buildingInitialPlan) dynamicallyPlannedPageCount += 1;
     planVersion += 1;
     return true;
   };
   const planThroughTotal = (highestTotal: number): void => {
-    const planned = new Set(offsets.keys());
-    addPlannedOffsets(planned, highestTotal);
-    for (const offset of [...planned].sort((a, b) => a - b)) planOffset(offset);
+    const requiredCompletionOffset = getRequiredCompletionOffset(highestTotal);
+    if (requiredCompletionOffset > getMaximumSafeOffset())
+      throw workdayError(
+        "pagination_limit_exceeded",
+        "Workday jobs pagination exceeded the safe page limit.",
+      );
+    for (
+      let offset = 0;
+      offset <= requiredCompletionOffset;
+      offset += WORKDAY_PAGE_SIZE
+    )
+      planOffset(offset, "required");
   };
   const observeTotal = (
     offset: number,
@@ -954,19 +975,13 @@ async function fetchCompleteListings(
 
   const planSentinelLookahead = (offset: number): void => {
     let planned = 0;
+    const maximumSafeOffset = getMaximumSafeOffset();
     for (let page = 1; page <= WORKDAY_SENTINEL_LOOKAHEAD_PAGES; page += 1) {
       const following = offset + page * WORKDAY_PAGE_SIZE;
-      if (following / WORKDAY_PAGE_SIZE >= WORKDAY_MAX_PAGES) break;
-      if (planOffset(following)) planned += 1;
+      if (following > maximumSafeOffset) break;
+      if (planOffset(following, "speculative")) planned += 1;
     }
-    if (planned > 0) {
-      sentinelExtensionCount += 1;
-      return;
-    }
-    throw workdayError(
-      "pagination_limit_exceeded",
-      "Workday jobs pagination exceeded the safe page limit.",
-    );
+    if (planned > 0) sentinelExtensionCount += 1;
   };
 
   const completePage = (
@@ -975,7 +990,8 @@ async function fetchCompleteListings(
   ): void => {
     const validationStartedAt = performance.now();
     const completedPage = { offset, jobs: page.jobs, total: page.total };
-    offsets.set(offset, { status: "completed", page: completedPage });
+    const purpose = offsets.get(offset)?.purpose ?? "required";
+    offsets.set(offset, { status: "completed", purpose, page: completedPage });
     rawRowsObserved += page.jobs.length;
     const emptyFirstPage =
       offset === 0 &&
@@ -993,8 +1009,14 @@ async function fetchCompleteListings(
     if (
       (totals.firstReportedTotal === undefined || rowBearingSentinel) &&
       page.jobs.length === WORKDAY_PAGE_SIZE
-    )
+    ) {
+      if (offset === getMaximumSafeOffset())
+        throw workdayError(
+          "pagination_limit_exceeded",
+          "Workday jobs pagination exceeded the safe page limit.",
+        );
       planSentinelLookahead(offset);
+    }
     validationDurationMs += performance.now() - validationStartedAt;
   };
 
@@ -1049,16 +1071,16 @@ async function fetchCompleteListings(
     throw workdayError("unknown_failure", "Workday jobs request failed.");
   };
 
-  planOffset(0);
+  planOffset(0, "required");
   try {
-    offsets.set(0, { status: "in_flight" });
+    offsets.set(0, { status: "in_flight", purpose: "required" });
     const firstFetchStartedAt = performance.now();
     try {
       completePage(0, await requestOffsetWithRetry(0));
       initialPlannedPageCount = offsets.size;
       buildingInitialPlan = false;
     } catch (error) {
-      offsets.set(0, { status: "failed", error });
+      offsets.set(0, { status: "failed", purpose: "required", error });
       throw error;
     } finally {
       const firstFetchFinishedAt = performance.now();
@@ -1072,7 +1094,10 @@ async function fetchCompleteListings(
         .filter(([, entry]) => entry.status === "planned")
         .map(([candidate]) => candidate)
         .sort((a, b) => a - b)[0];
-      if (offset !== undefined) offsets.set(offset, { status: "in_flight" });
+      if (offset !== undefined) {
+        const purpose = offsets.get(offset)?.purpose ?? "required";
+        offsets.set(offset, { status: "in_flight", purpose });
+      }
       pageSchedulingDurationMs += performance.now() - schedulingStartedAt;
       return offset;
     };
@@ -1107,14 +1132,23 @@ async function fetchCompleteListings(
         );
         active.delete(result.offset);
         if (result.error !== undefined) {
-          offsets.set(result.offset, { status: "failed", error: result.error });
+          const purpose = offsets.get(result.offset)?.purpose ?? "required";
+          offsets.set(result.offset, {
+            status: "failed",
+            purpose,
+            error: result.error,
+          });
           listingController.abort();
           await Promise.allSettled(
             [...active.values()].map(({ promise }) => promise),
           );
           for (const { offset } of active.values())
             if (offsets.get(offset)?.status === "in_flight")
-              offsets.set(offset, { status: "failed", error: result.error });
+              offsets.set(offset, {
+                status: "failed",
+                purpose: offsets.get(offset)?.purpose ?? "required",
+                error: result.error,
+              });
           throw result.error;
         }
         completePage(result.offset, result.page!);
@@ -1156,10 +1190,13 @@ async function fetchCompleteListings(
       first.total,
     );
     if (firstPageAuthoritativeTotal === 0 && first.jobs.length === 0) return [];
-    const highestRequiredOffset =
-      totals.maximumReportedTotal === undefined
-        ? (sortedOffsets.at(-1) ?? 0)
-        : getLastDataOffset(totals.maximumReportedTotal);
+    const highestRequiredOffset = sortedOffsets.reduce(
+      (highest, offset) =>
+        offsets.get(offset)?.purpose === "required"
+          ? Math.max(highest, offset)
+          : highest,
+      0,
+    );
     const sparseShortPageOffset = sortedOffsets.find((offset) => {
       const page = pages.get(offset);
       if (!page || page.jobs.length === WORKDAY_PAGE_SIZE) return false;
