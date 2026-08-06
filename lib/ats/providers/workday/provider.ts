@@ -788,6 +788,14 @@ async function fetchCompleteListings(
     | { status: "in_flight" }
     | { status: "completed"; page: WorkdayListingPage }
     | { status: "failed"; error: unknown };
+  type ActiveRequest = {
+    offset: number;
+    promise: Promise<{
+      offset: number;
+      page?: { jobs: Record<string, unknown>[]; total?: number };
+      error?: unknown;
+    }>;
+  };
 
   const listingController = new AbortController();
   const abortListing = () => listingController.abort();
@@ -798,6 +806,7 @@ async function fetchCompleteListings(
     stage: state.stage,
   };
   const offsets = new Map<number, OffsetState>();
+  const active = new Map<number, ActiveRequest>();
   const totals = {
     firstReportedTotal: undefined as number | undefined,
     minimumReportedTotal: undefined as number | undefined,
@@ -876,115 +885,131 @@ async function fetchCompleteListings(
     planThroughTotal(totals.maximumReportedTotal);
   };
 
+  const completePage = (
+    offset: number,
+    page: { jobs: Record<string, unknown>[]; total?: number },
+  ): void => {
+    const validationStartedAt = performance.now();
+    const completedPage = { offset, jobs: page.jobs, total: page.total };
+    offsets.set(offset, { status: "completed", page: completedPage });
+    rawRowsObserved += page.jobs.length;
+    const emptyFirstPage =
+      offset === 0 &&
+      getAuthoritativeTotal(offset, page.jobs, page.total) === 0 &&
+      page.jobs.length === 0;
+    if (!emptyFirstPage) observeTotal(offset, page.jobs, page.total);
+    const highestObservedRequiredOffset =
+      totals.maximumReportedTotal === undefined
+        ? undefined
+        : getLastDataOffset(totals.maximumReportedTotal);
+    const rowBearingSentinel =
+      highestObservedRequiredOffset !== undefined &&
+      offset > highestObservedRequiredOffset &&
+      page.jobs.length > 0;
+    if (
+      (totals.firstReportedTotal === undefined || rowBearingSentinel) &&
+      page.jobs.length === WORKDAY_PAGE_SIZE
+    ) {
+      const following = offset + WORKDAY_PAGE_SIZE;
+      if (following / WORKDAY_PAGE_SIZE >= WORKDAY_MAX_PAGES)
+        throw workdayError(
+          "pagination_limit_exceeded",
+          "Workday jobs pagination exceeded the safe page limit.",
+        );
+      planOffset(following);
+    }
+    validationDurationMs += performance.now() - validationStartedAt;
+  };
+
+  const requestOffset = async (offset: number) => {
+    const requestStartedAt = performance.now();
+    finishIdleGap(requestStartedAt);
+    numberOfListingRequests += 1;
+    activeRequests += 1;
+    maximumConcurrentRequestsObserved = Math.max(
+      maximumConcurrentRequestsObserved,
+      activeRequests,
+    );
+    try {
+      return await fetchSearchPage(source, offset, listingState);
+    } finally {
+      const requestFinishedAt = performance.now();
+      cumulativeRequestDurationMs += requestFinishedAt - requestStartedAt;
+      activeRequests -= 1;
+      if (activeRequests === 0) idleStartedAt = requestFinishedAt;
+    }
+  };
+
   planOffset(0);
   try {
-    let stableVersion: number | undefined;
-    while (!listingController.signal.aborted) {
+    offsets.set(0, { status: "in_flight" });
+    const firstFetchStartedAt = performance.now();
+    try {
+      completePage(0, await requestOffset(0));
+    } catch (error) {
+      offsets.set(0, { status: "failed", error });
+      throw error;
+    } finally {
+      const firstFetchFinishedAt = performance.now();
+      firstPageDurationMs = firstFetchFinishedAt - firstFetchStartedAt;
+      pageFetchDurationMs += firstPageDurationMs;
+    }
+
+    const claimPlannedOffset = (): number | undefined => {
       const schedulingStartedAt = performance.now();
-      const wave = [...offsets.entries()]
+      const offset = [...offsets.entries()]
         .filter(([, entry]) => entry.status === "planned")
-        .map(([offset]) => offset)
-        .sort((a, b) => a - b);
+        .map(([candidate]) => candidate)
+        .sort((a, b) => a - b)[0];
+      if (offset !== undefined) offsets.set(offset, { status: "in_flight" });
       pageSchedulingDurationMs += performance.now() - schedulingStartedAt;
-      if (wave.length === 0) {
-        const inFlight = [...offsets.values()].some(
-          (entry) => entry.status === "in_flight",
-        );
-        if (inFlight) continue;
-        if (stableVersion === planVersion) break;
-        stableVersion = planVersion;
-        continue;
-      }
-      stableVersion = undefined;
-      for (
-        let start = 0;
-        start < wave.length;
-        start += WORKDAY_LISTING_CONCURRENCY
+      return offset;
+    };
+    const replenish = (): void => {
+      while (
+        !listingController.signal.aborted &&
+        active.size < WORKDAY_LISTING_CONCURRENCY
       ) {
-        const batch = wave.slice(start, start + WORKDAY_LISTING_CONCURRENCY);
-        const batchSchedulingStartedAt = performance.now();
-        for (const offset of batch)
-          offsets.set(offset, { status: "in_flight" });
-        const requests = batch.map(async (offset) => {
-          const requestStartedAt = performance.now();
-          finishIdleGap(requestStartedAt);
-          numberOfListingRequests += 1;
-          activeRequests += 1;
-          maximumConcurrentRequestsObserved = Math.max(
-            maximumConcurrentRequestsObserved,
-            activeRequests,
-          );
-          try {
-            return {
-              offset,
-              page: await fetchSearchPage(source, offset, listingState),
-            };
-          } finally {
-            const requestFinishedAt = performance.now();
-            cumulativeRequestDurationMs += requestFinishedAt - requestStartedAt;
-            activeRequests -= 1;
-            if (activeRequests === 0) idleStartedAt = requestFinishedAt;
-          }
-        });
-        pageSchedulingDurationMs +=
-          performance.now() - batchSchedulingStartedAt;
-        const fetchStartedAt = performance.now();
-        let results: {
-          offset: number;
-          page: { jobs: Record<string, unknown>[]; total?: number };
-        }[];
-        try {
-          results = await Promise.all(requests);
-        } catch (error) {
-          listingController.abort();
-          await Promise.allSettled(requests);
-          const fetchFinishedAt = performance.now();
-          pageFetchDurationMs += fetchFinishedAt - fetchStartedAt;
-          if (batch.includes(0))
-            firstPageDurationMs = fetchFinishedAt - fetchStartedAt;
-          for (const offset of batch)
-            if (offsets.get(offset)?.status === "in_flight")
-              offsets.set(offset, { status: "failed", error });
-          throw error;
-        }
-        const fetchFinishedAt = performance.now();
-        pageFetchDurationMs += fetchFinishedAt - fetchStartedAt;
-        if (batch.includes(0))
-          firstPageDurationMs = fetchFinishedAt - fetchStartedAt;
-        const validationStartedAt = performance.now();
-        for (const result of results) {
-          const { offset, page } = result;
-          const completedPage = { offset, jobs: page.jobs, total: page.total };
-          offsets.set(offset, { status: "completed", page: completedPage });
-          rawRowsObserved += page.jobs.length;
-          const emptyFirstPage =
-            offset === 0 &&
-            getAuthoritativeTotal(offset, page.jobs, page.total) === 0 &&
-            page.jobs.length === 0;
-          if (!emptyFirstPage) observeTotal(offset, page.jobs, page.total);
-          const highestObservedRequiredOffset =
-            totals.maximumReportedTotal === undefined
-              ? undefined
-              : getLastDataOffset(totals.maximumReportedTotal);
-          const rowBearingSentinel =
-            highestObservedRequiredOffset !== undefined &&
-            offset > highestObservedRequiredOffset &&
-            page.jobs.length > 0;
-          if (
-            (totals.firstReportedTotal === undefined || rowBearingSentinel) &&
-            page.jobs.length === WORKDAY_PAGE_SIZE
-          ) {
-            const following = offset + WORKDAY_PAGE_SIZE;
-            if (following / WORKDAY_PAGE_SIZE >= WORKDAY_MAX_PAGES)
-              throw workdayError(
-                "pagination_limit_exceeded",
-                "Workday jobs pagination exceeded the safe page limit.",
-              );
-            planOffset(following);
-          }
-        }
-        validationDurationMs += performance.now() - validationStartedAt;
+        const offset = claimPlannedOffset();
+        if (offset === undefined) return;
+        const promise = requestOffset(offset).then(
+          (page) => ({ offset, page }),
+          (error: unknown) => ({ offset, error }),
+        );
+        active.set(offset, { offset, promise });
       }
+    };
+
+    let stableVersion: number | undefined;
+    const poolFetchStartedAt = performance.now();
+    try {
+      while (!listingController.signal.aborted) {
+        replenish();
+        if (active.size === 0) {
+          if (stableVersion === planVersion) break;
+          stableVersion = planVersion;
+          continue;
+        }
+        stableVersion = undefined;
+        const result = await Promise.race(
+          [...active.values()].map(({ promise }) => promise),
+        );
+        active.delete(result.offset);
+        if (result.error !== undefined) {
+          offsets.set(result.offset, { status: "failed", error: result.error });
+          listingController.abort();
+          await Promise.allSettled(
+            [...active.values()].map(({ promise }) => promise),
+          );
+          for (const { offset } of active.values())
+            if (offsets.get(offset)?.status === "in_flight")
+              offsets.set(offset, { status: "failed", error: result.error });
+          throw result.error;
+        }
+        completePage(result.offset, result.page!);
+      }
+    } finally {
+      pageFetchDurationMs += performance.now() - poolFetchStartedAt;
     }
     if (state.deadline.aborted || listingController.signal.aborted)
       throw workdayError("overall_timeout", "Workday jobs listing timed out.");
@@ -1088,6 +1113,9 @@ async function fetchCompleteListings(
   } finally {
     state.deadline.removeEventListener("abort", abortListing);
     listingController.abort();
+    await Promise.allSettled(
+      [...active.values()].map(({ promise }) => promise),
+    );
     state.receivedBytes = listingState.receivedBytes;
   }
 }
