@@ -31,10 +31,11 @@ export const WORKDAY_REQUEST_TIMEOUT_MS = 10_000;
 export const WORKDAY_LISTING_TIMEOUT_MS = 90_000;
 export const WORKDAY_PARSE_TIMEOUT_MS = 30_000;
 export const WORKDAY_MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
-// This allows an average of more than 80 KiB per listing response at the
-// 500-page boundary (over 4 KiB per row), while every response remains subject
-// to its separate 2 MiB cap. Keep the cumulative retrieval budget bounded.
-export const WORKDAY_MAX_CUMULATIVE_BYTES = 40 * 1024 * 1024;
+// Target-shaped fixtures average about 96 KiB per 20-row page (about 47 MiB at
+// the 500-page boundary). 64 MiB covers that complete board, three full-body
+// retries, and more than 25% additional headroom while remaining bounded. Every
+// response remains subject to its separate 2 MiB cap.
+export const WORKDAY_MAX_CUMULATIVE_BYTES = 64 * 1024 * 1024;
 export const WORKDAY_MAX_REDIRECTS = 3;
 
 const WORKDAY_CLUSTER_PATTERN = /^wd\d+$/;
@@ -130,6 +131,14 @@ type WorkdayListingTimingDiagnostic = {
   numberOfRetriedRequests: number;
 };
 
+type WorkdayCumulativeByteDiagnostic = {
+  cumulativeBytesReceived: number;
+  cumulativeByteLimit: number;
+  numberOfPages: number;
+  numberOfListingRequests: number;
+  numberOfRetryAttempts: number;
+};
+
 class WorkdayParserError extends Error {
   constructor(
     readonly failureCode: WorkdayFailureCode,
@@ -137,6 +146,7 @@ class WorkdayParserError extends Error {
     readonly paginationTotalDiagnostic?: WorkdayPaginationTotalDiagnostic,
     public listingTimingDiagnostic?: WorkdayListingTimingDiagnostic,
     readonly paginationLimitReason?: WorkdayPaginationLimitReason,
+    public cumulativeByteDiagnostic?: WorkdayCumulativeByteDiagnostic,
   ) {
     super(message);
     this.name = "WorkdayParserError";
@@ -216,6 +226,20 @@ function logWorkdayParsingFailure(
     stage === "detail" && failureCode !== "overall_timeout"
       ? "detail_failed"
       : failureCode;
+  if (
+    stage === "listing" &&
+    loggedFailureCode === "cumulative_budget_exceeded" &&
+    error instanceof WorkdayParserError &&
+    error.cumulativeByteDiagnostic
+  ) {
+    console.error({
+      provider: "workday",
+      stage,
+      failureCode: loggedFailureCode,
+      ...error.cumulativeByteDiagnostic,
+    });
+    return;
+  }
   if (
     stage === "listing" &&
     loggedFailureCode === "pagination_limit_exceeded" &&
@@ -1255,14 +1279,12 @@ async function fetchCompleteListings(
       const page = pages.get(offset);
       return Boolean(
         page &&
-          offset >= highestRequiredOffset &&
-          page.jobs.length < WORKDAY_PAGE_SIZE,
+        offset >= highestRequiredOffset &&
+        page.jobs.length < WORKDAY_PAGE_SIZE,
       );
     });
     if (shortPageOffset === undefined)
-      if (
-        pages.get(getMaximumSafeOffset())?.jobs.length === WORKDAY_PAGE_SIZE
-      )
+      if (pages.get(getMaximumSafeOffset())?.jobs.length === WORKDAY_PAGE_SIZE)
         throw workdayError(
           "pagination_limit_exceeded",
           "Workday jobs pagination exceeded the safe page limit.",
@@ -1319,6 +1341,24 @@ async function fetchCompleteListings(
       error.failureCode === "overall_timeout"
     )
       error.listingTimingDiagnostic = buildTimingDiagnostic();
+    if (
+      error instanceof WorkdayParserError &&
+      error.failureCode === "cumulative_budget_exceeded"
+    ) {
+      listingController.abort();
+      await Promise.allSettled(
+        [...active.values()].map(({ promise }) => promise),
+      );
+      error.cumulativeByteDiagnostic = {
+        cumulativeBytesReceived: listingState.receivedBytes,
+        cumulativeByteLimit: WORKDAY_MAX_CUMULATIVE_BYTES,
+        numberOfPages: [...offsets.values()].filter(
+          (entry) => entry.status === "completed",
+        ).length,
+        numberOfListingRequests,
+        numberOfRetryAttempts,
+      };
+    }
     throw error;
   } finally {
     state.deadline.removeEventListener("abort", abortListing);
@@ -1380,6 +1420,9 @@ export const workdayProvider: AtsProvider = {
           .filter((job): job is ImportedJob => Boolean(job));
       }
       state.stage = "detail";
+      // Detail hydration is a distinct bounded operation. Listing discovery
+      // must not leave selected-job requests with a partly consumed budget.
+      const detailState: FetchState = { ...state, receivedBytes: 0 };
       const jobs = await mapWithConcurrency(
         listings,
         WORKDAY_DETAIL_CONCURRENCY,
@@ -1390,8 +1433,12 @@ export const workdayProvider: AtsProvider = {
               "invalid_external_path",
               "Workday job listing contained an invalid external path.",
             );
-          const detail = await fetchJobDetail(source, externalPath, state);
-          state.stage = "normalization";
+          const detail = await fetchJobDetail(
+            source,
+            externalPath,
+            detailState,
+          );
+          detailState.stage = "normalization";
           return normalizeWorkdayJob(source, summary, detail);
         },
       );
@@ -1431,6 +1478,9 @@ export const workdayProvider: AtsProvider = {
           unique.set(job.externalId, job);
       const selected = [...unique.values()];
       state.stage = "detail";
+      // Preview discovery and later selected-job hydration have independent,
+      // bounded cumulative response budgets.
+      const detailState: FetchState = { ...state, receivedBytes: 0 };
       return await mapWithConcurrency(
         selected,
         WORKDAY_DETAIL_CONCURRENCY,
@@ -1450,8 +1500,12 @@ export const workdayProvider: AtsProvider = {
               externalId: job.externalId,
             };
           try {
-            const detail = await fetchJobDetail(source, externalPath, state);
-            state.stage = "normalization";
+            const detail = await fetchJobDetail(
+              source,
+              externalPath,
+              detailState,
+            );
+            detailState.stage = "normalization";
             const hydrated = normalizeWorkdayJob(source, listing, detail);
             return hydrated
               ? { status: "ready", job: hydrated }
@@ -1468,7 +1522,7 @@ export const workdayProvider: AtsProvider = {
               externalId: job.externalId,
             };
           } finally {
-            state.stage = "detail";
+            detailState.stage = "detail";
           }
         },
       );
