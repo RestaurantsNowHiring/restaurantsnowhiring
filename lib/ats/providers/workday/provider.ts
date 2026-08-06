@@ -11,6 +11,7 @@ import type {
 export const WORKDAY_PAGE_SIZE = 20;
 export const WORKDAY_DETAIL_CONCURRENCY = 4;
 export const WORKDAY_LISTING_CONCURRENCY = 8;
+export const WORKDAY_LISTING_MAX_ATTEMPTS = 3;
 export const WORKDAY_MAX_JOBS = 5_000;
 export const WORKDAY_MAX_TOTAL_DRIFT = 100;
 export const WORKDAY_MAX_PAGES = Math.ceil(
@@ -139,6 +140,39 @@ function classifyWorkdayFailure(error: unknown): WorkdayFailureCode {
   return error instanceof WorkdayParserError
     ? error.failureCode
     : "unknown_failure";
+}
+
+function isRetryableListingFailure(error: unknown): boolean {
+  const failureCode = classifyWorkdayFailure(error);
+  return (
+    failureCode === "request_timeout" ||
+    failureCode === "network_failure" ||
+    failureCode === "http_429" ||
+    failureCode === "http_5xx"
+  );
+}
+
+function waitForListingRetry(
+  delayMs: number,
+  signal: AbortSignal,
+): Promise<void> {
+  if (signal.aborted)
+    return Promise.reject(
+      workdayError("overall_timeout", "Workday jobs listing timed out."),
+    );
+  return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      clearTimeout(timeout);
+      reject(
+        workdayError("overall_timeout", "Workday jobs listing timed out."),
+      );
+    };
+    const timeout = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, delayMs);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }
 
 function logWorkdayParsingFailure(
@@ -940,12 +974,42 @@ async function fetchCompleteListings(
     }
   };
 
+  const requestOffsetWithRetry = async (offset: number) => {
+    const retryDelaysMs = [250, 600] as const;
+    for (
+      let attempt = 1;
+      attempt <= WORKDAY_LISTING_MAX_ATTEMPTS;
+      attempt += 1
+    ) {
+      if (listingController.signal.aborted)
+        throw workdayError(
+          "overall_timeout",
+          "Workday jobs listing timed out.",
+        );
+      try {
+        return await requestOffset(offset);
+      } catch (error) {
+        if (
+          attempt === WORKDAY_LISTING_MAX_ATTEMPTS ||
+          !isRetryableListingFailure(error) ||
+          listingController.signal.aborted
+        )
+          throw error;
+        await waitForListingRetry(
+          retryDelaysMs[attempt - 1],
+          listingController.signal,
+        );
+      }
+    }
+    throw workdayError("unknown_failure", "Workday jobs request failed.");
+  };
+
   planOffset(0);
   try {
     offsets.set(0, { status: "in_flight" });
     const firstFetchStartedAt = performance.now();
     try {
-      completePage(0, await requestOffset(0));
+      completePage(0, await requestOffsetWithRetry(0));
     } catch (error) {
       offsets.set(0, { status: "failed", error });
       throw error;
@@ -972,7 +1036,7 @@ async function fetchCompleteListings(
       ) {
         const offset = claimPlannedOffset();
         if (offset === undefined) return;
-        const promise = requestOffset(offset).then(
+        const promise = requestOffsetWithRetry(offset).then(
           (page) => ({ offset, page }),
           (error: unknown) => ({ offset, error }),
         );
