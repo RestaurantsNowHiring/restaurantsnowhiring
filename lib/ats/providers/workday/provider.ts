@@ -88,11 +88,25 @@ type WorkdayPaginationTotalDiagnostic = {
   rawRowsRetrieved: number;
 };
 
+type WorkdayListingTimingDiagnostic = {
+  firstPageDurationMs: number;
+  pageSchedulingDurationMs: number;
+  pageFetchDurationMs: number;
+  cumulativeRequestDurationMs: number;
+  validationDurationMs: number;
+  idleGapDurationMs: number;
+  totalListingDurationMs: number;
+  numberOfPages: number;
+  numberOfListingRequests: number;
+  maximumConcurrentRequestsObserved: number;
+};
+
 class WorkdayParserError extends Error {
   constructor(
     readonly failureCode: WorkdayFailureCode,
     message: string,
     readonly paginationTotalDiagnostic?: WorkdayPaginationTotalDiagnostic,
+    public listingTimingDiagnostic?: WorkdayListingTimingDiagnostic,
   ) {
     super(message);
     this.name = "WorkdayParserError";
@@ -147,6 +161,20 @@ function logWorkdayParsingFailure(
       stage,
       failureCode: loggedFailureCode,
       ...error.paginationTotalDiagnostic,
+    });
+    return;
+  }
+  if (
+    stage === "listing" &&
+    loggedFailureCode === "overall_timeout" &&
+    error instanceof WorkdayParserError &&
+    error.listingTimingDiagnostic
+  ) {
+    console.error({
+      provider: "workday",
+      stage,
+      failureCode: loggedFailureCode,
+      ...error.listingTimingDiagnostic,
     });
     return;
   }
@@ -744,6 +772,17 @@ async function fetchCompleteListings(
   source: WorkdaySource,
   state: FetchState,
 ): Promise<Record<string, unknown>[]> {
+  const listingStartedAt = performance.now();
+  let firstPageDurationMs = 0;
+  let pageSchedulingDurationMs = 0;
+  let pageFetchDurationMs = 0;
+  let cumulativeRequestDurationMs = 0;
+  let validationDurationMs = 0;
+  let numberOfListingRequests = 0;
+  let activeRequests = 0;
+  let maximumConcurrentRequestsObserved = 0;
+  let idleStartedAt: number | undefined;
+  let idleGapDurationMs = 0;
   type OffsetState =
     | { status: "planned" }
     | { status: "in_flight" }
@@ -767,6 +806,30 @@ async function fetchCompleteListings(
   };
   let rawRowsObserved = 0;
   let planVersion = 0;
+
+  const finishIdleGap = (now: number): void => {
+    if (idleStartedAt === undefined) return;
+    idleGapDurationMs += now - idleStartedAt;
+    idleStartedAt = undefined;
+  };
+  const buildTimingDiagnostic = (): WorkdayListingTimingDiagnostic => {
+    const now = performance.now();
+    finishIdleGap(now);
+    return {
+      firstPageDurationMs: Math.round(firstPageDurationMs),
+      pageSchedulingDurationMs: Math.round(pageSchedulingDurationMs),
+      pageFetchDurationMs: Math.round(pageFetchDurationMs),
+      cumulativeRequestDurationMs: Math.round(cumulativeRequestDurationMs),
+      validationDurationMs: Math.round(validationDurationMs),
+      idleGapDurationMs: Math.round(idleGapDurationMs),
+      totalListingDurationMs: Math.round(now - listingStartedAt),
+      numberOfPages: [...offsets.values()].filter(
+        (entry) => entry.status === "completed",
+      ).length,
+      numberOfListingRequests,
+      maximumConcurrentRequestsObserved,
+    };
+  };
 
   const planOffset = (offset: number): boolean => {
     if (offsets.has(offset)) return false;
@@ -817,10 +880,12 @@ async function fetchCompleteListings(
   try {
     let stableVersion: number | undefined;
     while (!listingController.signal.aborted) {
+      const schedulingStartedAt = performance.now();
       const wave = [...offsets.entries()]
         .filter(([, entry]) => entry.status === "planned")
         .map(([offset]) => offset)
         .sort((a, b) => a - b);
+      pageSchedulingDurationMs += performance.now() - schedulingStartedAt;
       if (wave.length === 0) {
         const inFlight = [...offsets.values()].some(
           (entry) => entry.status === "in_flight",
@@ -837,12 +902,33 @@ async function fetchCompleteListings(
         start += WORKDAY_LISTING_CONCURRENCY
       ) {
         const batch = wave.slice(start, start + WORKDAY_LISTING_CONCURRENCY);
+        const batchSchedulingStartedAt = performance.now();
         for (const offset of batch)
           offsets.set(offset, { status: "in_flight" });
-        const requests = batch.map(async (offset) => ({
-          offset,
-          page: await fetchSearchPage(source, offset, listingState),
-        }));
+        const requests = batch.map(async (offset) => {
+          const requestStartedAt = performance.now();
+          finishIdleGap(requestStartedAt);
+          numberOfListingRequests += 1;
+          activeRequests += 1;
+          maximumConcurrentRequestsObserved = Math.max(
+            maximumConcurrentRequestsObserved,
+            activeRequests,
+          );
+          try {
+            return {
+              offset,
+              page: await fetchSearchPage(source, offset, listingState),
+            };
+          } finally {
+            const requestFinishedAt = performance.now();
+            cumulativeRequestDurationMs += requestFinishedAt - requestStartedAt;
+            activeRequests -= 1;
+            if (activeRequests === 0) idleStartedAt = requestFinishedAt;
+          }
+        });
+        pageSchedulingDurationMs +=
+          performance.now() - batchSchedulingStartedAt;
+        const fetchStartedAt = performance.now();
         let results: {
           offset: number;
           page: { jobs: Record<string, unknown>[]; total?: number };
@@ -852,11 +938,20 @@ async function fetchCompleteListings(
         } catch (error) {
           listingController.abort();
           await Promise.allSettled(requests);
+          const fetchFinishedAt = performance.now();
+          pageFetchDurationMs += fetchFinishedAt - fetchStartedAt;
+          if (batch.includes(0))
+            firstPageDurationMs = fetchFinishedAt - fetchStartedAt;
           for (const offset of batch)
             if (offsets.get(offset)?.status === "in_flight")
               offsets.set(offset, { status: "failed", error });
           throw error;
         }
+        const fetchFinishedAt = performance.now();
+        pageFetchDurationMs += fetchFinishedAt - fetchStartedAt;
+        if (batch.includes(0))
+          firstPageDurationMs = fetchFinishedAt - fetchStartedAt;
+        const validationStartedAt = performance.now();
         for (const result of results) {
           const { offset, page } = result;
           const completedPage = { offset, jobs: page.jobs, total: page.total };
@@ -888,12 +983,14 @@ async function fetchCompleteListings(
             planOffset(following);
           }
         }
+        validationDurationMs += performance.now() - validationStartedAt;
       }
     }
     if (state.deadline.aborted || listingController.signal.aborted)
       throw workdayError("overall_timeout", "Workday jobs listing timed out.");
 
     state.receivedBytes = listingState.receivedBytes;
+    const validationStartedAt = performance.now();
     const sortedOffsets = [...offsets.keys()].sort((a, b) => a - b);
     const pages = new Map<number, WorkdayListingPage>();
     for (let i = 0; i < sortedOffsets.length; i += 1) {
@@ -979,7 +1076,15 @@ async function fetchCompleteListings(
           );
       }
     }
+    validationDurationMs += performance.now() - validationStartedAt;
     return listings;
+  } catch (error) {
+    if (
+      error instanceof WorkdayParserError &&
+      error.failureCode === "overall_timeout"
+    )
+      error.listingTimingDiagnostic = buildTimingDiagnostic();
+    throw error;
   } finally {
     state.deadline.removeEventListener("abort", abortListing);
     listingController.abort();
