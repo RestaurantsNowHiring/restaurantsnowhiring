@@ -55,6 +55,7 @@ export type WorkdayFailureCode =
   | "invalid_external_path"
   | "pagination_total_unstable"
   | "pagination_incomplete"
+  | "pagination_sparse"
   | "pagination_non_progressing"
   | "pagination_limit_exceeded"
   | "listing_page_failed"
@@ -831,8 +832,16 @@ async function fetchCompleteListings(
         pages.set(offset, { offset, jobs: page.jobs, total: page.total });
         rawRowsObserved += page.jobs.length;
         observeTotal(offset, page.jobs, page.total);
+        const highestObservedRequiredOffset =
+          totals.maximumReportedTotal === undefined
+            ? undefined
+            : getLastDataOffset(totals.maximumReportedTotal);
+        const rowBearingSentinel =
+          highestObservedRequiredOffset !== undefined &&
+          offset > highestObservedRequiredOffset &&
+          page.jobs.length > 0;
         if (
-          firstPageAuthoritativeTotal === undefined &&
+          (firstPageAuthoritativeTotal === undefined || rowBearingSentinel) &&
           page.jobs.length === WORKDAY_PAGE_SIZE
         ) {
           const following = offset + WORKDAY_PAGE_SIZE;
@@ -881,50 +890,50 @@ async function fetchCompleteListings(
     totals.maximumReportedTotal === undefined
       ? (sortedOffsets.at(-1) ?? 0)
       : getLastDataOffset(totals.maximumReportedTotal);
-  const completionPage = sortedOffsets.some((offset) => {
+  const shortPageOffset = sortedOffsets.find((offset) => {
     const page = pages.get(offset);
-    return Boolean(
-      page &&
-      offset >= highestRequiredOffset &&
-      page.jobs.length < WORKDAY_PAGE_SIZE,
-    );
+    return Boolean(page && page.jobs.length < WORKDAY_PAGE_SIZE);
   });
-  if (!completionPage)
+  if (shortPageOffset === undefined)
     throw workdayError(
       "pagination_incomplete",
       "Workday jobs listing ended before completion was established.",
     );
+  const laterRowOffset = sortedOffsets.find((offset) => {
+    const page = pages.get(offset);
+    return Boolean(
+      page && offset > shortPageOffset && page.jobs.length > 0,
+    );
+  });
+  if (laterRowOffset !== undefined && shortPageOffset < highestRequiredOffset)
+    throw workdayError(
+      "pagination_sparse",
+      "Workday jobs pagination returned rows after an early short page.",
+    );
   if (
-    totals.latestReportedTotal !== undefined &&
-    totals.latestReportedTotal > rawRowsObserved &&
-    (rawRowsObserved === 0 ||
-      totals.latestReportedTotal - rawRowsObserved > WORKDAY_MAX_TOTAL_DRIFT)
+    totals.maximumReportedTotal !== undefined &&
+    totals.maximumReportedTotal > 0 &&
+    rawRowsObserved === 0
   )
     throw workdayError(
       "pagination_incomplete",
-      "Workday jobs listing ended before the reported total was retrieved.",
+      "Workday jobs listing ended before completion was established.",
+    );
+  const shortPageCanBeTerminal =
+    shortPageOffset >= highestRequiredOffset || laterRowOffset === undefined;
+  if (!shortPageCanBeTerminal)
+    throw workdayError(
+      "pagination_incomplete",
+      "Workday jobs listing ended before completion was established.",
     );
   const seen = new Set<string>();
   const listings: Record<string, unknown>[] = [];
-  const maximumDataOffset =
-    totals.maximumReportedTotal === undefined
-      ? undefined
-      : getLastDataOffset(totals.maximumReportedTotal);
   for (const offset of [...pages.keys()].sort((a, b) => a - b)) {
     const page = pages.get(offset);
     if (!page) continue;
     for (const job of page.jobs) {
       const identity = getListingIdentity(job);
       if (!identity) continue;
-      if (
-        maximumDataOffset !== undefined &&
-        offset > maximumDataOffset &&
-        !seen.has(identity)
-      )
-        throw workdayError(
-          "pagination_non_progressing",
-          "Workday jobs pagination did not progress consistently.",
-        );
       if (seen.has(identity)) continue;
       seen.add(identity);
       listings.push(job);
