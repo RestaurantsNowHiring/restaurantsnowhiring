@@ -248,6 +248,9 @@ export default function AtsIntegrationPage() {
   const [careersPageUrl, setCareersPageUrl] = useState("");
   const [isFindingJobs, setIsFindingJobs] = useState(false);
   const [previewJobs, setPreviewJobs] = useState<PreviewJob[] | null>(null);
+  const [nextPreviewOffset, setNextPreviewOffset] = useState<number | null>(null);
+  const [hasMorePreviewJobs, setHasMorePreviewJobs] = useState(false);
+  const [isLoadingMoreJobs, setIsLoadingMoreJobs] = useState(false);
   const [selectedJobKeys, setSelectedJobKeys] = useState<Set<string>>(() => new Set());
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [selectedLocation, setSelectedLocation] = useState("");
@@ -498,6 +501,8 @@ export default function AtsIntegrationPage() {
     requestInFlightRef.current = true;
     setIsFindingJobs(true);
     setPreviewJobs(null);
+    setNextPreviewOffset(null);
+    setHasMorePreviewJobs(false);
     setSelectedJobKeys(new Set());
     setJobSearchQuery("");
     setSelectedLocation("");
@@ -549,11 +554,13 @@ export default function AtsIntegrationPage() {
       }
 
       const payload = (await response.json().catch(() => null)) as
-        | { status?: unknown; jobs?: unknown; message?: unknown }
+        | { status?: unknown; jobs?: unknown; message?: unknown; nextOffset?: unknown; hasMore?: unknown }
         | null;
 
       if (payload?.status === "ready" && Array.isArray(payload.jobs)) {
         setPreviewJobs(payload.jobs.map(toPreviewJob));
+        setNextPreviewOffset(typeof payload.nextOffset === "number" ? payload.nextOffset : null);
+        setHasMorePreviewJobs(payload.hasMore === true);
         setResultMessage(
           payload.jobs.length === 0
             ? "We connected to your careers page, but there are no open jobs right now."
@@ -580,6 +587,35 @@ export default function AtsIntegrationPage() {
     } finally {
       requestInFlightRef.current = false;
       setIsFindingJobs(false);
+    }
+  }
+
+  async function loadMoreJobs() {
+    if (!hasMorePreviewJobs || nextPreviewOffset === null || isLoadingMoreJobs) return;
+    setIsLoadingMoreJobs(true);
+    setResultMessage(null);
+    try {
+      const { data } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (!accessToken) return router.replace(`/employer-login?next=${encodeURIComponent("/employer-dashboard/ats")}`);
+      const response = await fetch("/api/employer/ats/preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...employerAccountHeaders(accessToken) },
+        body: JSON.stringify({ careersPageUrl: careersPageUrl.trim(), offset: nextPreviewOffset }),
+      });
+      const payload = await response.json().catch(() => null) as { status?: unknown; jobs?: unknown[]; nextOffset?: unknown; hasMore?: unknown } | null;
+      if (!response.ok || payload?.status !== "ready" || !Array.isArray(payload.jobs)) throw new Error("preview failed");
+      setPreviewJobs((current) => {
+        const jobsByKey = new Map((current ?? []).map((job) => [job.selectionKey, job]));
+        for (const value of payload.jobs ?? []) { const job = toPreviewJob(value); jobsByKey.set(job.selectionKey, job); }
+        return [...jobsByKey.values()];
+      });
+      setNextPreviewOffset(typeof payload.nextOffset === "number" ? payload.nextOffset : null);
+      setHasMorePreviewJobs(payload.hasMore === true);
+    } catch {
+      setResultMessage("We couldn’t load more jobs right now. Please try again.");
+    } finally {
+      setIsLoadingMoreJobs(false);
     }
   }
 
@@ -979,7 +1015,7 @@ export default function AtsIntegrationPage() {
               Jobs Found
             </h2>
             <p role="status" style={{ margin: "0 0 16px", color: homeTheme.muted, fontWeight: 800 }}>
-              We found {previewJobs.length} {previewJobs.length === 1 ? "job" : "jobs"}.
+              Showing {previewJobs.length} loaded {previewJobs.length === 1 ? "job" : "jobs"}.{hasMorePreviewJobs ? " More jobs available." : ""}
             </p>
             <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 12, marginBottom: 16 }}>
               <p role="status" style={{ margin: 0, color: homeTheme.text, fontWeight: 900 }}>
@@ -1021,7 +1057,7 @@ export default function AtsIntegrationPage() {
               }}
             >
               <label style={{ flex: "2 1 240px", fontWeight: 900, color: homeTheme.text }}>
-                Search Jobs
+                Search loaded jobs
                 <input
                   type="search"
                   value={jobSearchQuery}
@@ -1029,7 +1065,7 @@ export default function AtsIntegrationPage() {
                     setJobSearchQuery(event.target.value);
                     setCurrentPage(1);
                   }}
-                  placeholder="Search jobs"
+                  placeholder="Search loaded jobs"
                   style={{ ...homeInputStyle, marginTop: 6 }}
                 />
               </label>
@@ -1166,6 +1202,13 @@ export default function AtsIntegrationPage() {
                   Next
                 </button>
               </nav>
+            ) : null}
+            {hasMorePreviewJobs ? (
+              <div style={{ display: "flex", justifyContent: "center", marginTop: 16 }}>
+                <button type="button" className="rn-btn-secondary" style={homeSecondaryButton} onClick={() => void loadMoreJobs()} disabled={isLoadingMoreJobs}>
+                  {isLoadingMoreJobs ? "Loading More Jobs..." : "Load More Jobs"}
+                </button>
+              </div>
             ) : null}
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 20 }}>
               <button

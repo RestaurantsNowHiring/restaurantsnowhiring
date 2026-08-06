@@ -14,6 +14,8 @@ export type JobImportPreviewResult =
       providerKey: AtsProviderKey;
       sourceUrl: string;
       jobs: ImportedJob[];
+      nextOffset: number | null;
+      hasMore: boolean;
     }
   | {
       status: "discovery-failed";
@@ -36,6 +38,7 @@ export type JobImportPreviewResult =
 
 export async function previewJobImport(
   inputUrl: string,
+  offset = 0,
 ): Promise<JobImportPreviewResult> {
   const analysisResult = await analyzeCareersPage(inputUrl);
   const classification = classifyAnalysisResult(analysisResult);
@@ -62,15 +65,28 @@ export async function previewJobImport(
       }
 
       try {
-        const jobs = await provider.parseJobs({
-          url: classification.sourceUrl,
-        }, { detailMode: "listing" });
+        const page = provider.listJobsPage
+          ? await provider.listJobsPage({
+              careersPage: { url: classification.sourceUrl },
+              offset,
+              limit: 20,
+            })
+          : {
+              jobs: await provider.parseJobs(
+                { url: classification.sourceUrl },
+                { detailMode: "listing" },
+              ),
+              nextOffset: null,
+              hasMore: false,
+            };
 
         return {
           status: "ready",
           providerKey: classification.providerKey,
           sourceUrl: classification.sourceUrl,
-          jobs,
+          jobs: page.jobs,
+          nextOffset: page.nextOffset,
+          hasMore: page.hasMore,
         };
       } catch {
         return {

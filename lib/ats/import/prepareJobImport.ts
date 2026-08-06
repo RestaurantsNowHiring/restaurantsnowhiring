@@ -261,6 +261,16 @@ export async function prepareJobImport(input: PrepareJobImportInput, dependencie
 
   const unavailableHydration = new Set<string>();
   const provider = (dependencies?.getProvider ?? getAtsProvider)(preview.providerKey);
+  if (provider?.listJobsPage && provider.hydrateJobs) {
+    matchedJobs.clear();
+    for (const selected of input.selectedJobKeys) {
+      if (normalizeProviderKey(selected.providerKey) !== normalizeProviderKey(preview.providerKey)) continue;
+      matchedJobs.set(`${normalizeProviderKey(selected.providerKey)}\u0000${selected.externalId}`, {
+        providerKey: selected.providerKey, externalId: selected.externalId,
+        sourceUrl: preview.sourceUrl, applyUrl: preview.sourceUrl, title: "Selected job",
+      });
+    }
+  }
   if (provider?.hydrateJobs && matchedJobs.size) {
     try {
       const hydrated = await provider.hydrateJobs({ careersPage: { url: preview.sourceUrl }, jobs: [...matchedJobs.values()] });
@@ -281,7 +291,7 @@ export async function prepareJobImport(input: PrepareJobImportInput, dependencie
   let savedMappings: AtsLocationMapping[] = [];
   if (database && input.employerAccountId) {
     try {
-      const locationKeys = [...new Set([...matchedJobs.values()].map((job) => job.location ? normalizeAtsLocationKey(job.location) : "").filter(Boolean))];
+      const locationKeys = [...new Set(input.selectedJobKeys.map((selected) => jobs.get(`${normalizeProviderKey(selected.providerKey)}\u0000${selected.externalId}`)?.location).map((location) => location ? normalizeAtsLocationKey(location) : "").filter(Boolean))];
       savedMappings = await database.findLocationMappings(input.employerAccountId, normalizeProviderKey(preview.providerKey), locationKeys);
     } catch {
       return { status: "retrieval-failed", message: SAFE_PREVIEW_MESSAGES["retrieval-failed"] };
