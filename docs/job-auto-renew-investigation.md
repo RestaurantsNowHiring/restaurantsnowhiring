@@ -3,6 +3,8 @@
 **Investigation baseline:** commit `303683a07e3293017df0f2e2b7e6b0faeede944f` on branch `auto-renew` (investigated 2026-08-06).
 **Scope:** repository-grounded investigation and planning only. No application, billing, cron, email, UI, legal-copy, or database behavior is changed by this document.
 
+> **Historical baseline:** Sections describing auto-pause, expiration reminders, and missing auto-renew behavior document the pre-implementation state at the baseline commit above. The subsequent lifecycle implementation replaces that mutation with automatic 30-day renewal for approved active jobs, preserves status and billing quantity, and no longer invokes the old expiration emails.
+
 ## Executive summary
 
 The application currently has **two independent 30-day concepts**:

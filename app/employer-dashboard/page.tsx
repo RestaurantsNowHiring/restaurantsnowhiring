@@ -118,7 +118,7 @@ const JOB_STATUS_FILTER_OPTIONS: Array<{ value: JobStatusFilter; label: string }
   { value: "all", label: "All" },
   { value: "Active", label: "Active" },
   { value: "Paused", label: "Paused" },
-  { value: "Expired", label: "Expired" },
+  { value: "Expired", label: "Paused — Period Ended" },
   { value: "Pending", label: "Pending Review" },
   { value: "Rejected", label: "Rejected" },
 ];
@@ -367,6 +367,10 @@ function statusPillStyle(status: DashboardJob["dashboard_status"]): React.CSSPro
     fontFamily: "var(--font-body)",
     padding: "5px 10px",
   };
+}
+
+function dashboardStatusLabel(status: DashboardJob["dashboard_status"]) {
+  return status === "Expired" ? "Paused — Period Ended" : status;
 }
 
 function getJobPaginationItems(currentPage: number, totalPages: number): PaginationItem[] {
@@ -872,17 +876,18 @@ export default function EmployerDashboardPage() {
 
   function getExpirationStatusLabel(job: Pick<DashboardJob, "expires_at" | "dashboard_status">) {
     const remainingDays = getRemainingCalendarDays(job.expires_at);
-    if (!job.expires_at || remainingDays === null) return "No expiration date";
-    if (job.dashboard_status === "Expired") return "Expired";
-    if (remainingDays === 0) return "Expires today";
-    if (remainingDays === 1) return "1 day left";
-    return `${remainingDays} days left`;
+    if (!job.expires_at || remainingDays === null) return "No renewal date";
+    if (job.dashboard_status === "Expired") return "Paused period ended";
+    if (remainingDays === 0) return job.dashboard_status === "Active" ? "Renewal pending" : "Period ends today";
+    if (job.dashboard_status === "Paused") return remainingDays === 1 ? "Paused • 1 day left" : `Paused • ${remainingDays} days left`;
+    if (remainingDays === 1) return "Renews in 1 day";
+    return `Renews in ${remainingDays} days`;
   }
 
   function renderExpirationCell(job: Pick<DashboardJob, "expires_at" | "dashboard_status">) {
     const expirationDate = formatExpirationDate(job.expires_at);
     const statusLabel = getExpirationStatusLabel(job);
-    const isExpired = statusLabel === "Expired";
+    const isExpired = statusLabel === "Paused period ended";
 
     return (
       <div className="rn-dashboard-expiration">
@@ -909,9 +914,9 @@ export default function EmployerDashboardPage() {
       const remainingDays = getRemainingCalendarDays(job.expires_at);
       const body = job.expires_at && expirationDate
         ? remainingDays !== null && remainingDays < 1
-          ? `This job expires today.\n\nPausing will remove it from public search results and future billing, but the expiration date will continue to count down. Remaining days are not saved or extended.`
-          : `This job has ${remainingDays} ${remainingDays === 1 ? "day" : "days"} remaining in its current 30-day listing period and expires on ${expirationDate}.\n\nPausing will remove it from public search results and future billing, but the expiration date will continue to count down. Remaining days are not saved or extended.`
-        : "Pausing will remove this job from public search results and future billing.";
+          ? `This job is due to renew today.\n\nPausing will remove it from public search results and future billing and prevent automatic renewal.`
+          : `This job has ${remainingDays} ${remainingDays === 1 ? "day" : "days"} before its next renewal on ${expirationDate}.\n\nPausing will remove it from public search results and future billing and prevent automatic renewal. Remaining days are not saved or extended.`
+        : "Pausing will remove this job from public search results and future billing and prevent automatic renewal.";
       if (!window.confirm(`Pause this job?\n\n${body}`)) return;
     }
 
@@ -952,8 +957,8 @@ export default function EmployerDashboardPage() {
     } : item));
 
     if (payload.billing?.warning) setActionError(payload.billing.warning);
-    else if (action === "renew") setActionSuccess(`Job renewed and reactivated. It now expires on ${formatExpirationDate(typeof updated.expires_at === "string" ? updated.expires_at : null) ?? "the new expiration date"}.`);
-    else setActionSuccess(action === "pause" ? "Job paused. Its expiration date will continue to count down." : "Job resumed without changing its expiration date.");
+    else if (action === "renew") setActionSuccess(`Job renewed and reactivated. Its new listing period runs through ${formatExpirationDate(typeof updated.expires_at === "string" ? updated.expires_at : null) ?? "the new renewal date"}.`);
+    else setActionSuccess(action === "pause" ? "Job paused. It will not renew automatically while paused." : "Job resumed without changing its next renewal date.");
     setBusyJobId(null);
     await refreshBillingSummary();
   }
@@ -2368,7 +2373,7 @@ export default function EmployerDashboardPage() {
                       <th>Status</th>
                       <th>Location</th>
                       <th>Date Posted</th>
-                      <th>Expires</th>
+                      <th>Renews / Period Ends</th>
                       <th>Views</th>
                       <th>Actions</th>
                     </tr>
@@ -2386,7 +2391,7 @@ export default function EmployerDashboardPage() {
                         </td>
                         <td>{job.title}</td>
                         <td>
-                          <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
+                          <span style={statusPillStyle(job.dashboard_status)}>{dashboardStatusLabel(job.dashboard_status)}</span>
                         </td>
                         <td>{getJobLocationDisplay(job)}</td>
                         <td>{formatDate(job.created_at)}</td>
@@ -2442,13 +2447,13 @@ export default function EmployerDashboardPage() {
                       <h3 style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
                         {job.title}
                       </h3>
-                      <span style={statusPillStyle(job.dashboard_status)}>{job.dashboard_status}</span>
+                      <span style={statusPillStyle(job.dashboard_status)}>{dashboardStatusLabel(job.dashboard_status)}</span>
                     </div>
                     <p style={{ margin: "8px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
                       {getJobLocationDisplay(job)}
                     </p>
                     <p style={{ margin: "4px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
-                      Posted {formatDate(job.created_at)} • Expires {formatExpirationDate(job.expires_at) ?? "—"}{job.dashboard_status === "Expired" ? " (expired)" : ""} • {job.views} views
+                      Posted {formatDate(job.created_at)} • {job.dashboard_status === "Active" ? "Renews" : "Period ends"} {formatExpirationDate(job.expires_at) ?? "—"}{job.dashboard_status === "Expired" ? " (ended)" : ""} • {job.views} views
                     </p>
                     <div className="rn-dashboard-actions" style={{ marginTop: 12 }}>
                       <Link

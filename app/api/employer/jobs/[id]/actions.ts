@@ -46,7 +46,7 @@ export async function handleEmployerJobAction(request: Request, context: { param
     }
 
     if (action === "resume" && expired(job.expires_at as string | null)) {
-      return NextResponse.json({ error: "This job has expired. Use Renew & Reactivate to start a new 30-day listing period.", code: "renew_required" }, { status: 409 });
+      return NextResponse.json({ error: "This paused job's listing period has ended. Use Renew & Reactivate to start a new 30-day listing period.", code: "renew_required" }, { status: 409 });
     }
 
     const update = action === "pause"
