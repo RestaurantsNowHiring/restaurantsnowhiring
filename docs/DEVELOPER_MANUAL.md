@@ -302,7 +302,7 @@ Plain-English manual for founders/operators. This document explains what the cur
 - `app/api/stripe/checkout/route.ts`: creates Checkout session.
 - `app/api/stripe/portal/route.ts`: creates customer portal session.
 - `app/api/stripe/webhook/route.ts`: handles Stripe subscription lifecycle events.
-- `app/api/cron/pause-expired-jobs/route.ts`: sends reminders, calls expiration RPC, and syncs Stripe quantities.
+- `app/api/cron/pause-expired-jobs/route.ts`: invokes the idempotent job renewal RPC on the existing daily schedule.
 
 ## Supabase/database tables
 
@@ -322,7 +322,7 @@ The repository includes additive SQL files under `supabase/schema` and `supabase
 | `contact_inquiries`                | Contact page submissions.           | name, email, subject, message, status/read fields.                                                                                                                                                                                                                                                                        | Server-side service role writes.                                                                |
 | `admin_users`                      | Admin allowlist table.              | normalized email, created metadata.                                                                                                                                                                                                                                                                                       | Bootstrapped by env allowlist too.                                                              |
 | `blog_posts`                       | Private admin blog drafts.          | title, slug, category, excerpt, content, status, meta fields.                                                                                                                                                                                                                                                             | No public blog route currently.                                                                 |
-| `job_expiration_email_events`      | Deduplicates expiration emails.     | `job_id`, `reminder_type`, `sent_at`.                                                                                                                                                                                                                                                                                     | Used with 30-day auto-pause flow.                                                               |
+| `job_expiration_email_events`      | Historical expiration-email deduplication records. | `job_id`, `reminder_type`, `sent_at`.                                                                                                                                                                                                                                                                                     | Retained but no longer written by the auto-renew cron.                                          |
 
 ## Stripe/billing
 

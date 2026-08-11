@@ -24,7 +24,7 @@ The repository does not contain a complete base `jobs` table definition, so null
 | `jobs.active` | Redundant visibility/billing boolean. New jobs write `false`; approval/resume/renew write `true`; pause/reject/ATS close write `false`. Public and billable jobs require both `status='active'` and `active=true`. In legacy missing-`status` fallbacks, `active` alone can determine visibility/status. |
 | `jobs.created_at` | Insert timestamp supplied by the database; displayed as posted date and selected by lifecycle/email queries. It does not start the listing period. |
 | `jobs.approved_at` | Approval timestamp. Admin approval sets it to now; initial `expires_at` is based on it. ATS synchronization uses its presence to decide whether a returning ATS job can reactivate directly or must return to pending review. |
-| `jobs.expires_at` | Nullable `timestamptz`, indexed. Initial approval sets approval + 30 days; manual renew sets now + 30 days; pause/resume leave it unchanged. Public-listing selectors require it to be non-null and in the future. The expiration RPC selects it at/before database `now()`. |
+| `jobs.expires_at` | Nullable `timestamptz`, indexed. Initial approval sets approval + 30 days; manual renew sets now + 30 days; pause/resume leave it unchanged. It is lifecycle/scheduling data, not a direct public-visibility gate. The expiration RPC selects it at/before database `now()`. |
 | `jobs.employer_user_id`, `employer_email`, `employer_account_id` | Ownership, access, billing owner/counting, and notification routing. Account-based counting is preferred when an account ID is passed; several lifecycle sync calls pass only owner ID/email, an important multi-account audit point. |
 | `jobs.posted_by_user_id`, `posted_by_email` | Original submitter identity and expiration-recipient fallback. |
 | `jobs.source_type` | Checked `manual`/`ats`, default `manual`. Determines ATS provenance and special inactive-reason writes, but does **not** exempt a job from billing or expiration. |
@@ -33,7 +33,7 @@ The repository does not contain a complete base `jobs` table definition, so null
 | `jobs.ats_inactive_reason` | Nullable checked value: `closed_in_ats`, `employer_deactivated`, `admin_rejected`, `connection_unavailable`, or `review_required`. Employer pause sets `employer_deactivated`, resume/renew clears it, rejection sets `admin_rejected`, and an ATS disappearance sets `closed_in_ats`. Auto-pause does not set a reason. |
 | candidate routing fields | `apply_email`, `candidate_notification_email`, `candidate_notification_emails`, and `candidate_notification_routing` affect expiration recipients, not lifecycle or billing. |
 
-Dashboard-only `Expired` is **not persisted**. `dashboardStatusForJob` derives it when a persisted `active` or `paused` job has `expires_at <= now`; an active job can therefore display “Expired” before the daily cron persists `paused`. Public selectors independently suppress an active-but-expired job immediately (`lib/jobStatus.ts`). Admin status has no `Expired` representation.
+Dashboard-only `Expired` is **not persisted**. `dashboardStatusForJob` derives it when a persisted `active` or `paused` job has `expires_at <= now`; an active job can therefore display “Expired” before the daily cron persists `paused`. This dashboard label does not control public visibility. Admin status has no `Expired` representation.
 
 ### Creation and free trial
 
@@ -48,12 +48,12 @@ There is no “free job” flag or job-level trial. A job may be approved during
 
 * Admin approval requires `employer_user_id` and billing access (`active`/`trialing` Stripe status or a future local `trial_ends_at`). It writes `active=true`, `status='active'`, `approved_at=now`, and `expires_at=approved_at+30 days`, then best-effort syncs Stripe quantity (`app/api/admin/jobs/[id]/approve/route.ts`). Legacy fallbacks can approve without writing the date/status if columns are absent.
 * Admin rejection writes `active=false`, `status='rejected'`, adds `admin_rejected` for ATS, validates the persisted status, and best-effort syncs quantity (`app/api/admin/jobs/[id]/reject/route.ts`). No rejection reason/date is stored here.
-* A job is publicly visible only while status/active are both active and `expires_at` is future. Billable counting checks only status/active and does **not** check approval, `expires_at`, source type, or trial state (`lib/billing.ts`). Therefore an expired row remains counted between its exact expiry and the cron pause, even though public selectors hide it.
+* `isPubliclyVisibleJob` checks only `status` and `active`. `app/page.tsx`, `app/jobs/page.tsx`, `lib/companyPages.ts`, and `app/jobs/[id]/page.tsx` rely on that visibility rule without independently checking `expires_at`. Billable counting likewise checks only status/active and does **not** check approval, `expires_at`, source type, or trial state (`lib/billing.ts`). Therefore an active job can remain publicly visible and billable after `expires_at` until the daily cron changes its lifecycle state.
 
 ### Expiration and automatic pause
 
 * Listing duration is exactly `setUTCDate(+30)` from approval or manual-renew time, preserving time-of-day (`lib/jobListingDuration.ts`). This is 30 UTC calendar days, not “end of day,” and can differ from Stripe monthly recurrence.
-* At the exact timestamp, public selectors hide the job and the dashboard derives `Expired`; no synchronous write or charge occurs.
+* At the exact timestamp, the dashboard derives `Expired`, but no synchronous lifecycle write, visibility change, or charge occurs. The job remains publicly visible while its persisted status is active and `active=true`.
 * Daily cron later invokes `pause_expired_job_ads()`, which atomically updates every `status='active' AND active=true AND expires_at<=now()` row to `active=false,status='paused'`. It neither deletes nor changes `expires_at`, `approved_at`, or ATS reason. The route then sends auto-pause notices and best-effort resynchronizes each collected owner's Stripe quantity.
 
 ### Manual pause, resume, renew, delete/cancel
@@ -66,7 +66,7 @@ There is no “free job” flag or job-level trial. A job may be approved during
 ### ATS-managed lifecycle
 
 * Imported jobs start pending and require the same admin approval and billing gate as manual jobs. They have no billing exemption.
-* Daily ATS sync (`0 12 * * *` UTC) updates content. Missing remote jobs become `archived`/inactive with `closed_in_ats`. If they return, only `closed_in_ats` rows reopen: approved rows become active immediately; never-approved rows return pending. Reopening does not change `expires_at`, does not verify billing, and does not synchronize Stripe quantity, so an approved expired ATS job can be made `active` with a stale past expiration while remaining publicly hidden (`lib/ats/sync/syncEmployerAtsConnection.ts`). Employer/admin intentional inactive reasons are preserved.
+* Daily ATS sync (`0 12 * * *` UTC) updates content. Missing remote jobs become `archived`/inactive with `closed_in_ats`. If they return, only `closed_in_ats` rows reopen: approved rows become active immediately; never-approved rows return pending. Reopening does not change `expires_at`, verify billing, or synchronize Stripe quantity, so an approved ATS job can become active with a stale past expiration and remain publicly visible until another lifecycle mutation (`lib/ats/sync/syncEmployerAtsConnection.ts`). Employer/admin intentional inactive reasons are preserved.
 * The general expiration cron includes ATS rows and changes them to plain `paused` without recording an ATS inactive reason. Future design must define precedence between auto-renew, ATS closure, employer pause, rejection, and connection failures.
 
 ### MISSION BBQ
@@ -123,7 +123,7 @@ No refund API, refund webhook, credit/proration calculation, or per-job cancella
 | `public.pause_expired_job_ads()` in `supabase/migrations/202607130001_job_expires_at.sql` and duplicated in `supabase/policies/job-expiration.sql` | Called by the route. Policy file also documents an optional, currently commented `08:15 UTC` pg_cron schedule which must not be enabled alongside the route without deliberate design. | Bulk/atomic update to paused/inactive. Repeat calls affect zero already-paused rows. No charging/email. |
 | `app/api/cron/ats-sync/route.ts` configured in `vercel.json` | Daily at `12:00 UTC`, cron-secret protected. | Synchronizes ATS connections; may archive closed jobs or reopen returned jobs, and sends ATS sync-failure notifications under a separate flow. It does not renew expiration or explicitly sync billing quantity. |
 
-Because the expiration route's reminder selection is by entire **UTC date**, the email can be almost six calendar days or less than five exact 24-hour periods before `expires_at`. The pause occurs up to roughly 24 hours after exact expiry, although public visibility stops at exact expiry. Both a Vercel schedule and optional database schedule are documented, presenting a deployment audit requirement.
+Because the expiration route's reminder selection is by entire **UTC date**, the email can be almost six calendar days or less than five exact 24-hour periods before `expires_at`. The pause occurs up to roughly 24 hours after exact expiry; public visibility continues during that window because `expires_at` itself is not a visibility gate. Both a Vercel schedule and optional database schedule are documented, presenting a deployment audit requirement.
 
 ## 4. Relevant email inventory
 
@@ -161,7 +161,7 @@ The following are the files that contain relevant product assertions or surfaces
 | Transactional email | `lib/jobExpirationEmails.ts` | All three subjects/body/link labels are built around expiration and auto-pause. Must be replaced/versioned, not silently repurposed. |
 | Marketing email | No repository file found | No marketing-email campaign/template containing the requested terms was found. Audit external email provider/campaign system. |
 | Developer/product docs | `docs/CODEBASE_GUIDE.md`, `docs/DEVELOPER_MANUAL.md`, `supabase/policies/job-expiration.sql`, `supabase/migrations/202607130001_job_expires_at.sql` | Describe trial, recurring `$9`, expiration, reminder, and pause behavior; update after code/migration rollout, while retaining historical migration truth. |
-| SEO/public job pages | `app/sitemap.ts`, `app/page.tsx`, `app/jobs/page.tsx`, `app/jobs/[id]/page.tsx`, `app/[roleSlug]/page.tsx`, `lib/companyPages.ts`, `lib/jobStatus.ts` | These read/filter `expires_at`. They may need lifecycle semantics changes even where no employer-facing auto-pause prose exists. |
+| SEO/public job pages | `app/sitemap.ts`, `app/page.tsx`, `app/jobs/page.tsx`, `app/jobs/[id]/page.tsx`, `app/[roleSlug]/page.tsx`, `lib/companyPages.ts`, `lib/jobStatus.ts` | Public visibility is controlled by status/active rather than `expires_at`; lifecycle changes must account for the interval between the timestamp and the daily cron. Google Jobs metadata can still use `expires_at` as structured scheduling data. |
 
 No standalone FAQ route/file was found; the relevant FAQ is embedded in `app/pricing/page.tsx`. No repository copy promises a MISSION BBQ exemption.
 
