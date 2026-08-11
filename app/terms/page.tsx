@@ -95,7 +95,7 @@ const termsSections: LegalSection[] = [
     title: "9. Subscriptions, Billing, Trials, Renewals, Cancellation, and Refunds",
     paragraphs: [
       "RestaurantsNowHiring.com may offer paid job ads, subscriptions, trials, and other paid features. Payments and billing tools are processed by Stripe, and use of paid features may also be subject to Stripe’s terms, payment authorization flows, and payment method requirements.",
-      "Subscriptions, trials, or paid job posts may renew or convert to paid plans according to the plan, checkout, or billing terms selected or presented at purchase. Employers are responsible for reviewing the plan details and canceling before renewal if they do not want continued charges.",
+      "After the 30-day free trial, each approved active job listing is billed at $9 every 30 days and automatically renews for another 30-day listing period. Employers can prevent a listing's next renewal by pausing or removing it before the renewal date.",
       "Cancellation should be reasonably easy. Employers can cancel or manage billing through available account or billing portal tools when enabled, or by contacting us at the email below for account assistance. Cancellation will stop future renewals according to the applicable plan terms, but it may not reverse charges that have already been incurred.",
       "Fees are generally non-refundable unless a refund is required by law or expressly stated in the applicable offer, checkout flow, or written agreement. We may change prices or paid features prospectively, and we will provide notice where required by law or where the service flow indicates notice is appropriate.",
     ],

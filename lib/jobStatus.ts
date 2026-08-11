@@ -43,18 +43,6 @@ export function addDaysIso(value: string | null | undefined, days: number) {
   return baseDate.toISOString();
 }
 
-export function isNonExpiredPublicJob(job: {
-  active: boolean;
-  status?: string | null;
-  created_at?: string | null;
-  approved_at?: string | null;
-  expires_at?: string | null;
-}) {
-  if (job.status !== "active" || job.active !== true) return false;
-  if (!job.expires_at) return false;
-  return Date.now() < new Date(job.expires_at).getTime();
-}
-
 export function isExpiredJob(expiresAt: string | null | undefined, now = new Date()) {
   if (!expiresAt) return false;
   const expiresTime = new Date(expiresAt).getTime();
@@ -64,7 +52,7 @@ export function isExpiredJob(expiresAt: string | null | undefined, now = new Dat
 export function dashboardStatusForJob(status: string | null | undefined, active: boolean, expiresAt?: string | null): DashboardStatus {
   const normalized = normalizePersistedStatus(status);
 
-  if ((normalized === "active" || normalized === "paused") && isExpiredJob(expiresAt)) return "Expired";
+  if (normalized === "paused" && isExpiredJob(expiresAt)) return "Expired";
   if (normalized === "active") return active ? "Active" : "Paused";
   if (normalized === "paused") return "Paused";
   if (normalized === "pending") return "Pending";

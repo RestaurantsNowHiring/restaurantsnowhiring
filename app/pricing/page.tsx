@@ -144,7 +144,7 @@ export default function PricingPage() {
     "$9 per approved job ad every 30 days",
     "Cancel anytime",
     "Only approved jobs are billed",
-    "Jobs auto-expire after 30 days",
+    "Active jobs auto-renew every 30 days",
     "Pause/remove jobs anytime",
     "Google Jobs optimized",
     "Employer dashboard included",
@@ -164,7 +164,7 @@ export default function PricingPage() {
     {
       question: "What happens after 30 days?",
       answer:
-        "Approved jobs automatically expire after 30 days to prevent unintended renewals. You can renew, pause, remove, or reactivate listings at any time from your employer dashboard.",
+        "Approved active jobs automatically renew for another 30 days. Pause or remove a listing from your employer dashboard to prevent its next renewal.",
     },
     {
       question: "Can I cancel anytime?",
@@ -323,7 +323,7 @@ export default function PricingPage() {
                 <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
                   {[
                     "Only approved job ads are billed",
-                    "Jobs automatically expire after 30 days",
+                    "Active jobs automatically renew every 30 days",
                     "Pause or remove jobs anytime",
                   ].map((item) => (
                     <div key={item} style={checkRow}>
@@ -397,7 +397,7 @@ export default function PricingPage() {
                 {
                   icon: <BriefcaseBusiness size={24} color={GREEN} strokeWidth={2.4} />,
                   title: "Dashboard included",
-                  body: "Employers can review listing status, manage ads, and reactivate roles in one place.",
+                  body: "Employers can review listing status and manage active, paused, or removed ads in one place.",
                 },
               ].map((feature) => (
                 <div key={feature.title} style={whiteCard} className="rn-pricing-feature-card">
