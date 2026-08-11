@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import JobsFilterPanel from "../components/JobsFilterPanel";
 import { homeCardStyle, homePrimaryButton, homeSecondaryButton, homeTheme } from "../styles/homepageDesignSystem";
-import { isMissingStatusColumnError, isNonExpiredPublicJob, isPubliclyVisibleJob } from "../../lib/jobStatus";
+import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../../lib/jobStatus";
 import { buildUniqueJobSlugMap } from "../../lib/jobSlugs";
 import {
   getRestaurantRolePage,
@@ -133,7 +133,7 @@ function getLiveStateJobs(jobs: RoleJob[], state: StateLandingPage) {
   return jobs.filter(
     (job) =>
       job.state?.trim().toUpperCase() === state.code &&
-      isNonExpiredPublicJob(job),
+      isPubliclyVisibleJob(job.status, job.active),
   );
 }
 

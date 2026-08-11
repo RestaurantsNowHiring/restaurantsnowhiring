@@ -8,7 +8,7 @@ The individual job detail page JSON-LD was audited and tightened so `JobPosting`
 - `active = true`
 - not expired under the current 30-day listing rule
 
-The sitemap job URL filter was also tightened so only active, non-expired public job detail URLs are included.
+The sitemap includes every publicly visible job, based on `status = 'active'` and `active = true`; `expires_at` is not a public visibility or sitemap gate.
 
 ## Where schema is generated
 
@@ -77,7 +77,7 @@ Listings follow the existing 30-day expiration model documented in Supabase job-
 3. Add 30 days.
 4. Output the result as an ISO date/time string.
 
-Expired jobs do not output `JobPosting` schema and are excluded from the sitemap job URL list.
+Jobs past `validThrough` do not output `JobPosting` schema. They can remain on the public page and in the sitemap until the daily auto-renew cron advances `expires_at`.
 
 ## Sitemap behavior
 
@@ -87,7 +87,8 @@ Job URLs are included only when:
 
 - `status = 'active'`
 - `active = true`
-- the 30-day validity window has not passed
+
+The sitemap does not independently check the 30-day structured-data validity window.
 
 Sitemap job URLs use `getJobPath()` and the same slug map approach used by job pages so sitemap URLs match canonical job detail URLs.
 
@@ -107,12 +108,12 @@ Unavailable job pages return noindex robots metadata.
 ## How to test with Google Rich Results Test
 
 1. Deploy the changes.
-2. Open the production URL for 3-5 active, approved, non-expired job detail pages.
+2. Open the production URL for 3-5 active, approved job detail pages with future renewal dates.
 3. Test each URL in Google Rich Results Test: <https://search.google.com/test/rich-results>
 4. Confirm each eligible job page detects a valid `JobPosting` item.
-5. Test at least one paused, rejected, inactive, or expired job detail URL and confirm no `JobPosting` item appears.
+5. Test at least one paused, rejected, or inactive job detail URL and confirm no `JobPosting` item appears; also confirm an overdue active job temporarily omits schema until renewal.
 6. Open the rendered page source and confirm the JSON-LD is valid JSON inside one `application/ld+json` script for the job detail page.
-7. Open `/sitemap.xml` and confirm eligible active job URLs are present while paused, rejected, inactive, and expired jobs are absent.
+7. Open `/sitemap.xml` and confirm active job URLs are present while paused, rejected, and inactive jobs are absent.
 
 ## What to monitor in Google Search Console
 

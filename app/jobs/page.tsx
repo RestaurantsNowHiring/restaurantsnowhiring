@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
-import { isMissingStatusColumnError, isNonExpiredPublicJob, isPubliclyVisibleJob } from "../../lib/jobStatus";
+import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../../lib/jobStatus";
 import JobsFilterPanel from "../components/JobsFilterPanel";
 import {
   homePrimaryButton,
@@ -152,7 +152,7 @@ export default async function JobsPage({
 
   const stateCounts = new Map<string, number>();
   for (const job of visibleJobsForSlugs) {
-    if (!isNonExpiredPublicJob(job)) continue;
+    if (!isPubliclyVisibleJob(job.status, job.active)) continue;
 
     const code = job.state?.trim().toUpperCase();
     if (!code || !getStateLandingPageByCode(code)) continue;

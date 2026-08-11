@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { supabase } from "../lib/supabase";
-import { isMissingStatusColumnError, isNonExpiredPublicJob } from "../lib/jobStatus";
+import { isMissingStatusColumnError, isPubliclyVisibleJob } from "../lib/jobStatus";
 import { absoluteUrl } from "../lib/seo";
 import { buildUniqueJobSlugMap, getJobPath } from "../lib/jobSlugs";
 import { restaurantRolePages } from "../lib/restaurantRolePages";
@@ -75,7 +75,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     : initialResult;
 
   const visibleJobs = ((result.data ?? []) as SitemapJob[]).filter((job) =>
-    isNonExpiredPublicJob(job),
+    isPubliclyVisibleJob(job.status, job.active),
   );
 
   const slugById = buildUniqueJobSlugMap(visibleJobs);
