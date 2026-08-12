@@ -1959,12 +1959,12 @@ export default function EmployerDashboardPage() {
                         <td>{job.views}</td>
                         <td>
                           <div className="rn-dashboard-actions rn-dashboard-row-actions">
-                            <Link href={`/jobs/${job.id}`} prefetch={false} className="rn-dashboard-action">View</Link>
-                            {canManageJobs ? <Link href={`/employer-dashboard/jobs/${job.id}/edit`} className="rn-dashboard-action">Edit</Link> : null}
+                            <Link href={`/jobs/${job.id}`} prefetch={false} className="rn-dashboard-action rn-dashboard-action--text">View</Link>
+                            {canManageJobs ? <Link href={`/employer-dashboard/jobs/${job.id}/edit`} className="rn-dashboard-action rn-dashboard-action--text">Edit</Link> : null}
                             {canManageJobs && canEmployerPauseResume(job.status) ? (
                               <button
                                 type="button"
-                                className="rn-dashboard-action"
+                                className="rn-dashboard-action rn-dashboard-action--lifecycle"
                                 aria-label={`${getJobAction(job) === "renew" ? "Renew" : getJobAction(job) === "resume" ? "Resume" : "Pause"} ${job.title}`}
                                 onClick={() => (canManageJobs ? handlePauseToggle(job) : setActionError("Contact your account admin to make changes."))}
                                 disabled={busyJobId === job.id}
@@ -2372,31 +2372,31 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table__col-title {
-          width: 16%;
+          width: 20%;
         }
 
         .rn-dashboard-table__col-status {
-          width: 10.5%;
+          width: 8.5%;
         }
 
         .rn-dashboard-table__col-location {
-          width: 13.5%;
+          width: 16.5%;
         }
 
         .rn-dashboard-table__col-date {
-          width: 10.5%;
+          width: 9%;
         }
 
         .rn-dashboard-table__col-expires {
-          width: 14%;
+          width: 13.5%;
         }
 
         .rn-dashboard-table__col-views {
-          width: 5.5%;
+          width: 4%;
         }
 
         .rn-dashboard-table__col-actions {
-          width: 25%;
+          width: 24%;
         }
 
         .rn-dashboard-table th,
@@ -2406,7 +2406,7 @@ export default function EmployerDashboardPage() {
           font-family: var(--font-body);
           font-size: 14px;
           font-weight: 700;
-          padding: 13px 8px;
+          padding: 9px 6px;
           text-align: left;
           vertical-align: middle;
         }
@@ -2530,8 +2530,13 @@ export default function EmployerDashboardPage() {
 
         .rn-dashboard-table td:last-child,
         .rn-dashboard-table th:last-child {
-          padding-right: 12px;
-          text-align: right;
+          padding-right: 8px;
+          text-align: left;
+        }
+
+        .rn-dashboard-table td:nth-child(7),
+        .rn-dashboard-table th:nth-child(7) {
+          text-align: center;
         }
 
         .rn-dashboard-mobile-select {
@@ -2555,29 +2560,42 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-row-actions {
-          display: grid;
-          gap: 6px;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
+          display: flex;
+          flex-wrap: nowrap;
+          gap: 3px;
+          justify-content: flex-start;
+          white-space: nowrap;
         }
 
         .rn-dashboard-action {
           align-items: center;
           background: #fff;
           border: 1px solid ${homeTheme.border};
-          border-radius: 10px;
+          border-radius: 8px;
           box-shadow: none;
           color: ${homeTheme.green};
           cursor: pointer;
           display: flex;
           font-family: var(--font-body);
-          font-size: 12px;
+          font-size: 11.5px;
           font-weight: 900;
           justify-content: center;
           line-height: 1.15;
-          min-height: 32px;
-          padding: 6px 7px;
+          min-height: 28px;
+          padding: 5px 6px;
           text-align: center;
           text-decoration: none;
+          white-space: nowrap;
+        }
+
+        .rn-dashboard-action--text {
+          background: transparent;
+          border-color: transparent;
+          padding-inline: 4px;
+        }
+
+        .rn-dashboard-action--lifecycle {
+          flex: 0 1 auto;
         }
 
         .rn-dashboard-action:hover,
