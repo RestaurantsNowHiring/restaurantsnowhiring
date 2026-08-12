@@ -106,10 +106,6 @@ const DELETE_EMAIL_RETURN_FIELDS = "id,employer_email";
 const DELETE_USER_ID_RETURN_FIELDS = "id,employer_user_id,employer_email,employer_account_id";
 const DELETE_CONFIRMATION_MESSAGE =
   "This will permanently delete your job ad. If you want to repost this position later, you will need to complete the Post a Job form again.";
-const CANDIDATE_STATUS_OPTIONS = ["new", "reviewed", "contacted", "archived"] as const;
-type CandidateStatusOption = (typeof CANDIDATE_STATUS_OPTIONS)[number];
-type CandidateFilter = "all" | CandidateStatusOption;
-type CandidateJobLevelFilter = "all" | "hourly_store" | "salaried_manager" | "general_manager" | "area_director" | "regional_director" | "other";
 type JobStatusFilter = "all" | "Active" | "Paused" | "Expired" | "Pending" | "Rejected";
 type JobSortOption = "newest" | "oldest" | "most_viewed";
 type PaginationItem = number | "ellipsis-start" | "ellipsis-end";
@@ -132,23 +128,7 @@ const JOB_SORT_OPTIONS: Array<{ value: JobSortOption; label: string }> = [
   { value: "most_viewed", label: "Most Viewed" },
 ];
 
-const CANDIDATE_FILTER_OPTIONS: Array<{ value: CandidateFilter; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "new", label: "New" },
-  { value: "reviewed", label: "Reviewed" },
-  { value: "contacted", label: "Contacted" },
-  { value: "archived", label: "Archived" },
-];
 
-const CANDIDATE_JOB_LEVEL_OPTIONS: Array<{ value: CandidateJobLevelFilter; label: string }> = [
-  { value: "all", label: "All levels" },
-  { value: "hourly_store", label: "Hourly / Store role" },
-  { value: "salaried_manager", label: "Salaried Manager" },
-  { value: "general_manager", label: "General Manager" },
-  { value: "area_director", label: "Area Director" },
-  { value: "regional_director", label: "Regional Director" },
-  { value: "other", label: "Other" },
-];
 
 function formatBillingDate(isoDate?: string | null) {
   if (!isoDate) return "—";
@@ -255,83 +235,6 @@ function formatDate(isoDate: string) {
   }).format(new Date(isoDate));
 }
 
-function formatCandidateStatus(status: string) {
-  return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
-}
-
-function normalizeCandidateFilterValue(value?: string | null) {
-  return (value ?? "").trim().toLowerCase();
-}
-
-function getCandidateLocationLabel(candidate: Pick<CandidateSubmission, "restaurant_name" | "city" | "state">) {
-  const cityState = [candidate.city, candidate.state].map((part) => part?.trim()).filter(Boolean).join(", ");
-  return [candidate.restaurant_name?.trim(), cityState].filter(Boolean).join(" — ") || "Unlisted location";
-}
-
-function getCandidateJobLevel(candidate: Pick<CandidateSubmission, "job_title" | "role_category">): CandidateJobLevelFilter {
-  const roleText = `${candidate.job_title ?? ""} ${candidate.role_category ?? ""}`.toLowerCase();
-
-  if (/\bregional\s+director\b/.test(roleText)) return "regional_director";
-  if (/\barea\s+director\b/.test(roleText)) return "area_director";
-  if (/\bgeneral\s+manager\b/.test(roleText)) return "general_manager";
-
-  if (/\b(salaried|manager|management|assistant\s+manager|shift\s+lead|shift\s+leader|supervisor)\b/.test(roleText)) {
-    return "salaried_manager";
-  }
-
-  if (/\b(hourly|store|crew|team\s+member|cashier|server|host|hostess|cook|line\s+cook|prep|grill|dishwasher|bartender|barista|service|representative)\b/.test(roleText)) {
-    return "hourly_store";
-  }
-
-  return "other";
-}
-
-function getCandidateJobLevelLabel(value: CandidateJobLevelFilter) {
-  return CANDIDATE_JOB_LEVEL_OPTIONS.find((option) => option.value === value)?.label ?? "Other";
-}
-
-function getCandidateStatusTheme(status: string) {
-  const themes: Record<CandidateStatusOption, { bg: string; text: string; border: string; shadow: string }> = {
-    new: {
-      bg: "rgba(53,128,110,0.12)",
-      text: "#1d5b4d",
-      border: "rgba(53,128,110,0.28)",
-      shadow: "rgba(53,128,110,0.12)",
-    },
-    reviewed: {
-      bg: "rgba(30,137,153,0.12)",
-      text: "#11606d",
-      border: "rgba(30,137,153,0.28)",
-      shadow: "rgba(30,137,153,0.12)",
-    },
-    contacted: {
-      bg: "rgba(227,160,8,0.15)",
-      text: "#7a5600",
-      border: "rgba(227,160,8,0.32)",
-      shadow: "rgba(227,160,8,0.14)",
-    },
-    archived: {
-      bg: "rgba(101,115,126,0.13)",
-      text: "#46525c",
-      border: "rgba(101,115,126,0.26)",
-      shadow: "rgba(101,115,126,0.12)",
-    },
-  };
-
-  return themes[status as CandidateStatusOption] ?? themes.archived;
-}
-
-function candidateStatusControlStyle(status: string): React.CSSProperties {
-  const theme = getCandidateStatusTheme(status);
-
-  return {
-    backgroundColor: theme.bg,
-    borderColor: theme.border,
-    boxShadow: `0 8px 18px ${theme.shadow}`,
-    color: theme.text,
-  };
-}
-
 function getJobOwnershipMatch(job: Record<string, unknown>, owner: EmployerOwner): OwnershipMatch | null {
   const employerAccountId = typeof job.employer_account_id === "string" ? job.employer_account_id.trim() : "";
   const employerUserId = typeof job.employer_user_id === "string" ? job.employer_user_id.trim() : "";
@@ -423,18 +326,11 @@ export default function EmployerDashboardPage() {
   const [jobs, setJobs] = useState<DashboardJob[]>([]);
   const [dashboardNowMs] = useState(() => Date.now());
   const [candidates, setCandidates] = useState<CandidateSubmission[]>([]);
-  const [candidateFilter, setCandidateFilter] = useState<CandidateFilter>("all");
-  const [candidateSearchQuery, setCandidateSearchQuery] = useState("");
-  const [candidateJobRoleFilter, setCandidateJobRoleFilter] = useState("all");
-  const [candidateLocationFilter, setCandidateLocationFilter] = useState("all");
-  const [candidateJobLevelFilter, setCandidateJobLevelFilter] = useState<CandidateJobLevelFilter>("all");
   const [jobSearchQuery, setJobSearchQuery] = useState("");
   const [jobStatusFilter, setJobStatusFilter] = useState<JobStatusFilter>("all");
   const [jobSortOption, setJobSortOption] = useState<JobSortOption>("newest");
   const [jobCurrentPage, setJobCurrentPage] = useState(1);
-  const [areCandidatesExpanded, setAreCandidatesExpanded] = useState(false);
   const [candidatesError, setCandidatesError] = useState<string | null>(null);
-  const [candidateBusyId, setCandidateBusyId] = useState<string | null>(null);
   const [busyJobId, setBusyJobId] = useState<string | null>(null);
   const [bulkAction, setBulkAction] = useState<"pause" | "unpause" | "renew" | "delete" | null>(null);
   const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(() => new Set());
@@ -572,7 +468,6 @@ export default function EmployerDashboardPage() {
         if (mounted) {
           setJobs([]);
           setCandidates([]);
-          setAreCandidatesExpanded(false);
           setOwner(null);
           setAuthStatus("allowed");
           setActionError("Your employer session is missing account ownership details. Please sign out and sign back in.");
@@ -632,7 +527,6 @@ export default function EmployerDashboardPage() {
         if (mounted) {
           setJobs([]);
           setCandidates(nextCandidates);
-          setAreCandidatesExpanded(nextCandidates.some((candidate) => candidate.status === "new"));
           setOwner(currentOwner);
           setBillingSummary(nextBillingSummary);
           setAuthStatus("allowed");
@@ -683,7 +577,6 @@ export default function EmployerDashboardPage() {
       if (mounted) {
         setJobs(hydratedJobs);
         setCandidates(nextCandidates);
-        setAreCandidatesExpanded(nextCandidates.some((candidate) => candidate.status === "new"));
         setOwner(currentOwner);
         setBillingSummary(nextBillingSummary);
         setEmployerAccess(access);
@@ -1123,127 +1016,6 @@ export default function EmployerDashboardPage() {
     void syncBillingQuantity().then(refreshBillingSummary);
   }
 
-  async function handleCandidateStatusChange(candidateId: string, nextStatus: string) {
-    if (candidateBusyId) return;
-
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    if (!accessToken) {
-      setCandidatesError("Please sign in again before updating a candidate.");
-      return;
-    }
-
-    setCandidateBusyId(candidateId);
-    setCandidatesError(null);
-
-    const response = await fetch("/api/employer/candidate-submissions", {
-      method: "PATCH",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
-      },
-      body: JSON.stringify({ id: candidateId, status: nextStatus }),
-    });
-    const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-
-    if (!response.ok) {
-      setCandidatesError(payload?.error || "Could not update candidate status.");
-      setCandidateBusyId(null);
-      return;
-    }
-
-    setCandidates((prev) => prev.map((candidate) => (candidate.id === candidateId ? { ...candidate, status: nextStatus } : candidate)));
-    setCandidateBusyId(null);
-  }
-
-  async function handleResumeOpen(candidateId: string) {
-    const { data: sessionData } = await supabase.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    if (!accessToken) {
-      setCandidatesError("Please sign in again before opening a resume.");
-      return;
-    }
-
-    setCandidateBusyId(candidateId);
-    setCandidatesError(null);
-
-    const response = await fetch(`/api/employer/candidate-submissions/${encodeURIComponent(candidateId)}/resume`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        ...(selectedEmployerAccountId ? { "X-Employer-Account-Id": selectedEmployerAccountId } : {}),
-      },
-    });
-    const payload = (await response.json().catch(() => null)) as { url?: string; error?: string } | null;
-
-    if (!response.ok || !payload?.url) {
-      setCandidatesError(payload?.error || "Could not create a secure resume link.");
-      setCandidateBusyId(null);
-      return;
-    }
-
-    window.open(payload.url, "_blank", "noopener,noreferrer");
-    setCandidateBusyId(null);
-  }
-
-  const candidateJobRoleOptions = useMemo(() => {
-    return Array.from(new Set(candidates.map((candidate) => candidate.job_title.trim()).filter(Boolean))).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: "base" })
-    );
-  }, [candidates]);
-
-  const candidateLocationOptions = useMemo(() => {
-    return Array.from(new Set(candidates.map((candidate) => getCandidateLocationLabel(candidate)))).sort((a, b) =>
-      a.localeCompare(b, undefined, { sensitivity: "base" })
-    );
-  }, [candidates]);
-
-  const activeCandidateJobRoleFilter = candidateJobRoleFilter === "all" || candidateJobRoleOptions.includes(candidateJobRoleFilter) ? candidateJobRoleFilter : "all";
-  const activeCandidateLocationFilter = candidateLocationFilter === "all" || candidateLocationOptions.includes(candidateLocationFilter) ? candidateLocationFilter : "all";
-
-  const candidateBaseFilteredCandidates = useMemo(() => {
-    const normalizedSearch = candidateSearchQuery.trim().toLowerCase();
-
-    return candidates.filter((candidate) => {
-      const locationLabel = getCandidateLocationLabel(candidate);
-      const jobLevel = getCandidateJobLevel(candidate);
-      const searchableText = [
-        candidate.candidate_name,
-        candidate.candidate_email,
-        candidate.candidate_phone,
-        candidate.job_title,
-        candidate.role_category,
-        candidate.restaurant_name,
-        candidate.city,
-        candidate.state,
-        locationLabel,
-      ]
-        .map(normalizeCandidateFilterValue)
-        .join(" ");
-
-      const matchesSearch = !normalizedSearch || searchableText.includes(normalizedSearch);
-      const matchesRole = activeCandidateJobRoleFilter === "all" || candidate.job_title.trim() === activeCandidateJobRoleFilter;
-      const matchesLocation = activeCandidateLocationFilter === "all" || locationLabel === activeCandidateLocationFilter;
-      const matchesLevel = candidateJobLevelFilter === "all" || jobLevel === candidateJobLevelFilter;
-
-      return matchesSearch && matchesRole && matchesLocation && matchesLevel;
-    });
-  }, [activeCandidateJobRoleFilter, activeCandidateLocationFilter, candidateJobLevelFilter, candidateSearchQuery, candidates]);
-
-  const candidateStatusCounts = useMemo(() => {
-    return CANDIDATE_STATUS_OPTIONS.reduce(
-      (counts, status) => ({
-        ...counts,
-        [status]: candidateBaseFilteredCandidates.filter((candidate) => candidate.status === status).length,
-      }),
-      { all: candidateBaseFilteredCandidates.length } as Record<CandidateFilter, number>
-    );
-  }, [candidateBaseFilteredCandidates]);
-
-  const filteredCandidates = useMemo(() => {
-    if (candidateFilter === "all") return candidateBaseFilteredCandidates;
-    return candidateBaseFilteredCandidates.filter((candidate) => candidate.status === candidateFilter);
-  }, [candidateBaseFilteredCandidates, candidateFilter]);
 
 
   const filteredJobs = useMemo(() => {
@@ -1571,7 +1343,6 @@ export default function EmployerDashboardPage() {
   const canManageBilling = employerAccess?.canManageBilling ?? true;
   const canManageProfile = employerAccess?.canManageProfile ?? true;
   const canManageTeam = employerAccess?.canManageTeam ?? true;
-  const canUpdateCandidateStatuses = employerAccess?.canUpdateCandidateStatuses ?? true;
   const accessibleMemberships = (employerAccess?.memberships ?? []).filter((membership) => !membership.invitationPending);
 
   if (authStatus === "loading") {
@@ -1863,234 +1634,23 @@ export default function EmployerDashboardPage() {
         )}
 
         <section id="interested-candidates" style={{ ...homeCardStyle, marginBottom: 16 }}>
-          <div className="rn-dashboard-header-row rn-candidate-section-header">
+          <div className="rn-dashboard-header-row">
             <div>
-              <div className="rn-candidate-title-row">
-                <h2
-                  style={{
-                    margin: 0,
-                    color: homeTheme.text,
-                    fontSize: 26,
-                    fontFamily: "var(--font-heading)",
-                    lineHeight: 1.2,
-                  }}
-                >
-                  Interested Candidates
-                </h2>
-                <span className="rn-candidate-count-pill">{candidates.length} total</span>
-                <span className="rn-candidate-count-pill rn-candidate-count-pill-new">{candidateStatusCounts.new} new</span>
-              </div>
-              <p
-                style={{
-                  marginTop: 6,
-                  marginBottom: 0,
-                  color: homeTheme.muted,
-                  fontWeight: 600,
-                  fontFamily: "var(--font-body)",
-                }}
-              >
-                Candidate submissions from your public job ad pages, newest first.
+              <h2 style={{ margin: 0, color: homeTheme.text, fontSize: 26, fontFamily: "var(--font-heading)", lineHeight: 1.2 }}>
+                Interested Candidates
+              </h2>
+              <p style={{ margin: "8px 0 0", color: homeTheme.green, fontFamily: "var(--font-heading)", fontSize: 22, fontWeight: 900 }}>
+                {candidates.length} Interested Candidates
               </p>
+              <p style={{ margin: "6px 0 0", color: homeTheme.muted, fontWeight: 600, fontFamily: "var(--font-body)" }}>
+                Review candidates who have expressed interest in your job listings.
+              </p>
+              {candidatesError ? <p role="alert" style={{ margin: "8px 0 0", color: "#8a2f2f", fontWeight: 800 }}>{candidatesError}</p> : null}
             </div>
-            <button
-              type="button"
-              className="rn-candidate-toggle"
-              onClick={() => setAreCandidatesExpanded((isExpanded) => !isExpanded)}
-              aria-controls="interested-candidates-content"
-              aria-expanded={areCandidatesExpanded}
-            >
-              <span>{areCandidatesExpanded ? "Collapse" : "Expand"}</span>
-              <span className="rn-candidate-toggle-icon" aria-hidden="true">
-                {areCandidatesExpanded ? "−" : "+"}
-              </span>
-            </button>
+            <Link href="/employer-dashboard/interested-candidates" style={homePrimaryButton} className="rn-btn-primary">
+              View Candidates
+            </Link>
           </div>
-
-          {candidatesError ? (
-            <div
-              role="alert"
-              style={{
-                marginBottom: 16,
-                borderRadius: 14,
-                border: "1px solid rgba(173,67,67,0.28)",
-                backgroundColor: "rgba(173,67,67,0.08)",
-                color: "#8a2f2f",
-                fontFamily: "var(--font-body)",
-                fontWeight: 800,
-                padding: "12px 14px",
-              }}
-            >
-              {candidatesError}
-            </div>
-          ) : null}
-
-          {!areCandidatesExpanded ? (
-            <p className="rn-candidate-collapsed-summary">
-              {candidates.length} total candidates • {candidateStatusCounts.new} new
-            </p>
-          ) : (
-            <div id="interested-candidates-content">
-          {candidates.length > 0 ? (
-            <>
-              <div className="rn-candidate-filter-controls" aria-label="Filter interested candidates">
-                <label className="rn-candidate-filter-control rn-candidate-filter-control-search">
-                  <span>Search</span>
-                  <input
-                    type="search"
-                    value={candidateSearchQuery}
-                    onChange={(event) => setCandidateSearchQuery(event.target.value)}
-                    placeholder="Search name, email, phone, job, or location"
-                    aria-label="Search interested candidates"
-                  />
-                </label>
-                <label className="rn-candidate-filter-control">
-                  <span>Job Role</span>
-                  <select
-                    className="rn-combobox__input"
-                    value={activeCandidateJobRoleFilter}
-                    onChange={(event) => setCandidateJobRoleFilter(event.target.value)}
-                    aria-label="Filter interested candidates by job role"
-                  >
-                    <option value="all">All job roles</option>
-                    {candidateJobRoleOptions.map((role) => (
-                      <option key={role} value={role}>
-                        {role}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="rn-candidate-filter-control">
-                  <span>Location</span>
-                  <select
-                    className="rn-combobox__input"
-                    value={activeCandidateLocationFilter}
-                    onChange={(event) => setCandidateLocationFilter(event.target.value)}
-                    aria-label="Filter interested candidates by location"
-                  >
-                    <option value="all">All locations</option>
-                    {candidateLocationOptions.map((location) => (
-                      <option key={location} value={location}>
-                        {location}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label className="rn-candidate-filter-control">
-                  <span>Job Level</span>
-                  <select
-                    className="rn-combobox__input"
-                    value={candidateJobLevelFilter}
-                    onChange={(event) => setCandidateJobLevelFilter(event.target.value as CandidateJobLevelFilter)}
-                    aria-label="Filter interested candidates by job level"
-                  >
-                    {CANDIDATE_JOB_LEVEL_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              <div className="rn-candidate-filter-summary" role="status">
-                Showing {filteredCandidates.length} of {candidates.length} access-allowed candidates
-                {candidateJobLevelFilter !== "all" ? ` • ${getCandidateJobLevelLabel(candidateJobLevelFilter)}` : ""}
-              </div>
-
-              <div className="rn-candidate-filters" aria-label="Filter interested candidates by status">
-                {CANDIDATE_FILTER_OPTIONS.map((filter) => {
-                  const isActive = candidateFilter === filter.value;
-
-                  return (
-                    <button
-                      type="button"
-                      className={`rn-candidate-filter${isActive ? " rn-candidate-filter-active" : ""}`}
-                      key={filter.value}
-                      onClick={() => setCandidateFilter(filter.value)}
-                      aria-pressed={isActive}
-                    >
-                      <span>{filter.label}</span>
-                      <strong>{candidateStatusCounts[filter.value]}</strong>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-
-          {candidates.length === 0 ? (
-            <div className="rn-candidate-empty">
-              No interested candidates yet. When job seekers send their information, they will appear here.
-            </div>
-          ) : filteredCandidates.length === 0 ? (
-            <div className="rn-candidate-empty">
-              No candidates match the selected search, job role, location, job level, and status filters.
-            </div>
-          ) : (
-            <div className="rn-candidate-list">
-              {filteredCandidates.map((candidate) => (
-                <article className="rn-candidate-card" id={`candidate-${candidate.id}`} key={candidate.id}>
-                  <div className="rn-candidate-card-header">
-                    <div>
-                      <h3>{candidate.candidate_name}</h3>
-                      <p>
-                        {candidate.job_title} • {[candidate.restaurant_name, [candidate.city, candidate.state].filter(Boolean).join(", ")]
-                          .filter(Boolean)
-                          .join(" — ") || "Restaurant job"}
-                      </p>
-                      <p>Submitted {formatDate(candidate.created_at)}</p>
-                    </div>
-                    <label className="rn-candidate-status-label">
-                      <span>Status</span>
-                      <span className="rn-candidate-status-control" style={candidateStatusControlStyle(candidate.status)}>
-                        <span className="rn-candidate-status-dot" aria-hidden="true" />
-                        <select
-                          value={candidate.status}
-                          onChange={(event) => handleCandidateStatusChange(candidate.id, event.target.value)}
-                          disabled={!canUpdateCandidateStatuses || candidateBusyId === candidate.id}
-                          aria-label={`Update ${candidate.candidate_name}'s status`}
-                        >
-                        {CANDIDATE_STATUS_OPTIONS.map((status) => (
-                          <option key={status} value={status}>
-                            {formatCandidateStatus(status)}
-                          </option>
-                        ))}
-                        </select>
-                      </span>
-                    </label>
-                  </div>
-                  <div className="rn-candidate-contact-grid">
-                    <div>
-                      <span>Email</span>
-                      <a href={`mailto:${candidate.candidate_email}`}>{candidate.candidate_email}</a>
-                    </div>
-                    <div>
-                      <span>Phone</span>
-                      <a href={`tel:${candidate.candidate_phone}`}>{candidate.candidate_phone}</a>
-                    </div>
-                    <div>
-                      <span>Resume</span>
-                      {candidate.resume_filename ? (
-                        <button
-                          type="button"
-                          className="rn-resume-link"
-                          onClick={() => handleResumeOpen(candidate.id)}
-                          disabled={candidateBusyId === candidate.id}
-                        >
-                          {candidateBusyId === candidate.id ? "Opening..." : candidate.resume_filename}
-                        </button>
-                      ) : (
-                        "—"
-                      )}
-                    </div>
-                  </div>
-                  {candidate.message ? <p className="rn-candidate-message">{candidate.message}</p> : null}
-                </article>
-              ))}
-            </div>
-          )}
-            </div>
-          )}
         </section>
 
         <section style={homeCardStyle}>
