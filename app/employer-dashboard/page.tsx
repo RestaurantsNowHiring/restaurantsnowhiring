@@ -1906,7 +1906,7 @@ export default function EmployerDashboardPage() {
                   {allFilteredJobsSelected ? (
                     <p className="rn-job-selection-summary">All {filteredJobs.length} filtered {filteredJobs.length === 1 ? "job is" : "jobs are"} selected.</p>
                   ) : null}
-                  <div className="rn-dashboard-table-wrap" tabIndex={0} aria-label="Scrollable job listings table">
+                  <div className="rn-dashboard-table-wrap">
                 <table className="rn-dashboard-table">
                   <colgroup>
                     <col className="rn-dashboard-table__col-select" />
@@ -1949,40 +1949,34 @@ export default function EmployerDashboardPage() {
                             aria-label={`Select ${job.title}`}
                           />
                         </td>
-                        <td>{job.title}</td>
+                        <td><span className="rn-dashboard-table__truncate" title={job.title}>{job.title}</span></td>
                         <td>
                           <span style={statusPillStyle(job.dashboard_status)}>{dashboardStatusLabel(job.dashboard_status)}</span>
                         </td>
-                        <td>{getJobLocationDisplay(job)}</td>
+                        <td><span className="rn-dashboard-table__truncate" title={getJobLocationDisplay(job)}>{getJobLocationDisplay(job)}</span></td>
                         <td>{formatDate(job.created_at)}</td>
                         <td>{renderExpirationCell(job)}</td>
                         <td>{job.views}</td>
                         <td>
-                          <div className="rn-dashboard-actions">
+                          <div className="rn-dashboard-actions rn-dashboard-row-actions">
+                            <Link href={`/jobs/${job.id}`} prefetch={false} className="rn-dashboard-action">View</Link>
+                            {canManageJobs ? <Link href={`/employer-dashboard/jobs/${job.id}/edit`} className="rn-dashboard-action">Edit</Link> : null}
                             {canManageJobs && canEmployerPauseResume(job.status) ? (
                               <button
                                 type="button"
-                                style={homeSecondaryButton}
-                                className="rn-btn-secondary rn-dashboard-actions__primary"
+                                className="rn-dashboard-action"
                                 aria-label={`${getJobAction(job) === "renew" ? "Renew" : getJobAction(job) === "resume" ? "Resume" : "Pause"} ${job.title}`}
                                 onClick={() => (canManageJobs ? handlePauseToggle(job) : setActionError("Contact your account admin to make changes."))}
                                 disabled={busyJobId === job.id}
                               >
-                                {busyJobId === job.id ? "Saving..." : getJobAction(job) === "renew" ? "Renew" : getJobAction(job) === "resume" ? "Resume" : "Pause"}
+                                {busyJobId === job.id ? "Saving..." : getJobAction(job) === "renew" ? "Renew & Reactivate" : getJobAction(job) === "resume" ? "Resume" : "Pause"}
                               </button>
                             ) : null}
-                            <details className="rn-dashboard-actions__menu">
-                              <summary aria-label={`More actions for ${job.title}`}>More</summary>
-                              <div className="rn-dashboard-actions__menu-items">
-                                <Link href={`/jobs/${job.id}`} prefetch={false} className="rn-dashboard-actions__menu-item">View</Link>
-                                {canManageJobs ? <Link href={`/employer-dashboard/jobs/${job.id}/edit`} className="rn-dashboard-actions__menu-item">Edit</Link> : null}
-                                {canManageJobs ? (
-                                  <button type="button" className="rn-dashboard-actions__menu-item rn-dashboard-actions__menu-item--danger" onClick={() => handleDeleteClick(job)} disabled={busyJobId === job.id}>
-                                    Delete
-                                  </button>
-                                ) : null}
-                              </div>
-                            </details>
+                            {canManageJobs ? (
+                              <button type="button" className="rn-dashboard-action rn-dashboard-action--danger" onClick={() => handleDeleteClick(job)} disabled={busyJobId === job.id}>
+                                Delete
+                              </button>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -2004,12 +1998,12 @@ export default function EmployerDashboardPage() {
                         />
                         <span>Select</span>
                       </label>
-                      <h3 style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
+                      <h3 title={job.title} style={{ margin: 0, fontSize: 18, color: homeTheme.text, fontFamily: "var(--font-heading)" }}>
                         {job.title}
                       </h3>
                       <span style={statusPillStyle(job.dashboard_status)}>{dashboardStatusLabel(job.dashboard_status)}</span>
                     </div>
-                    <p style={{ margin: "8px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
+                    <p title={getJobLocationDisplay(job)} style={{ margin: "8px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
                       {getJobLocationDisplay(job)}
                     </p>
                     <p style={{ margin: "4px 0 0 0", color: homeTheme.muted, fontWeight: 700 }}>
@@ -2323,39 +2317,12 @@ export default function EmployerDashboardPage() {
           background: #fff;
           border: 1px solid ${homeTheme.border};
           border-radius: 14px;
-          max-height: 520px;
-          overflow-x: auto;
-          overflow-y: visible;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-color: rgba(31, 79, 68, 0.28) transparent;
-          scrollbar-gutter: stable;
-          scrollbar-width: thin;
+          overflow: hidden;
           width: 100%;
-        }
-
-        .rn-dashboard-table-wrap:focus-visible {
-          outline: 3px solid rgba(31, 79, 68, 0.22);
-          outline-offset: 3px;
-        }
-
-        .rn-dashboard-table-wrap::-webkit-scrollbar {
-          height: 10px;
-          width: 10px;
-        }
-
-        .rn-dashboard-table-wrap::-webkit-scrollbar-thumb {
-          background: rgba(31, 79, 68, 0.24);
-          border: 2px solid #fff;
-          border-radius: 999px;
-        }
-
-        .rn-dashboard-table-wrap::-webkit-scrollbar-track {
-          background: transparent;
         }
 
         .rn-dashboard-table {
           border-collapse: collapse;
-          min-width: 1180px;
           table-layout: fixed;
           width: 100%;
         }
@@ -2401,35 +2368,35 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table__col-select {
-          width: 56px;
+          width: 4.5%;
         }
 
         .rn-dashboard-table__col-title {
-          width: 280px;
+          width: 16%;
         }
 
         .rn-dashboard-table__col-status {
-          width: 130px;
+          width: 10.5%;
         }
 
         .rn-dashboard-table__col-location {
-          width: 190px;
+          width: 13.5%;
         }
 
         .rn-dashboard-table__col-date {
-          width: 150px;
+          width: 10.5%;
         }
 
         .rn-dashboard-table__col-expires {
-          width: 190px;
+          width: 14%;
         }
 
         .rn-dashboard-table__col-views {
-          width: 90px;
+          width: 5.5%;
         }
 
         .rn-dashboard-table__col-actions {
-          width: 170px;
+          width: 25%;
         }
 
         .rn-dashboard-table th,
@@ -2439,7 +2406,7 @@ export default function EmployerDashboardPage() {
           font-family: var(--font-body);
           font-size: 14px;
           font-weight: 700;
-          padding: 14px 12px;
+          padding: 13px 8px;
           text-align: left;
           vertical-align: middle;
         }
@@ -2521,9 +2488,7 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table td:nth-child(2) {
-          overflow: hidden;
           line-height: 1.35;
-          text-overflow: ellipsis;
         }
 
         .rn-dashboard-table td:nth-child(3),
@@ -2535,9 +2500,11 @@ export default function EmployerDashboardPage() {
           white-space: nowrap;
         }
 
-        .rn-dashboard-table td:nth-child(4) {
+        .rn-dashboard-table__truncate {
+          display: block;
           overflow: hidden;
           text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .rn-dashboard-expiration {
@@ -2587,81 +2554,43 @@ export default function EmployerDashboardPage() {
           width: 100%;
         }
 
-        .rn-dashboard-actions__primary {
-          box-shadow: none !important;
-          font-size: 12px !important;
-          justify-content: center !important;
-          min-height: 34px;
-          min-width: 78px;
-          padding: 7px 10px !important;
-          white-space: nowrap;
+        .rn-dashboard-row-actions {
+          display: grid;
+          gap: 6px;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
         }
 
-        .rn-dashboard-actions__menu {
-          position: relative;
-        }
-
-        .rn-dashboard-actions__menu summary {
+        .rn-dashboard-action {
+          align-items: center;
           background: #fff;
           border: 1px solid ${homeTheme.border};
-          border-radius: 12px;
+          border-radius: 10px;
           box-shadow: none;
+          color: ${homeTheme.green};
           cursor: pointer;
-          display: inline-flex;
+          display: flex;
           font-family: var(--font-body);
           font-size: 12px;
-          font-weight: 800;
-          min-height: 34px;
-          padding: 7px 10px;
-          user-select: none;
-          white-space: nowrap;
-        }
-
-        .rn-dashboard-actions__menu summary:focus-visible {
-          outline: 3px solid rgba(31, 79, 68, 0.18);
-          outline-offset: 2px;
-        }
-
-        .rn-dashboard-actions__menu-items {
-          background: #fff;
-          border: 1px solid ${homeTheme.border};
-          border-radius: 12px;
-          box-shadow: 0 14px 30px rgba(0, 0, 0, 0.12);
-          display: grid;
-          min-width: 130px;
-          padding: 6px;
-          position: absolute;
-          right: 0;
-          top: calc(100% + 6px);
-          z-index: 5;
-        }
-
-        .rn-dashboard-actions__menu:not([open]) .rn-dashboard-actions__menu-items {
-          display: none;
-        }
-
-        .rn-dashboard-actions__menu-item {
-          background: transparent;
-          border: 0;
-          border-radius: 8px;
-          color: ${homeTheme.text};
-          cursor: pointer;
-          font-family: var(--font-body);
-          font-size: 13px;
-          font-weight: 800;
-          padding: 8px 10px;
-          text-align: left;
+          font-weight: 900;
+          justify-content: center;
+          line-height: 1.15;
+          min-height: 32px;
+          padding: 6px 7px;
+          text-align: center;
           text-decoration: none;
-          white-space: nowrap;
         }
 
-        .rn-dashboard-actions__menu-item:hover,
-        .rn-dashboard-actions__menu-item:focus-visible {
+        .rn-dashboard-action:hover,
+        .rn-dashboard-action:focus-visible {
           background: rgba(31, 79, 68, 0.08);
-          outline: none;
+          border-color: rgba(31, 79, 68, 0.34);
+          outline: 2px solid rgba(31, 79, 68, 0.16);
+          outline-offset: 1px;
         }
 
-        .rn-dashboard-actions__menu-item--danger {
+        .rn-dashboard-action--danger {
+          background: rgba(173, 67, 67, 0.04);
+          border-color: rgba(173, 67, 67, 0.24);
           color: #9f2d20;
         }
 
@@ -3156,6 +3085,14 @@ export default function EmployerDashboardPage() {
           .rn-dashboard-metrics {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }
+
+          .rn-dashboard-table-wrap {
+            display: none;
+          }
+
+          .rn-dashboard-mobile-list {
+            display: grid;
+          }
         }
 
         @media (max-width: 760px) {
@@ -3172,14 +3109,6 @@ export default function EmployerDashboardPage() {
 
           .rn-job-listing-pagination__controls {
             justify-content: flex-start;
-          }
-
-          .rn-dashboard-table-wrap {
-            display: block;
-          }
-
-          .rn-dashboard-mobile-list {
-            display: none;
           }
 
           .rn-candidate-card-header {
