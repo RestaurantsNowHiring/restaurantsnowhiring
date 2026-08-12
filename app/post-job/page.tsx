@@ -12,7 +12,6 @@ import {
   STATE_OPTIONS,
 } from "../../lib/jobFormOptions";
 import { normalizeRichTextForEditing, sanitizeRichText } from "../../lib/richText";
-import { getNewJobApprovalFields, shouldAutoApproveJob } from "../../lib/jobPersistence";
 import { supabase } from "../../lib/supabase";
 import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 import {
@@ -236,6 +235,7 @@ export default function PostJobPage() {
   const [isTemplateComboboxOpen, setIsTemplateComboboxOpen] = useState(false);
   const [highlightedTemplateIndex, setHighlightedTemplateIndex] = useState(0);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [submittedJobAutoApproved, setSubmittedJobAutoApproved] = useState(false);
   const successDialogRef = useRef<HTMLDivElement>(null);
   const storeComboboxRef = useRef<HTMLDivElement>(null);
   const templateComboboxRef = useRef<HTMLDivElement>(null);
@@ -961,62 +961,42 @@ export default function PostJobPage() {
       .join("\n\n");
 
     const jobPayload = {
-      restaurant_name: companyName.trim(),
+      restaurantName: companyName.trim(),
       title: jobTitle.trim(),
-      role_category: roleCategoryForDb,
+      roleCategory: roleCategoryForDb,
       city: city.trim(),
       state: stateVal.trim().toUpperCase(),
-      apply_email: workEmail.trim(),
-      company_website: companyWebsite.trim() || null,
-      employment_type: employmentType || null,
-      pay_range: computedPay || null,
+      applyEmail: workEmail.trim(),
+      companyWebsite: companyWebsite.trim() || null,
+      employmentType: employmentType || "",
+      payRange: computedPay || null,
       address: address.trim() || null,
-      how_to_apply: howToApply.trim() || null,
+      howToApply: howToApply.trim() || null,
       description: combinedDescription,
-      ...getNewJobApprovalFields(employerAccess?.accountId),
-      employer_email: employerEmail,
-      employer_user_id: employerUserId,
-      employer_account_id: employerAccess?.accountId ?? null,
-      posted_by_user_id: postedByUserId,
-      posted_by_email: postedByEmail,
-      candidate_notification_email: notificationEmail || null,
-      candidate_notification_emails: notificationEmails.length > 0 ? notificationEmails : null,
-      candidate_notification_routing: notificationEmails.length > 0 ? "custom_job_email" : employerAccess?.defaultCandidateNotificationRouting ?? "job_poster",
-      employer_store_id: selectedStoreId || null,
-      employer_job_template_id: selectedTemplateId || null,
+      candidateNotificationEmail: notificationEmail || null,
+      candidateNotificationEmails: notificationEmails.length > 0 ? notificationEmails : null,
+      candidateNotificationRouting: notificationEmails.length > 0 ? "custom_job_email" : employerAccess?.defaultCandidateNotificationRouting ?? "job_poster",
+      employerStoreId: selectedStoreId || null,
+      employerJobTemplateId: selectedTemplateId || null,
     };
 
-    let insertResult = await supabase.from("jobs").insert([jobPayload]);
-
-    if (
-      insertResult.error &&
-      (insertResult.error.message.includes("employer_store_id") || insertResult.error.message.includes("employer_job_template_id"))
-    ) {
-      const { employer_store_id: _storeId, employer_job_template_id: _templateId, ...legacyJobPayload } = jobPayload;
-      void _storeId;
-      void _templateId;
-      insertResult = await supabase.from("jobs").insert([legacyJobPayload]);
-    }
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    const response = token ? await fetch("/api/employer/jobs", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...employerAccountHeaders(token) },
+      body: JSON.stringify(jobPayload),
+    }) : null;
+    const responseBody = response ? await response.json().catch(() => null) as { autoApproved?: boolean; error?: string } | null : null;
 
     setIsSubmitting(false);
 
-    if (insertResult.error) {
-      setMessage(`Error: ${insertResult.error.message}`);
+    if (!response?.ok) {
+      setMessage(`Error: ${responseBody?.error || "Please sign in again before posting this job."}`);
       return;
     }
 
-    if (shouldAutoApproveJob(employerAccess?.accountId)) {
-      const { data } = await supabase.auth.getSession();
-      const token = data.session?.access_token;
-      if (token) {
-        // Match the normal approval route's best-effort Stripe quantity sync.
-        void fetch("/api/billing/sync", {
-          method: "POST",
-          headers: employerAccountHeaders(token),
-        });
-      }
-    }
-
+    setSubmittedJobAutoApproved(responseBody?.autoApproved === true);
     setMessage(null);
     setShowSuccessModal(true);
   }
@@ -2450,7 +2430,7 @@ export default function PostJobPage() {
                 fontFamily: "var(--font-body)",
               }}
             >
-              {shouldAutoApproveJob(employerAccess?.accountId)
+              {submittedJobAutoApproved
                 ? "Your job post is approved and publicly eligible on the site."
                 : "Your job post has been submitted for review. Once approved, it will become publicly visible on the site."}
             </p>
