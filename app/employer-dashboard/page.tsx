@@ -1372,7 +1372,7 @@ export default function EmployerDashboardPage() {
         backgroundColor: homeTheme.bg,
       }}
     >
-      <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 18px" }}>
+      <div className="rn-employer-dashboard-content" style={{ maxWidth: 1480, margin: "0 auto", padding: "0 24px" }}>
 
         <section style={{ ...homeCardStyle, marginBottom: 16 }}>
           <p
@@ -2109,6 +2109,10 @@ export default function EmployerDashboardPage() {
           justify-content: space-between;
         }
 
+        .rn-employer-dashboard-content {
+          width: 100%;
+        }
+
         .rn-dashboard-metrics {
           display: grid;
           grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2368,7 +2372,7 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table__col-select {
-          width: 4.5%;
+          width: 4%;
         }
 
         .rn-dashboard-table__col-title {
@@ -2376,11 +2380,11 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table__col-status {
-          width: 8.5%;
+          width: 8%;
         }
 
         .rn-dashboard-table__col-location {
-          width: 16.5%;
+          width: 17%;
         }
 
         .rn-dashboard-table__col-date {
@@ -2388,15 +2392,15 @@ export default function EmployerDashboardPage() {
         }
 
         .rn-dashboard-table__col-expires {
-          width: 13.5%;
+          width: 14%;
         }
 
         .rn-dashboard-table__col-views {
-          width: 4%;
+          width: 5%;
         }
 
         .rn-dashboard-table__col-actions {
-          width: 24%;
+          width: 23%;
         }
 
         .rn-dashboard-table th,
@@ -2406,7 +2410,7 @@ export default function EmployerDashboardPage() {
           font-family: var(--font-body);
           font-size: 14px;
           font-weight: 700;
-          padding: 9px 6px;
+          padding: 12px 10px;
           text-align: left;
           vertical-align: middle;
         }
@@ -2530,7 +2534,7 @@ export default function EmployerDashboardPage() {
 
         .rn-dashboard-table td:last-child,
         .rn-dashboard-table th:last-child {
-          padding-right: 8px;
+          padding-right: 12px;
           text-align: left;
         }
 
@@ -2562,7 +2566,7 @@ export default function EmployerDashboardPage() {
         .rn-dashboard-row-actions {
           display: flex;
           flex-wrap: nowrap;
-          gap: 3px;
+          gap: 7px;
           justify-content: flex-start;
           white-space: nowrap;
         }
@@ -2577,21 +2581,21 @@ export default function EmployerDashboardPage() {
           cursor: pointer;
           display: flex;
           font-family: var(--font-body);
-          font-size: 11.5px;
+          font-size: 12px;
           font-weight: 900;
           justify-content: center;
           line-height: 1.15;
-          min-height: 28px;
-          padding: 5px 6px;
+          min-height: 32px;
+          padding: 6px 9px;
           text-align: center;
           text-decoration: none;
           white-space: nowrap;
         }
 
         .rn-dashboard-action--text {
-          background: transparent;
-          border-color: transparent;
-          padding-inline: 4px;
+          background: rgba(31, 79, 68, 0.035);
+          border-color: rgba(31, 79, 68, 0.1);
+          padding-inline: 8px;
         }
 
         .rn-dashboard-action--lifecycle {
@@ -3099,7 +3103,7 @@ export default function EmployerDashboardPage() {
           background: rgba(255, 255, 255, 0.92);
         }
 
-        @media (max-width: 980px) {
+        @media (max-width: 1180px) {
           .rn-dashboard-metrics {
             grid-template-columns: repeat(2, minmax(0, 1fr));
           }

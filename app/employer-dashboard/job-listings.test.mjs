@@ -49,16 +49,19 @@ test("search, filter, sorting, pagination, and bulk selection stay available", (
 test("desktop table does not opt into horizontal scrolling and mobile uses cards", () => {
   assert.match(dashboard, /\.rn-dashboard-table-wrap\s*{[\s\S]*?overflow: hidden;/);
   assert.doesNotMatch(dashboard, /min-width:\s*1180px|overflow-x:\s*auto|Scrollable job listings table/);
-  assert.match(dashboard, /@media \(max-width: 980px\)[\s\S]*?\.rn-dashboard-table-wrap\s*{\s*display: none;/);
-  assert.match(dashboard, /@media \(max-width: 980px\)[\s\S]*?\.rn-dashboard-mobile-list\s*{\s*display: grid;/);
+  assert.match(dashboard, /@media \(max-width: 1180px\)[\s\S]*?\.rn-dashboard-table-wrap\s*{\s*display: none;/);
+  assert.match(dashboard, /@media \(max-width: 1180px\)[\s\S]*?\.rn-dashboard-mobile-list\s*{\s*display: grid;/);
   assert.match(dashboard, /rn-dashboard-mobile-card/);
 });
 
 test("desktop actions stay on one compact row and title and location retain useful width", () => {
   assert.match(dashboard, /\.rn-dashboard-row-actions\s*{[\s\S]*?display: flex;[\s\S]*?flex-wrap: nowrap;/);
+  assert.match(dashboard, /maxWidth: 1480/);
   assert.match(dashboard, /\.rn-dashboard-table__col-title\s*{\s*width: 20%;/);
-  assert.match(dashboard, /\.rn-dashboard-table__col-location\s*{\s*width: 16\.5%;/);
-  assert.match(dashboard, /\.rn-dashboard-table th,[\s\S]*?padding: 9px 6px;/);
+  assert.match(dashboard, /\.rn-dashboard-table__col-location\s*{\s*width: 17%;/);
+  assert.match(dashboard, /\.rn-dashboard-table th,[\s\S]*?padding: 12px 10px;/);
+  assert.match(dashboard, /\.rn-dashboard-row-actions\s*{[\s\S]*?gap: 7px;/);
+  assert.match(dashboard, /\.rn-dashboard-action\s*{[\s\S]*?font-size: 12px;/);
   assert.match(dashboard, /\.rn-dashboard-table td:nth-child\(7\),[\s\S]*?text-align: center;/);
 });
 
