@@ -2,7 +2,8 @@ import "server-only";
 
 import { EMPLOYMENT_OPTIONS, ROLE_OPTIONS, STATE_OPTIONS } from "../../jobFormOptions";
 import { sanitizeRichText } from "../../richText";
-import { buildCanonicalJobInsertPayload } from "../../jobPersistence";
+import { syncSubscriptionQuantityForEmployer } from "../../billing";
+import { buildCanonicalJobInsertPayload, shouldAutoApproveJob } from "../../jobPersistence";
 import { getSupabaseAdminClient } from "../../supabaseAdmin";
 import { getAtsProvider } from "../providers/registry";
 import type { PreparedImportItem, PreparedRnhJob } from "./prepareJobImport";
@@ -61,6 +62,7 @@ type ImportDatabase = {
 export type ImportPreparedJobsDependencies = {
   database: ImportDatabase;
   now: () => Date;
+  syncSubscriptionQuantityForEmployer?: typeof syncSubscriptionQuantityForEmployer;
 };
 
 function defaultDatabase(): ImportDatabase | null {
@@ -294,6 +296,7 @@ export async function importPreparedJobs(input: ImportPreparedJobsInput, depende
               howToApply: job.applyUrl,
               candidateNotificationEmail: null,
               candidateNotificationEmails: null,
+              approvalDate: new Date(now),
             }),
             ...managed,
           });
@@ -320,6 +323,12 @@ export async function importPreparedJobs(input: ImportPreparedJobsInput, depende
           : persistedAs === "Imported" ? "The ATS job was imported for approval." : "The ATS job was updated." });
       }
     }
+  }
+  if (result.Imported.length > 0 && shouldAutoApproveJob(accountId)) {
+    const syncQuantity = dependencies?.syncSubscriptionQuantityForEmployer ?? syncSubscriptionQuantityForEmployer;
+    await syncQuantity(accountResult.data.owner_user_id).catch((syncError) => {
+      console.error("Failed to sync Stripe quantity after MISSION BBQ ATS auto-approval", { syncError });
+    });
   }
   return result;
 }

@@ -12,6 +12,7 @@ import {
   STATE_OPTIONS,
 } from "../../lib/jobFormOptions";
 import { normalizeRichTextForEditing, sanitizeRichText } from "../../lib/richText";
+import { getNewJobApprovalFields, shouldAutoApproveJob } from "../../lib/jobPersistence";
 import { supabase } from "../../lib/supabase";
 import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
 import {
@@ -972,7 +973,7 @@ export default function PostJobPage() {
       address: address.trim() || null,
       how_to_apply: howToApply.trim() || null,
       description: combinedDescription,
-      active: false,
+      ...getNewJobApprovalFields(employerAccess?.accountId),
       employer_email: employerEmail,
       employer_user_id: employerUserId,
       employer_account_id: employerAccess?.accountId ?? null,
@@ -1002,6 +1003,18 @@ export default function PostJobPage() {
     if (insertResult.error) {
       setMessage(`Error: ${insertResult.error.message}`);
       return;
+    }
+
+    if (shouldAutoApproveJob(employerAccess?.accountId)) {
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      if (token) {
+        // Match the normal approval route's best-effort Stripe quantity sync.
+        void fetch("/api/billing/sync", {
+          method: "POST",
+          headers: employerAccountHeaders(token),
+        });
+      }
     }
 
     setMessage(null);
@@ -2437,8 +2450,9 @@ export default function PostJobPage() {
                 fontFamily: "var(--font-body)",
               }}
             >
-              Your job post has been submitted for review. Once approved, it will become publicly
-              visible on the site.
+              {shouldAutoApproveJob(employerAccess?.accountId)
+                ? "Your job post is approved and publicly eligible on the site."
+                : "Your job post has been submitted for review. Once approved, it will become publicly visible on the site."}
             </p>
 
             <div

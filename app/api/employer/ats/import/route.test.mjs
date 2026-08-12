@@ -33,7 +33,7 @@ const validBody = { careersPageUrl: "https://example.com/careers", selectedJobKe
 function dependencies(overrides = {}) {
   return {
     getAuthUserFromRequest: async () => ({ id: "user_1" }),
-    getEmployerAccountContext: async () => ({ accountId: "server_account", canManageJobs: true }),
+    getEmployerAccountContext: async () => ({ accountId: "server_account", ownerUserId: "owner_1", canManageJobs: true }),
     getSelectedEmployerAccountIdFromRequest: () => "selected_account",
     assertEmployerPermission: (context, permission) => { assert.equal(permission, "canManageJobs"); if (!context.canManageJobs) { const error = new Error("secret forbidden"); error.name = "EmployerPermissionError"; throw error; } },
     prepareJobImport: async () => prepared,

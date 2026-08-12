@@ -6,6 +6,35 @@ export const NEW_JOB_ACTIVE = false;
 export const NEW_JOB_STATUS = "pending" as const;
 export const DEFAULT_CANDIDATE_NOTIFICATION_ROUTING = "job_poster" as const;
 
+/** Stable employer-account identities eligible for immediate approval. */
+export function getAutoApproveEmployerAccountIds(value = process.env.MISSION_BBQ_AUTO_APPROVE_ACCOUNT_IDS) {
+  return new Set((value ?? "").split(",").map((id) => id.trim()).filter(Boolean));
+}
+
+export function shouldAutoApproveJob(employerAccountId: string | null | undefined, configuredIds?: ReadonlySet<string>) {
+  const id = employerAccountId?.trim();
+  return Boolean(id && (configuredIds ?? getAutoApproveEmployerAccountIds()).has(id));
+}
+
+export function getNewJobApprovalFields(
+  employerAccountId: string | null | undefined,
+  now = new Date(),
+  configuredIds?: ReadonlySet<string>,
+) {
+  if (!shouldAutoApproveJob(employerAccountId, configuredIds)) {
+    return { active: NEW_JOB_ACTIVE, status: NEW_JOB_STATUS } as const;
+  }
+
+  const expiresAt = new Date(now);
+  expiresAt.setUTCDate(expiresAt.getUTCDate() + 30);
+  return {
+    active: true,
+    status: "active" as const,
+    approved_at: now.toISOString(),
+    expires_at: expiresAt.toISOString(),
+  };
+}
+
 export type CanonicalJobInsertInput = {
   restaurantName: string;
   title: string;
@@ -29,6 +58,7 @@ export type CanonicalJobInsertInput = {
   candidateNotificationRouting?: "account_owner" | "job_poster" | "company_support" | "custom_job_email";
   employerStoreId?: string | null;
   employerJobTemplateId?: string | null;
+  approvalDate?: Date;
 };
 
 export function buildCanonicalJobInsertPayload(input: CanonicalJobInsertInput) {
@@ -45,8 +75,7 @@ export function buildCanonicalJobInsertPayload(input: CanonicalJobInsertInput) {
     address: input.address ?? null,
     how_to_apply: input.howToApply ?? null,
     description: input.description,
-    active: NEW_JOB_ACTIVE,
-    status: NEW_JOB_STATUS,
+    ...getNewJobApprovalFields(input.employerAccountId, input.approvalDate),
     employer_email: input.employerEmail,
     employer_user_id: input.employerUserId,
     employer_account_id: input.employerAccountId,
