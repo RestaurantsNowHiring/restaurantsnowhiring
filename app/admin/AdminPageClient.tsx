@@ -17,6 +17,12 @@ import {
   type AdminReadableStatus,
   isMissingStatusColumnError,
 } from "../../lib/jobStatus";
+import {
+  ADMIN_EMPLOYERS_PER_PAGE,
+  filterAdminEmployers,
+  paginateAdminEmployers,
+  type AdminEmployerRow,
+} from "../../lib/adminEmployerList";
 
 type AdminJob = {
   id: string;
@@ -135,6 +141,8 @@ export default function AdminPageClient() {
   const [statusColumnAvailable, setStatusColumnAvailable] = useState(true);
   const [jobFilter, setJobFilter] = useState<AdminJobFilter>("pending");
   const [previewJob, setPreviewJob] = useState<AdminJob | null>(null);
+  const [employerSearch, setEmployerSearch] = useState("");
+  const [employerPage, setEmployerPage] = useState(1);
 
   const [contactInquiries, setContactInquiries] = useState<ContactInquiry[]>(
     [],
@@ -310,10 +318,7 @@ export default function AdminPageClient() {
   }, []);
 
   const employerRows = useMemo(() => {
-    const map = new Map<
-      string,
-      { employer: string; email: string; adCount: number; latest: string }
-    >();
+    const map = new Map<string, AdminEmployerRow>();
 
     for (const job of jobs) {
       const employerName =
@@ -344,6 +349,20 @@ export default function AdminPageClient() {
       (a, b) => new Date(b.latest).getTime() - new Date(a.latest).getTime(),
     );
   }, [jobs]);
+
+  const filteredEmployerRows = useMemo(
+    () => filterAdminEmployers(employerRows, employerSearch),
+    [employerRows, employerSearch],
+  );
+  const employerPagination = useMemo(
+    () =>
+      paginateAdminEmployers(
+        filteredEmployerRows,
+        employerPage,
+        ADMIN_EMPLOYERS_PER_PAGE,
+      ),
+    [filteredEmployerRows, employerPage],
+  );
 
   function getAdminReadableStatus(job: AdminJob): AdminReadableStatus {
     return adminReadableStatusForJob(job.status, job.active);
@@ -659,52 +678,6 @@ export default function AdminPageClient() {
                   color: homeTheme.text,
                 }}
               >
-                Employers with submitted jobs
-              </h2>
-
-              {jobsState === "loading" ? (
-                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
-                  Loading employer submissions…
-                </div>
-              ) : employerRows.length === 0 ? (
-                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
-                  No employer submissions found yet. Once employers post jobs,
-                  they will show up here.
-                </div>
-              ) : (
-                <div style={tableWrap}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ backgroundColor: "rgba(0,0,0,.03)" }}>
-                        <th style={thTdCommon}>Employer / Restaurant</th>
-                        <th style={thTdCommon}>Contact Email</th>
-                        <th style={thTdCommon}>Job Ads</th>
-                        <th style={thTdCommon}>Latest Submission</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {employerRows.map((row) => (
-                        <tr key={`${row.employer}-${row.email}`}>
-                          <td style={thTdCommon}>{row.employer}</td>
-                          <td style={thTdCommon}>{row.email}</td>
-                          <td style={thTdCommon}>{row.adCount}</td>
-                          <td style={thTdCommon}>{formatDate(row.latest)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-
-            <section style={homeCardStyle}>
-              <h2
-                style={{
-                  marginTop: 0,
-                  marginBottom: 12,
-                  color: homeTheme.text,
-                }}
-              >
                 Job ad review
               </h2>
               <p
@@ -937,6 +910,133 @@ export default function AdminPageClient() {
                     </tbody>
                   </table>
                 </div>
+              )}
+            </section>
+
+            <section style={homeCardStyle}>
+              <h2
+                style={{
+                  marginTop: 0,
+                  marginBottom: 12,
+                  color: homeTheme.text,
+                }}
+              >
+                Employers with submitted jobs
+              </h2>
+
+              {jobsState === "loading" ? (
+                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                  Loading employer submissions…
+                </div>
+              ) : employerRows.length === 0 ? (
+                <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                  No employer submissions found yet. Once employers post jobs,
+                  they will show up here.
+                </div>
+              ) : (
+                <>
+                  <label
+                    htmlFor="employer-search"
+                    style={{
+                      display: "block",
+                      marginBottom: 14,
+                      color: homeTheme.text,
+                      fontWeight: 800,
+                      fontFamily: "var(--font-body)",
+                    }}
+                  >
+                    Search employers
+                    <input
+                      id="employer-search"
+                      type="search"
+                      value={employerSearch}
+                      onChange={(event) => {
+                        setEmployerSearch(event.target.value);
+                        setEmployerPage(1);
+                      }}
+                      placeholder="Restaurant name or contact email"
+                      style={{
+                        display: "block",
+                        width: "min(100%, 460px)",
+                        marginTop: 7,
+                        border: `1px solid ${homeTheme.border}`,
+                        borderRadius: 12,
+                        padding: "10px 12px",
+                        font: "inherit",
+                        color: homeTheme.text,
+                        backgroundColor: "#fff",
+                      }}
+                    />
+                  </label>
+
+                  {filteredEmployerRows.length === 0 ? (
+                    <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                      No employers match “{employerSearch.trim()}”.
+                    </div>
+                  ) : (
+                    <>
+                      <div style={tableWrap}>
+                        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                          <thead>
+                            <tr style={{ backgroundColor: "rgba(0,0,0,.03)" }}>
+                              <th style={thTdCommon}>Employer / Restaurant</th>
+                              <th style={thTdCommon}>Contact Email</th>
+                              <th style={thTdCommon}>Job Ads</th>
+                              <th style={thTdCommon}>Latest Submission</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {employerPagination.rows.map((row) => (
+                              <tr key={`${row.employer}-${row.email}`}>
+                                <td style={thTdCommon}>{row.employer}</td>
+                                <td style={thTdCommon}>{row.email}</td>
+                                <td style={thTdCommon}>{row.adCount}</td>
+                                <td style={thTdCommon}>{formatDate(row.latest)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                          flexWrap: "wrap",
+                          marginTop: 14,
+                        }}
+                      >
+                        <div style={{ color: homeTheme.muted, fontWeight: 700 }}>
+                          Showing {employerPagination.showingStart}–{employerPagination.showingEnd} of{" "}
+                          {employerPagination.total} employers
+                        </div>
+                        <div style={{ display: "flex", gap: 8 }}>
+                          <button
+                            type="button"
+                            onClick={() => setEmployerPage((page) => Math.max(1, page - 1))}
+                            disabled={employerPagination.page === 1}
+                            style={{ ...homeSecondaryButton, padding: "8px 12px" }}
+                          >
+                            Previous
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setEmployerPage((page) =>
+                                Math.min(employerPagination.totalPages, page + 1),
+                              )
+                            }
+                            disabled={employerPagination.page === employerPagination.totalPages}
+                            style={{ ...homeSecondaryButton, padding: "8px 12px" }}
+                          >
+                            Next
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </>
               )}
             </section>
           </>
