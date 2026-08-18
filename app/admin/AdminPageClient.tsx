@@ -643,6 +643,9 @@ export default function AdminPageClient() {
             >
               Blog Drafts
             </Link>
+            <Link href="/admin/candidate-resources" style={tabBtn(false)} className="rn-btn-secondary">
+              Candidate Resources
+            </Link>
           </div>
         </section>
 
