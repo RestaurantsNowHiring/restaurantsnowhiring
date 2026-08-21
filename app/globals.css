@@ -534,20 +534,31 @@ select.rn-combobox__input {
   display: flex;
 }
 
-.top-banner__employer-toggle {
+.top-banner__employer-button {
   align-items: center;
   background: transparent;
   border: 0;
   color: #fef5ea;
   cursor: pointer;
   display: inline-flex;
-  font-size: 18px;
+  font-family: var(--font-coldsmith);
+  font-size: 25px;
+  font-weight: 200;
   justify-content: center;
-  margin-left: 3px;
-  padding: 5px 2px;
+  letter-spacing: 1.1px;
+  line-height: 1;
+  min-height: 34px;
+  padding: 7px 0;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-.top-banner__employer-toggle:focus-visible {
+.top-banner__employer-button span {
+  font-size: 18px;
+  margin-left: 5px;
+}
+
+.top-banner__employer-button:focus-visible {
   outline: 3px solid #ff7a00;
   outline-offset: 2px;
 }
@@ -566,8 +577,7 @@ select.rn-combobox__input {
   z-index: 10;
 }
 
-.top-banner__employer-menu.is-open .top-banner__employer-dropdown,
-.top-banner__employer-menu:focus-within .top-banner__employer-dropdown {
+.top-banner__employer-menu.is-open .top-banner__employer-dropdown {
   display: block;
 }
 
@@ -582,8 +592,25 @@ select.rn-combobox__input {
   text-decoration: none;
 }
 
+.top-banner__employer-dropdown-action {
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  color: #193d34;
+  cursor: pointer;
+  display: block;
+  font-family: var(--font-coldsmith);
+  font-size: 17px;
+  letter-spacing: 0.7px;
+  padding: 8px 10px;
+  text-align: left;
+  width: 100%;
+}
+
 .top-banner__employer-dropdown a:hover,
-.top-banner__employer-dropdown a:focus-visible {
+.top-banner__employer-dropdown a:focus-visible,
+.top-banner__employer-dropdown-action:hover,
+.top-banner__employer-dropdown-action:focus-visible {
   background: #e5efe9;
   color: #245f50;
 }
@@ -593,6 +620,10 @@ select.rn-combobox__input {
   .top-banner__auth {
     align-items: center !important;
     min-width: 0;
+  }
+
+  .top-banner__employer-button {
+    font-size: 22px;
   }
 
   .top-banner__nav {
@@ -789,25 +820,32 @@ select.rn-combobox__input {
     justify-content: center;
   }
 
-  .top-banner__employer-toggle {
-    display: none;
+  .top-banner__employer-button {
+    font-size: 18px;
+    min-height: 38px;
+    padding: 9px 12px;
+    width: 100%;
   }
 
   .top-banner__employer-dropdown,
-  .top-banner__employer-menu.is-open .top-banner__employer-dropdown,
-  .top-banner__employer-menu:focus-within .top-banner__employer-dropdown {
+  .top-banner__employer-menu.is-open .top-banner__employer-dropdown {
     background: transparent;
     border: 0;
     border-radius: 0;
     box-shadow: none;
-    display: grid;
+    display: none;
     gap: 3px;
     min-width: 0;
     padding: 0 4px 4px;
     position: static;
   }
 
-  .top-banner__employer-dropdown a {
+  .top-banner__employer-menu.is-open .top-banner__employer-dropdown {
+    display: grid;
+  }
+
+  .top-banner__employer-dropdown a,
+  .top-banner__employer-dropdown-action {
     background: rgba(254, 245, 234, 0.07);
     color: #fef5ea;
     font-size: 16px;

@@ -62,6 +62,7 @@ export default function TopBanner() {
   async function handleSignOut() {
     await supabase.auth.signOut();
     setIsMobileMenuOpen(false);
+    setIsEmployerMenuOpen(false);
 
     // Optional: If they were on /post-job, send them to login
     if (pathname === "/post-job") {
@@ -73,8 +74,6 @@ export default function TopBanner() {
   { href: "/jobs", label: "AVAILABLE JOBS" },
   { href: "/candidate-resources", label: "CANDIDATE RESOURCES" },
   { href: "/companies", label: "COMPANIES" },
-    ...(isLoggedIn ? [{ href: "/employer-dashboard", label: "DASHBOARD" }] : []),
-    { href: "/about", label: "ABOUT" },
     { href: "/contact", label: "CONTACT" },
   ];
 
@@ -127,40 +126,7 @@ export default function TopBanner() {
           <div id="top-banner-menu" className="top-banner__menu">
             {/* LEFT SIDE */}
             <div className="top-banner__nav" style={{ display: "flex", gap: 34 }}>
-              {navLinks.slice(0, 3).map((link) => (
-                <NavLink key={link.href} href={link.href} onClick={() => setIsMobileMenuOpen(false)}>
-                  {link.label}
-                </NavLink>
-              ))}
-              <div
-                className={`top-banner__employer-menu${isEmployerMenuOpen ? " is-open" : ""}`}
-                ref={employerMenuRef}
-                onMouseEnter={() => setIsEmployerMenuOpen(true)}
-                onMouseLeave={() => setIsEmployerMenuOpen(false)}
-              >
-                <div className="top-banner__employer-trigger">
-                  <NavLink href="/for-employers" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>
-                    FOR EMPLOYERS
-                  </NavLink>
-                  <button
-                    type="button"
-                    className="top-banner__employer-toggle"
-                    aria-label="Toggle For Employers menu"
-                    aria-haspopup="menu"
-                    aria-expanded={isEmployerMenuOpen}
-                    aria-controls="employer-dropdown"
-                    onClick={() => setIsEmployerMenuOpen((isOpen) => !isOpen)}
-                  >
-                    <span aria-hidden="true">⌄</span>
-                  </button>
-                </div>
-                <div id="employer-dropdown" className="top-banner__employer-dropdown" role="menu">
-                  <Link href="/for-employers" role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>For Employers</Link>
-                  <Link href={postJobHref} role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>Post a Job</Link>
-                  <Link href="/pricing" role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>Pricing</Link>
-                </div>
-              </div>
-              {navLinks.slice(3).map((link) => (
+              {navLinks.map((link) => (
                 <NavLink key={link.href} href={link.href} onClick={() => setIsMobileMenuOpen(false)}>
                   {link.label}
                 </NavLink>
@@ -172,46 +138,39 @@ export default function TopBanner() {
               className="top-banner__auth"
               style={{ display: "flex", alignItems: "center", gap: 20 }}
             >
-              {/* Prevent flicker before auth check completes */}
-              {!isReady ? null : !isLoggedIn ? (
-                <Link
-                  href="/employer-login"
-                  className="banner-link--login"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  style={{
-                    fontFamily: "var(--font-coldsmith)",
-                    letterSpacing: 1.1,
-                    textTransform: "uppercase",
-                    fontSize: 25,
-                    textDecoration: "none",
-                    fontWeight: 200,
-                  }}
-                >
-                  EMPLOYER LOGIN / SIGN UP
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSignOut}
-                  className="banner-link--login top-banner__sign-out"
-                  style={{
-                    fontFamily: "var(--font-coldsmith)",
-                    letterSpacing: 1.1,
-                    textTransform: "uppercase",
-                    fontSize: 25,
-                    textDecoration: "none",
-                    fontWeight: 200,
-                    background: "transparent",
-                    border: "none",
-                    padding: 0,
-                    lineHeight: 1,
-                    color: "#fff",
-                    cursor: "pointer",
-                  }}
-                >
-                  SIGN OUT
-                </button>
-              )}
+              <div
+                className={`top-banner__employer-menu${isEmployerMenuOpen ? " is-open" : ""}`}
+                ref={employerMenuRef}
+                onMouseEnter={() => setIsEmployerMenuOpen(true)}
+                onMouseLeave={() => setIsEmployerMenuOpen(false)}
+              >
+                <div className="top-banner__employer-trigger">
+                  <button
+                    type="button"
+                    className="top-banner__employer-button"
+                    aria-label="Toggle For Employers menu"
+                    aria-haspopup="menu"
+                    aria-expanded={isEmployerMenuOpen}
+                    aria-controls="employer-dropdown"
+                    onClick={() => setIsEmployerMenuOpen((isOpen) => !isOpen)}
+                  >
+                    FOR EMPLOYERS <span aria-hidden="true">⌄</span>
+                  </button>
+                </div>
+                <div id="employer-dropdown" className="top-banner__employer-dropdown" role="menu">
+                  <Link href={postJobHref} role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>Post a Job</Link>
+                  <Link href="/pricing" role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>Pricing</Link>
+                  <Link href="/about" role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>About</Link>
+                  {isReady && (isLoggedIn ? (
+                    <>
+                      <Link href="/employer-dashboard" role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>Dashboard</Link>
+                      <button type="button" role="menuitem" className="top-banner__employer-dropdown-action" onClick={handleSignOut}>Sign Out</button>
+                    </>
+                  ) : (
+                    <Link href="/employer-login" role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>Employer Login / Sign Up</Link>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
