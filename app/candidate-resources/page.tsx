@@ -4,7 +4,7 @@ import CandidateResourcesClient from "./CandidateResourcesClient";
 import type { CandidateResource } from "../../lib/candidateResources";
 
 export const metadata: Metadata = {
-  title: "Restaurant Career Resources | Restaurants Now Hiring",
+  title: "Restaurant Career Resources",
   description: "Build your restaurant career with resume help, interview preparation, career guides, job search resources, and restaurant jobs from Restaurants Now Hiring.",
 };
 export const revalidate = 60;
