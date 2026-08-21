@@ -12,7 +12,7 @@ const candidateTools: Array<{
   icon: ReactNode;
   href?: string;
 }> = [
-  { title: "BUILD YOUR RESUME", description: "Create a restaurant-ready resume in minutes.", icon: <FileText aria-hidden="true" /> },
+  { title: "BUILD YOUR RESUME", description: "Create a restaurant-ready resume in minutes.", icon: <FileText aria-hidden="true" />, href: "/candidate-resources/resume-builder" },
   { title: "PRACTICE AN INTERVIEW", description: "Practice questions for your restaurant role.", icon: <MessagesSquare aria-hidden="true" /> },
   { title: "EXPLORE RESTAURANT CAREERS", description: "Learn about positions, skills & responsibilities.", icon: <ChefHat aria-hidden="true" /> },
   { title: "FIND YOUR NEXT JOB", description: "Search restaurant opportunities near you.", icon: <Search aria-hidden="true" />, href: "/jobs" },
@@ -37,7 +37,7 @@ export default function CandidateResourcesClient({ resources }: { resources: Can
           <h3>{tool.title}</h3>
           <p>{tool.description}</p>
           {tool.href
-            ? <Link href={tool.href} className={styles.toolAction}>Browse Jobs <span aria-hidden="true">→</span></Link>
+            ? <Link href={tool.href} className={styles.toolAction}>{tool.title === "BUILD YOUR RESUME" ? "Start Building" : "Browse Jobs"} <span aria-hidden="true">→</span></Link>
             : <span className={styles.comingSoon}>Coming Soon</span>}
         </article>)}
       </div>
