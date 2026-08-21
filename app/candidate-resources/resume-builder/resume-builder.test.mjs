@@ -82,9 +82,12 @@ test("print typography has a readable professional hierarchy and resume bullets"
   const roleSize = size("\\.resume header h2");
   const sectionSize = size("\\.resume section>h2");
   const bodySize = size("\\.resume");
+  const jobHeadingSize = size("\\.resumeEntry h3,\\.resume section h3");
   assert.ok(nameSize > roleSize, "candidate name should be larger than target role");
   assert.ok(roleSize > sectionSize, "target role should be larger than section headings");
   assert.ok(bodySize >= 9.5, "print body text should remain readable");
+  assert.ok(bodySize > sectionSize, "section labels should be smaller than body text");
+  assert.ok(jobHeadingSize > sectionSize, "experience heading should be larger than section labels");
   assert.match(printCss, /\.resumeEntry ul\{[^}]*padding-left:1[5-9]px/);
   assert.match(printCss, /\.resumeEntry li\{[^}]*line-height:1\.[34][^}]*margin:[2-4]px 0/);
   assert.match(printCss, /border-bottom:\.5px solid #aaa/);
