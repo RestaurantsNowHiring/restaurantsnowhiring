@@ -10,16 +10,39 @@ test("TopBanner keeps every public and authenticated navigation control", async 
     "AVAILABLE JOBS",
     "CANDIDATE RESOURCES",
     "COMPANIES",
-    "POST A JOB",
-    "DASHBOARD",
-    "PRICING",
-    "ABOUT",
+    "FOR EMPLOYERS",
     "CONTACT",
-    "EMPLOYER LOGIN / SIGN UP",
-    "SIGN OUT",
   ]) {
     assert.ok(component.includes(label), `missing navigation control: ${label}`);
   }
+});
+
+test("employer links are grouped in an accessible responsive dropdown", async () => {
+  const component = await read("app/components/TopBanner.tsx");
+  const css = await read("app/globals.css");
+
+  assert.doesNotMatch(component, /\/for-employers/);
+  assert.match(component, /aria-haspopup="menu"/);
+  assert.match(component, /aria-expanded=\{isEmployerMenuOpen\}/);
+  assert.match(component, /event\.key === "Escape"/);
+  assert.match(component, /"\/employer-login\?next=\/post-job" : "\/post-job"/);
+  assert.match(component, /href="\/pricing" role="menuitem"/);
+  assert.match(component, /href="\/about" role="menuitem"/);
+  assert.match(component, /href="\/employer-login" role="menuitem"/);
+  assert.match(component, /href="\/employer-dashboard" role="menuitem"/);
+  assert.match(component, /className="top-banner__employer-dropdown-action" onClick=\{handleSignOut\}/);
+  assert.match(css, /\.top-banner__employer-menu\.is-open \.top-banner__employer-dropdown/);
+  assert.match(css, /@media \(max-width: 1199px\) \{[\s\S]*?\.top-banner__employer-dropdown[\s\S]*?display: grid/);
+});
+
+test("desktop and mobile keep employer actions in the divided account area", async () => {
+  const component = await read("app/components/TopBanner.tsx");
+  const css = await read("app/globals.css");
+  const authArea = component.slice(component.indexOf('className="top-banner__auth"'));
+
+  assert.match(authArea, /top-banner__employer-menu/);
+  assert.match(css, /\.top-banner__auth \{[\s\S]*?border-left:/);
+  assert.match(css, /@media \(max-width: 1199px\) \{[\s\S]*?\.top-banner__employer-dropdown[\s\S]*?display: grid/);
 });
 
 test("intermediate widths use the mobile menu before navigation can overflow", async () => {
