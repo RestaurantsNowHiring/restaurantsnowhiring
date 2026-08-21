@@ -69,11 +69,23 @@ test("print output excludes global chrome and builder controls with Letter margi
   assert.match(layout, /className="global-site-footer"/);
   for (const selector of [":global(.top-banner)", ":global(.top-banner__mobile-spacer)", ":global(.global-site-footer)", ".noPrint", ".jobs"]) assert.ok(css.includes(selector), selector);
   assert.match(css, /@page\{size:Letter portrait;margin:\.45in\}/);
-  assert.match(css, /\.resume header h1\{font-size:26pt\}/);
-  assert.match(css, /\.resume header h2\{font-size:12pt;margin-top:8px\}/);
-  assert.match(css, /\.resume section\{margin-top:14px;break-inside:avoid\}/);
-  assert.match(css, /\.resume section>h2\{font-size:10\.5pt/);
   assert.match(css, /box-shadow:none!important/);
   assert.match(css, /break-inside:avoid/);
   assert.doesNotMatch(css, /body>header|body>nav/);
+});
+
+test("print typography has a readable professional hierarchy and resume bullets", async () => {
+  const css = await read("app/candidate-resources/resume-builder/resumeBuilder.module.css");
+  const printCss = css.slice(css.indexOf("@media print"));
+  const size = (selector) => Number(printCss.match(new RegExp(`${selector}\\{[^}]*font-size:([\\d.]+)pt`))?.[1]);
+  const nameSize = size("\\.resume header h1");
+  const roleSize = size("\\.resume header h2");
+  const sectionSize = size("\\.resume section>h2");
+  const bodySize = size("\\.resume");
+  assert.ok(nameSize > roleSize, "candidate name should be larger than target role");
+  assert.ok(roleSize > sectionSize, "target role should be larger than section headings");
+  assert.ok(bodySize >= 9.5, "print body text should remain readable");
+  assert.match(printCss, /\.resumeEntry ul\{[^}]*padding-left:1[5-9]px/);
+  assert.match(printCss, /\.resumeEntry li\{[^}]*line-height:1\.[34][^}]*margin:[2-4]px 0/);
+  assert.match(printCss, /border-bottom:\.5px solid #aaa/);
 });
