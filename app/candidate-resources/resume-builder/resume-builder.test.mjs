@@ -74,6 +74,14 @@ test("screen preview uses a centered, paper-proportioned resume layout", async (
   assert.match(screenCss, /\.resume section>h2\{[^}]*font-size:12px/);
   assert.match(screenCss, /\.resumeEntry ul\{list-style:disc outside/);
   assert.doesNotMatch(screenCss, /\.resume header\{[^}]*border/);
+  assert.match(screenCss, /\.resume section>h2\{[^}]*border-bottom:\.[5-9]px solid #[a-f\d]{6}/i);
+});
+
+test("every major resume section uses the shared subtle-divider treatment", async () => {
+  const client = await read("app/candidate-resources/resume-builder/ResumeBuilderClient.tsx");
+  for (const title of ["Professional Summary", "Experience", "Skills", "Education", "Certifications"]) {
+    assert.ok(client.includes(`title="${title}"`), `${title} should use the shared Section component`);
+  }
 });
 
 test("print output excludes global chrome and builder controls with Letter margins", async () => {
@@ -103,7 +111,7 @@ test("print typography has a readable professional hierarchy and resume bullets"
   assert.match(printCss, /\.resumeEntry ul\{[^}]*padding-left:1[5-9]px/);
   assert.match(printCss, /\.resumeEntry li\{[^}]*line-height:1\.[34][^}]*margin:[2-4]px 0/);
   assert.match(printCss, /\.resume header\{[^}]*border:0/);
-  assert.match(printCss, /\.resume section>h2\{[^}]*border:0/);
+  assert.match(printCss, /\.resume section>h2\{[^}]*border-bottom:\.[5-9]pt solid #[a-f\d]{6}/i);
 });
 
 test("print geometry fills a white Letter page without scaling or constrained ancestors", async () => {
