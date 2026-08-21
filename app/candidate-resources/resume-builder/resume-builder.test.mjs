@@ -84,11 +84,11 @@ test("every major resume section uses the shared subtle-divider treatment", asyn
   }
 });
 
-test("print output excludes global chrome and builder controls with Letter margins", async () => {
+test("print output excludes global chrome and builder controls without browser margins", async () => {
   const [css, layout] = await Promise.all([read("app/candidate-resources/resume-builder/resumeBuilder.module.css"), read("app/layout.tsx")]);
   assert.match(layout, /className="global-site-footer"/);
   for (const selector of [":global(.top-banner)", ":global(.top-banner__mobile-spacer)", ":global(.global-site-footer)", ".noPrint", ".jobs"]) assert.ok(css.includes(selector), selector);
-  assert.match(css, /@page\{size:Letter portrait;margin:\.65in\}/);
+  assert.match(css, /@page\{size:Letter portrait;margin:0\}/);
   assert.match(css, /box-shadow:none!important/);
   assert.match(css, /break-inside:avoid/);
   assert.doesNotMatch(css, /body>header|body>nav/);
@@ -117,12 +117,16 @@ test("print typography has a readable professional hierarchy and resume bullets"
 test("print geometry fills a white Letter page without scaling or constrained ancestors", async () => {
   const css = await read("app/candidate-resources/resume-builder/resumeBuilder.module.css");
   const printCss = css.slice(css.indexOf("@media print"));
-  assert.match(printCss, /@page\{size:Letter portrait;margin:\.65in\}/);
-  assert.match(printCss, /:global\(html\),:global\(body\),:global\(#main-content\)\{[^}]*width:100%!important[^}]*max-width:none!important/);
-  assert.match(printCss, /\.page,\.shell,\.previewWrap\{[^}]*width:100%!important[^}]*max-width:none!important[^}]*background:#fff!important/);
-  assert.match(printCss, /\.resume\{[^}]*width:100%!important[^}]*max-width:none!important[^}]*background:#fff!important[^}]*box-shadow:none!important[^}]*border:0!important[^}]*outline:0!important/);
-  assert.doesNotMatch(printCss, /transform\s*:|scale\s*\(|zoom\s*:/);
-  assert.match(printCss, /\.resume\{[^}]*font-size:10\.5pt/);
+  assert.match(printCss, /@page\{size:Letter portrait;margin:0\}/);
+  assert.match(printCss, /:global\(html\),:global\(body\),:global\(#main-content\)\{[^}]*margin:0!important[^}]*padding:0!important/);
+  assert.match(printCss, /\.page,\.shell,\.previewWrap\{[^}]*width:100%!important[^}]*max-width:none!important[^}]*padding:0!important[^}]*margin:0!important/);
+  assert.match(printCss, /\.resume\{[^}]*width:8\.5in!important[^}]*max-width:8\.5in!important[^}]*min-height:11in!important[^}]*box-sizing:border-box[^}]*background:#fff!important[^}]*box-shadow:none!important[^}]*border:0!important[^}]*outline:0!important[^}]*padding:\.65in!important/);
+  assert.doesNotMatch(printCss, /clamp\s*\(|\dvw|transform\s*:|scale\s*\(|zoom\s*:/);
+  assert.match(printCss, /\.resume\{[^}]*font-size:10pt/);
+  assert.match(printCss, /\.resume header h1\{[^}]*font-size:22\.5pt/);
+  assert.match(printCss, /\.resume header p\{[^}]*font-size:9\.25pt/);
+  assert.match(printCss, /\.resume header h2\{[^}]*font-size:11pt/);
+  assert.match(printCss, /\.resume section>h2\{[^}]*font-size:9pt/);
   assert.match(printCss, /\.resumeEntry ul\{list-style:disc outside[^}]*padding-left:18px/);
   assert.match(printCss, /\.resumeEntry li\{display:list-item/);
 });
