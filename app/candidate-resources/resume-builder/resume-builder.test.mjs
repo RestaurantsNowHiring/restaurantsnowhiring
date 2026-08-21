@@ -69,6 +69,10 @@ test("print output excludes global chrome and builder controls with Letter margi
   assert.match(layout, /className="global-site-footer"/);
   for (const selector of [":global(.top-banner)", ":global(.top-banner__mobile-spacer)", ":global(.global-site-footer)", ".noPrint", ".jobs"]) assert.ok(css.includes(selector), selector);
   assert.match(css, /@page\{size:Letter portrait;margin:\.45in\}/);
+  assert.match(css, /\.resume header h1\{font-size:26pt\}/);
+  assert.match(css, /\.resume header h2\{font-size:12pt;margin-top:8px\}/);
+  assert.match(css, /\.resume section\{margin-top:14px;break-inside:avoid\}/);
+  assert.match(css, /\.resume section>h2\{font-size:10\.5pt/);
   assert.match(css, /box-shadow:none!important/);
   assert.match(css, /break-inside:avoid/);
   assert.doesNotMatch(css, /body>header|body>nav/);
