@@ -1,6 +1,7 @@
 // src/app/layout.tsx
 import "./globals.css";
 import Link from "next/link";
+import Script from "next/script";
 import { Suspense } from "react";
 import localFont from "next/font/local";
 import { Inter, Sora } from "next/font/google";
@@ -157,6 +158,24 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense fallback={null}>
           <GoogleAnalytics measurementId={googleAnalyticsMeasurementId} />
         </Suspense>
+        <Script id="apollo-website-tracker" strategy="afterInteractive">
+          {`
+            function initApollo() {
+              var n = Math.random().toString(36).substring(7),
+                o = document.createElement("script");
+              o.src = "https://assets.apollo.io/micro/website-tracker/tracker.iife.js?nocache=" + n;
+              o.async = true;
+              o.defer = true;
+              o.onload = function() {
+                window.trackingFunctions.onLoad({
+                  appId: "6a7a830bf210580014aa739a"
+                });
+              };
+              document.head.appendChild(o);
+            }
+            initApollo();
+          `}
+        </Script>
         <Analytics />
       </body>
     </html>
