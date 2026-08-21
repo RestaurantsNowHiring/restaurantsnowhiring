@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase"; // ✅ if TopBanner is in app/components
 import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
@@ -18,6 +18,8 @@ export default function TopBanner() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isEmployerMenuOpen, setIsEmployerMenuOpen] = useState(false);
+  const employerMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Initial session check
@@ -38,6 +40,25 @@ export default function TopBanner() {
     };
   }, []);
 
+  useEffect(() => {
+    function closeEmployerMenu(event: MouseEvent) {
+      if (!employerMenuRef.current?.contains(event.target as Node)) {
+        setIsEmployerMenuOpen(false);
+      }
+    }
+
+    function handleEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsEmployerMenuOpen(false);
+    }
+
+    document.addEventListener("mousedown", closeEmployerMenu);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeEmployerMenu);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, []);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     setIsMobileMenuOpen(false);
@@ -52,12 +73,12 @@ export default function TopBanner() {
   { href: "/jobs", label: "AVAILABLE JOBS" },
   { href: "/candidate-resources", label: "CANDIDATE RESOURCES" },
   { href: "/companies", label: "COMPANIES" },
-  { href: !isLoggedIn ? "/employer-login?next=/post-job" : "/post-job", label: "POST A JOB" },
     ...(isLoggedIn ? [{ href: "/employer-dashboard", label: "DASHBOARD" }] : []),
-    { href: "/pricing", label: "PRICING" },
     { href: "/about", label: "ABOUT" },
     { href: "/contact", label: "CONTACT" },
   ];
+
+  const postJobHref = !isLoggedIn ? "/employer-login?next=/post-job" : "/post-job";
 
   return (
     <>
@@ -106,12 +127,41 @@ export default function TopBanner() {
           <div id="top-banner-menu" className="top-banner__menu">
             {/* LEFT SIDE */}
             <div className="top-banner__nav" style={{ display: "flex", gap: 34 }}>
-              {navLinks.map((link) => (
-                <NavLink
-                  key={`${link.href}-${link.label}`}
-                  href={link.href}
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
+              {navLinks.slice(0, 3).map((link) => (
+                <NavLink key={link.href} href={link.href} onClick={() => setIsMobileMenuOpen(false)}>
+                  {link.label}
+                </NavLink>
+              ))}
+              <div
+                className={`top-banner__employer-menu${isEmployerMenuOpen ? " is-open" : ""}`}
+                ref={employerMenuRef}
+                onMouseEnter={() => setIsEmployerMenuOpen(true)}
+                onMouseLeave={() => setIsEmployerMenuOpen(false)}
+              >
+                <div className="top-banner__employer-trigger">
+                  <NavLink href="/for-employers" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>
+                    FOR EMPLOYERS
+                  </NavLink>
+                  <button
+                    type="button"
+                    className="top-banner__employer-toggle"
+                    aria-label="Toggle For Employers menu"
+                    aria-haspopup="menu"
+                    aria-expanded={isEmployerMenuOpen}
+                    aria-controls="employer-dropdown"
+                    onClick={() => setIsEmployerMenuOpen((isOpen) => !isOpen)}
+                  >
+                    <span aria-hidden="true">⌄</span>
+                  </button>
+                </div>
+                <div id="employer-dropdown" className="top-banner__employer-dropdown" role="menu">
+                  <Link href="/for-employers" role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>For Employers</Link>
+                  <Link href={postJobHref} role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>Post a Job</Link>
+                  <Link href="/pricing" role="menuitem" onClick={() => { setIsEmployerMenuOpen(false); setIsMobileMenuOpen(false); }}>Pricing</Link>
+                </div>
+              </div>
+              {navLinks.slice(3).map((link) => (
+                <NavLink key={link.href} href={link.href} onClick={() => setIsMobileMenuOpen(false)}>
                   {link.label}
                 </NavLink>
               ))}

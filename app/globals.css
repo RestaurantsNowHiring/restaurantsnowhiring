@@ -525,6 +525,69 @@ select.rn-combobox__input {
   width: 100%;
 }
 
+.top-banner__employer-menu {
+  position: relative;
+}
+
+.top-banner__employer-trigger {
+  align-items: center;
+  display: flex;
+}
+
+.top-banner__employer-toggle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #fef5ea;
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 18px;
+  justify-content: center;
+  margin-left: 3px;
+  padding: 5px 2px;
+}
+
+.top-banner__employer-toggle:focus-visible {
+  outline: 3px solid #ff7a00;
+  outline-offset: 2px;
+}
+
+.top-banner__employer-dropdown {
+  background: #fffaf3;
+  border: 1px solid #d9d1c6;
+  border-radius: 6px;
+  box-shadow: 0 7px 16px rgba(0, 0, 0, 0.2);
+  display: none;
+  left: -12px;
+  min-width: 168px;
+  padding: 6px;
+  position: absolute;
+  top: calc(100% - 2px);
+  z-index: 10;
+}
+
+.top-banner__employer-menu.is-open .top-banner__employer-dropdown,
+.top-banner__employer-menu:focus-within .top-banner__employer-dropdown {
+  display: block;
+}
+
+.top-banner__employer-dropdown a {
+  border-radius: 4px;
+  color: #193d34;
+  display: block;
+  font-family: var(--font-coldsmith);
+  font-size: 17px;
+  letter-spacing: 0.7px;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+.top-banner__employer-dropdown a:hover,
+.top-banner__employer-dropdown a:focus-visible {
+  background: #e5efe9;
+  color: #245f50;
+}
+
 @media (min-width: 1200px) {
   .top-banner__nav,
   .top-banner__auth {
@@ -713,6 +776,44 @@ select.rn-combobox__input {
 
   .top-banner__nav {
     padding-top: 0;
+  }
+
+  .top-banner__employer-menu {
+    background: rgba(254, 245, 234, 0.05);
+    border-radius: 10px;
+    padding: 4px;
+    width: 100%;
+  }
+
+  .top-banner__employer-trigger {
+    justify-content: center;
+  }
+
+  .top-banner__employer-toggle {
+    display: none;
+  }
+
+  .top-banner__employer-dropdown,
+  .top-banner__employer-menu.is-open .top-banner__employer-dropdown,
+  .top-banner__employer-menu:focus-within .top-banner__employer-dropdown {
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    display: grid;
+    gap: 3px;
+    min-width: 0;
+    padding: 0 4px 4px;
+    position: static;
+  }
+
+  .top-banner__employer-dropdown a {
+    background: rgba(254, 245, 234, 0.07);
+    color: #fef5ea;
+    font-size: 16px;
+    min-height: 36px;
+    padding: 7px 12px;
+    text-align: center;
   }
 
   .top-banner__auth {

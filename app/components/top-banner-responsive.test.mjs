@@ -10,9 +10,8 @@ test("TopBanner keeps every public and authenticated navigation control", async 
     "AVAILABLE JOBS",
     "CANDIDATE RESOURCES",
     "COMPANIES",
-    "POST A JOB",
+    "FOR EMPLOYERS",
     "DASHBOARD",
-    "PRICING",
     "ABOUT",
     "CONTACT",
     "EMPLOYER LOGIN / SIGN UP",
@@ -20,6 +19,19 @@ test("TopBanner keeps every public and authenticated navigation control", async 
   ]) {
     assert.ok(component.includes(label), `missing navigation control: ${label}`);
   }
+});
+
+test("employer links are grouped in an accessible responsive dropdown", async () => {
+  const component = await read("app/components/TopBanner.tsx");
+  const css = await read("app/globals.css");
+
+  assert.match(component, /href="\/for-employers"/);
+  assert.match(component, /aria-haspopup="menu"/);
+  assert.match(component, /aria-expanded=\{isEmployerMenuOpen\}/);
+  assert.match(component, /event\.key === "Escape"/);
+  assert.match(component, /"\/employer-login\?next=\/post-job" : "\/post-job"/);
+  assert.match(css, /\.top-banner__employer-menu\.is-open \.top-banner__employer-dropdown/);
+  assert.match(css, /@media \(max-width: 1199px\) \{[\s\S]*?\.top-banner__employer-dropdown[\s\S]*?display: grid/);
 });
 
 test("intermediate widths use the mobile menu before navigation can overflow", async () => {
