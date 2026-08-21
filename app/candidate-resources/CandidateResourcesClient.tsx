@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { BookOpen, ExternalLink, Play } from "lucide-react";
 import { CANDIDATE_RESOURCE_CATEGORIES, type CandidateResource, visibleResources, youtubeThumbnail } from "../../lib/candidateResources";
 import styles from "./candidateResources.module.css";
@@ -9,11 +10,21 @@ export default function CandidateResourcesClient({ resources }: { resources: Can
   const shown = visibleResources(resources, category);
   return <main className={styles.page}>
     <section className={styles.hero}><span className={styles.eyebrow}>TOOLS FOR YOUR NEXT OPPORTUNITY</span><h1>Candidate Resources</h1><p>Practical videos and articles to help you prepare, stand out, and feel confident throughout your restaurant job search.</p></section>
+    <section className={styles.toolGrid} aria-label="Candidate tools">
+      <Tool title="BUILD YOUR RESUME" text="Create a polished restaurant resume in minutes." href="/candidate-resources/resume-builder" action="Build Your Resume →" />
+      <Tool title="PRACTICE AN INTERVIEW" text="Build confidence with realistic, role-specific questions." href="/candidate-resources/interview-practice" action="Start Practicing →" />
+      <Tool title="FIND YOUR NEXT JOB" text="Browse restaurant opportunities near you." href="/jobs" action="Find Your Next Job →" />
+      <Tool title="EXPLORE RESTAURANT CAREERS" text="Learn about paths across restaurant teams." action="Coming Soon" />
+    </section>
     <nav className={styles.filters} aria-label="Filter resources by category">
       {["All", ...CANDIDATE_RESOURCE_CATEGORIES].map((item) => <button key={item} type="button" aria-pressed={category === item} className={category === item ? styles.activeFilter : ""} onClick={() => setCategory(item)}>{item}</button>)}
     </nav>
     {shown.length ? <section className={styles.grid} aria-live="polite">{shown.map((resource) => <ResourceCard key={resource.id} resource={resource} />)}</section> : <div className={styles.empty}>No published resources are available in this category yet. Please check back soon.</div>}
   </main>;
+}
+
+function Tool({title,text,href,action}:{title:string;text:string;href?:string;action:string}) {
+  return <article className={styles.tool}><h2>{title}</h2><p>{text}</p>{href ? <Link href={href}>{action}</Link> : <span>{action}</span>}</article>;
 }
 
 function ResourceCard({ resource }: { resource: CandidateResource }) {
