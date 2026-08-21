@@ -64,11 +64,23 @@ test("preview, print, and jobs actions exist without persistence", async () => {
   assert.doesNotMatch(client, /supabase|\.from\(|localStorage|sessionStorage/i);
 });
 
+test("screen preview uses a centered, paper-proportioned resume layout", async () => {
+  const css = await read("app/candidate-resources/resume-builder/resumeBuilder.module.css");
+  const screenCss = css.slice(0, css.indexOf("@media print"));
+  assert.match(screenCss, /\.resume\{[^}]*max-width:816px[^}]*min-height:1056px[^}]*margin:0 auto[^}]*background:#fff/);
+  assert.match(screenCss, /\.resume\{[^}]*padding:62px 67px[^}]*box-shadow:/);
+  assert.match(screenCss, /\.resume header h1\{[^}]*font:700 31px/);
+  assert.match(screenCss, /\.resume header h2\{[^}]*font-size:15px/);
+  assert.match(screenCss, /\.resume section>h2\{[^}]*font-size:12px/);
+  assert.match(screenCss, /\.resumeEntry ul\{list-style:disc outside/);
+  assert.doesNotMatch(screenCss, /\.resume header\{[^}]*border/);
+});
+
 test("print output excludes global chrome and builder controls with Letter margins", async () => {
   const [css, layout] = await Promise.all([read("app/candidate-resources/resume-builder/resumeBuilder.module.css"), read("app/layout.tsx")]);
   assert.match(layout, /className="global-site-footer"/);
   for (const selector of [":global(.top-banner)", ":global(.top-banner__mobile-spacer)", ":global(.global-site-footer)", ".noPrint", ".jobs"]) assert.ok(css.includes(selector), selector);
-  assert.match(css, /@page\{size:Letter portrait;margin:\.5in\}/);
+  assert.match(css, /@page\{size:Letter portrait;margin:\.65in\}/);
   assert.match(css, /box-shadow:none!important/);
   assert.match(css, /break-inside:avoid/);
   assert.doesNotMatch(css, /body>header|body>nav/);
@@ -90,13 +102,14 @@ test("print typography has a readable professional hierarchy and resume bullets"
   assert.ok(jobHeadingSize > sectionSize, "experience heading should be larger than section labels");
   assert.match(printCss, /\.resumeEntry ul\{[^}]*padding-left:1[5-9]px/);
   assert.match(printCss, /\.resumeEntry li\{[^}]*line-height:1\.[34][^}]*margin:[2-4]px 0/);
-  assert.match(printCss, /border-bottom:\.5px solid #aaa/);
+  assert.match(printCss, /\.resume header\{[^}]*border:0/);
+  assert.match(printCss, /\.resume section>h2\{[^}]*border:0/);
 });
 
 test("print geometry fills a white Letter page without scaling or constrained ancestors", async () => {
   const css = await read("app/candidate-resources/resume-builder/resumeBuilder.module.css");
   const printCss = css.slice(css.indexOf("@media print"));
-  assert.match(printCss, /@page\{size:Letter portrait;margin:\.5in\}/);
+  assert.match(printCss, /@page\{size:Letter portrait;margin:\.65in\}/);
   assert.match(printCss, /:global\(html\),:global\(body\),:global\(#main-content\)\{[^}]*width:100%!important[^}]*max-width:none!important/);
   assert.match(printCss, /\.page,\.shell,\.previewWrap\{[^}]*width:100%!important[^}]*max-width:none!important[^}]*background:#fff!important/);
   assert.match(printCss, /\.resume\{[^}]*width:100%!important[^}]*max-width:none!important[^}]*background:#fff!important[^}]*box-shadow:none!important[^}]*border:0!important[^}]*outline:0!important/);
