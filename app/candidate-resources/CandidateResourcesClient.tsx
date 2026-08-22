@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Link from "next/link";
 import { BookOpen, ExternalLink, Play } from "lucide-react";
 import { CANDIDATE_RESOURCE_CATEGORIES, type CandidateResource, visibleResources, youtubeThumbnail } from "../../lib/candidateResources";
 import styles from "./candidateResources.module.css";
@@ -9,6 +10,7 @@ export default function CandidateResourcesClient({ resources }: { resources: Can
   const shown = visibleResources(resources, category);
   return <main className={styles.page}>
     <section className={styles.hero}><span className={styles.eyebrow}>TOOLS FOR YOUR NEXT OPPORTUNITY</span><h1>Candidate Resources</h1><p>Practical videos and articles to help you prepare, stand out, and feel confident throughout your restaurant job search.</p></section>
+    <section className={styles.featuredTool} aria-labelledby="career-tool-title"><div><span>EXPLORE RESTAURANT CAREERS</span><h2 id="career-tool-title">Find the restaurant role that fits you</h2><p>Learn about responsibilities, skills, interview questions, and possible career paths for 11 common restaurant roles.</p></div><Link href="/candidate-resources/restaurant-careers">Explore Roles <span aria-hidden="true">→</span></Link></section>
     <nav className={styles.filters} aria-label="Filter resources by category">
       {["All", ...CANDIDATE_RESOURCE_CATEGORIES].map((item) => <button key={item} type="button" aria-pressed={category === item} className={category === item ? styles.activeFilter : ""} onClick={() => setCategory(item)}>{item}</button>)}
     </nav>
