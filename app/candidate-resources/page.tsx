@@ -3,7 +3,10 @@ import type { Metadata } from "next";
 import CandidateResourcesClient from "./CandidateResourcesClient";
 import type { CandidateResource } from "../../lib/candidateResources";
 
-export const metadata: Metadata = { title: "Candidate Resources", description: "Practical resources to help restaurant job seekers prepare and apply with confidence." };
+export const metadata: Metadata = {
+  title: "Restaurant Career Resources",
+  description: "Build your restaurant career with resume help, interview preparation, career guides, job search resources, and restaurant jobs from Restaurants Now Hiring.",
+};
 export const revalidate = 60;
 
 async function loadResources(): Promise<CandidateResource[]> {
