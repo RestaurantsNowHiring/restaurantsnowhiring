@@ -123,6 +123,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </div>
 
         <footer
+          className="global-site-footer"
           style={{
             borderTop: "1px solid rgba(255,255,255,.15)",
             padding: "18px 24px",
