@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 
@@ -45,6 +45,17 @@ test("every generated career guide uses the supported candidate tool destination
   assert.match(guide, /href="\/candidate-resources\/resume-builder"/);
   assert.match(guide, /href="\/jobs"/);
   assert.doesNotMatch(guide, /interview-practice\?role=|\/jobs\?role=/);
+});
+
+test("career-detail CTA destination pages exist in the same source tree", async () => {
+  await Promise.all([
+    access(new URL("app/candidate-resources/resume-builder/page.tsx", root)),
+    access(new URL("app/candidate-resources/interview-practice/page.tsx", root)),
+  ]);
+  const guide = await read("app/candidate-resources/restaurant-careers/[slug]/page.tsx");
+  assert.match(guide, /href="\/candidate-resources\/interview-practice"/);
+  assert.match(guide, /href="\/candidate-resources\/resume-builder"/);
+  assert.match(guide, /href="\/jobs"/);
 });
 
 test("career guide panels use the light card treatment and green CTAs", async () => {
