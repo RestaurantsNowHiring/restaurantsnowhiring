@@ -8,6 +8,7 @@ import {
 import { buildCanonicalJobInsertPayload, shouldAutoApproveJob } from "../../../../lib/jobPersistence";
 import { filterEmployerVisibleJobs, loadEmployerJobsForDashboard } from "../../../../lib/employerVisibleJobs";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
+import { CANADIAN_PROVINCE_OPTIONS, normalizeJobCountry, STATE_OPTIONS } from "../../../../lib/jobFormOptions";
 
 type JobPayload = {
   restaurantName?: string;
@@ -15,6 +16,8 @@ type JobPayload = {
   roleCategory?: string;
   city?: string;
   state?: string;
+  country?: string;
+  postalCode?: string;
   applyEmail?: string;
   companyWebsite?: string | null;
   employmentType?: string;
@@ -30,7 +33,7 @@ type JobPayload = {
 };
 
 const ALLOWED_FIELDS = new Set<keyof JobPayload>([
-  "restaurantName", "title", "roleCategory", "city", "state", "applyEmail", "companyWebsite",
+  "restaurantName", "title", "roleCategory", "city", "state", "country", "postalCode", "applyEmail", "companyWebsite",
   "employmentType", "payRange", "address", "howToApply", "description", "candidateNotificationEmail",
   "candidateNotificationEmails", "candidateNotificationRouting", "employerStoreId", "employerJobTemplateId",
 ]);
@@ -85,13 +88,20 @@ export async function POST(request: Request) {
     const title = text(body.title, 500, true);
     const roleCategory = text(body.roleCategory, 100, true);
     const city = text(body.city, 200, true);
-    const state = text(body.state, 2, true)?.toUpperCase();
+    const country = normalizeJobCountry(body.country);
+    const state = text(body.state, 100, true);
+    const postalCode = text(body.postalCode, 24);
     const applyEmail = text(body.applyEmail, 254, true);
     const employmentType = text(body.employmentType, 100, true);
     const description = text(body.description, 250_000, true);
-    if (!restaurantName || !title || !roleCategory || !city || !state || !applyEmail || !employmentType || !description) {
+    if (!restaurantName || !title || !roleCategory || !city || !state || !country || !applyEmail || !employmentType || !description) {
       return NextResponse.json({ error: "Complete all required job fields." }, { status: 400 });
     }
+    const normalizedState = country === "United States" ? state.toUpperCase() : state;
+    const validRegion = country === "United States"
+      ? STATE_OPTIONS.includes(normalizedState)
+      : CANADIAN_PROVINCE_OPTIONS.includes(normalizedState);
+    if (!validRegion) return NextResponse.json({ error: "Choose a valid state or province/territory." }, { status: 400 });
 
     const admin = getSupabaseAdminClient();
     if (!admin) throw new Error("Supabase service role is not configured on the server.");
@@ -118,7 +128,7 @@ export async function POST(request: Request) {
       : null;
     const autoApproved = shouldAutoApproveJob(context.accountId);
     const payload = buildCanonicalJobInsertPayload({
-      restaurantName, title, roleCategory, city, state, applyEmail, employmentType, description,
+      restaurantName, title, roleCategory, city, state: normalizedState, country, postalCode, applyEmail, employmentType, description,
       employerEmail: context.ownerEmail, employerUserId: context.ownerUserId, employerAccountId: context.accountId,
       postedByUserId: user.id, postedByEmail: user.email,
       companyWebsite: text(body.companyWebsite, 2048), payRange: text(body.payRange, 500),

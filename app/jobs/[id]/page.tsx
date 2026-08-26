@@ -11,6 +11,7 @@ import {
   isPubliclyVisibleJob,
 } from "../../../lib/jobStatus";
 import { isRichTextHtml, sanitizeRichText } from "../../../lib/richText";
+import { formatJobLocation } from "../../../lib/jobFormOptions";
 import {
   SITE_NAME,
   absoluteUrl,
@@ -28,7 +29,7 @@ import {
 type JobRouteParams = { id?: string };
 
 const JOB_DETAIL_FIELDS =
-  "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
+  "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
 
 const RESTAURANT_INDUSTRY = "Restaurants";
 
@@ -265,7 +266,7 @@ function parsePayUnitText(value: string) {
   return "HOUR";
 }
 
-function buildBaseSalary(payRange: string | null | undefined) {
+function buildBaseSalary(payRange: string | null | undefined, currency = "USD") {
   if (!payRange?.trim()) return undefined;
 
   const normalized = payRange.trim();
@@ -278,7 +279,7 @@ function buildBaseSalary(payRange: string | null | undefined) {
   if (parts.length >= 2) {
     return {
       "@type": "MonetaryAmount",
-      currency: "USD",
+      currency,
       value: {
         "@type": "QuantitativeValue",
         minValue: Math.min(parts[0], parts[1]),
@@ -293,7 +294,7 @@ function buildBaseSalary(payRange: string | null | undefined) {
 
   return {
     "@type": "MonetaryAmount",
-    currency: "USD",
+    currency,
     value: {
       "@type": "QuantitativeValue",
       value: amount,
@@ -308,7 +309,7 @@ function serializeJsonLd(value: unknown) {
 
 function buildJobMetaDescription(job: Job) {
   const location =
-    job.city && job.state ? `${job.city}, ${job.state}` : "restaurant location";
+    formatJobLocation(job) || "restaurant location";
   const pay = job.pay_range ? ` Pay: ${job.pay_range}.` : "";
   return truncateMetaDescription(
     `${job.restaurant_name} is hiring a ${job.title} in ${location}.${pay} View details and apply on RestaurantsNowHiring.com.`,
@@ -320,7 +321,7 @@ function buildJobPostingSchema(job: Job, canonicalPath: string) {
 
   const jobUrl = absoluteUrl(canonicalPath);
   const locationName =
-    job.city && job.state ? `${job.city}, ${job.state}` : undefined;
+    formatJobLocation(job) || undefined;
   const orgUrl = safeExternalUrl(job.company_website);
   const datePosted = getJobPostedDate(job)?.toISOString() ?? job.created_at;
   const validThrough = getValidThroughIso(job);
@@ -344,7 +345,7 @@ function buildJobPostingSchema(job: Job, canonicalPath: string) {
     datePosted,
     validThrough,
     employmentType: formatEmploymentType(job.employment_type),
-    baseSalary: buildBaseSalary(job.pay_range),
+    baseSalary: buildBaseSalary(job.pay_range, job.country === "Canada" ? "CAD" : "USD"),
     // RestaurantsNowHiring.com is a restaurant hiring board; use the site-level industry only when no more specific job field exists.
     industry: RESTAURANT_INDUSTRY,
     occupationalCategory: job.role_category || undefined,
@@ -362,7 +363,8 @@ function buildJobPostingSchema(job: Job, canonicalPath: string) {
         streetAddress: job.address || undefined,
         addressLocality: job.city || undefined,
         addressRegion: job.state || undefined,
-        addressCountry: "US",
+        postalCode: job.postal_code || undefined,
+        addressCountry: job.country === "Canada" ? "CA" : "US",
       }),
     },
     url: jobUrl,
@@ -395,7 +397,7 @@ export async function generateMetadata({
   }
 
   const location =
-    job.city && job.state ? `${job.city}, ${job.state}` : "Restaurant Job";
+    formatJobLocation(job) || "Restaurant Job";
   const title = `${job.title} at ${job.restaurant_name} - ${location}`;
   const description = buildJobMetaDescription(job);
   const url = absoluteUrl(resolvedRoute?.canonicalPath ?? getJobPath(job));
@@ -432,6 +434,8 @@ type Job = {
   restaurant_name: string;
   city: string;
   state: string;
+  country?: string | null;
+  postal_code?: string | null;
   description: string | null;
   created_at: string;
   approved_at?: string | null;
@@ -475,56 +479,56 @@ export default async function JobDetailsPage({
   }> = [
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
       includesStatus: true,
       includesViews: true,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
       includesStatus: true,
       includesViews: false,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
       includesStatus: true,
       includesViews: true,
       includesApprovedAt: false,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
       includesStatus: true,
       includesViews: false,
       includesApprovedAt: false,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
       includesStatus: false,
       includesViews: true,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
       includesStatus: false,
       includesViews: false,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
       includesStatus: false,
       includesViews: true,
       includesApprovedAt: false,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
       includesStatus: false,
       includesViews: false,
       includesApprovedAt: false,
@@ -604,8 +608,7 @@ export default async function JobDetailsPage({
     }
   }
 
-  const locationText =
-    job?.city && job?.state ? `${job.city}, ${job.state}` : "";
+  const locationText = job ? formatJobLocation(job) : "";
 
   const postedText = job?.created_at
     ? new Date(job.created_at).toLocaleDateString()

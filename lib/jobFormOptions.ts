@@ -54,3 +54,26 @@ export const STATE_OPTIONS = [
   "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
   "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY", "DC",
 ];
+
+export const COUNTRY_OPTIONS = ["United States", "Canada"] as const;
+export type JobCountry = (typeof COUNTRY_OPTIONS)[number];
+
+export const CANADIAN_PROVINCE_OPTIONS = [
+  "Alberta", "British Columbia", "Manitoba", "New Brunswick",
+  "Newfoundland and Labrador", "Northwest Territories", "Nova Scotia", "Nunavut",
+  "Ontario", "Prince Edward Island", "Quebec", "Saskatchewan", "Yukon",
+];
+
+export function normalizeJobCountry(value: unknown): JobCountry | null {
+  if (value === undefined || value === null || value === "" || value === "United States" || value === "US") {
+    return "United States";
+  }
+  if (value === "Canada" || value === "CA") return "Canada";
+  return null;
+}
+
+export function formatJobLocation(job: { city?: string | null; state?: string | null; country?: string | null }) {
+  const country = normalizeJobCountry(job.country) ?? "United States";
+  const locality = [job.city, job.state].filter(Boolean).join(", ");
+  return country === "Canada" ? [locality, "Canada"].filter(Boolean).join(", ") : locality;
+}
