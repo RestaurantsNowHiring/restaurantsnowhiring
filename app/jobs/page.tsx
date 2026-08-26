@@ -50,6 +50,7 @@ type Job = {
   restaurant_name: string;
   city: string;
   state: string;
+  country?: string | null;
   created_at: string;
   approved_at?: string | null;
   expires_at?: string | null;
@@ -93,7 +94,7 @@ export default async function JobsPage({
   let query = supabase
     .from("jobs")
     .select(
-      "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,status,role_category,pay_range,employment_type"
+      "id,title,restaurant_name,city,state,country,created_at,approved_at,expires_at,active,status,role_category,pay_range,employment_type"
     )
     .order("created_at", { ascending: false });
 

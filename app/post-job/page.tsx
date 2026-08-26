@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../lib/candidateNotificationEmails";
 import {
   BENEFIT_OPTIONS,
+  CANADIAN_PROVINCE_OPTIONS,
+  COUNTRY_OPTIONS,
   EMPLOYMENT_OPTIONS,
   ROLE_OPTIONS,
   SCHEDULE_OPTIONS,
@@ -253,6 +255,8 @@ export default function PostJobPage() {
   const [roleCategories, setRoleCategories] = useState<string[]>([]);
   const [city, setCity] = useState("");
   const [stateVal, setStateVal] = useState("");
+  const [country, setCountry] = useState<"United States" | "Canada">("United States");
+  const [postalCode, setPostalCode] = useState("");
 
   // Step 3
   const [employmentType, setEmploymentType] = useState("");
@@ -675,7 +679,10 @@ export default function PostJobPage() {
     setCompanyName(store.location_name || companyName);
     setAddress(store.address ?? "");
     setCity(store.city ?? "");
+    // Existing store records predate country support and represent U.S. locations.
+    setCountry("United States");
     setStateVal(store.state ?? "");
+    setPostalCode("");
     if (store.default_application_url) {
       setHowToApply(store.default_application_url);
       setCompanyWebsite((current) => current || store.default_application_url || "");
@@ -808,7 +815,8 @@ export default function PostJobPage() {
         !jobTitle.trim() ||
         roleCategories.length === 0 ||
         !city.trim() ||
-        !stateVal.trim()
+        !stateVal.trim() ||
+        !postalCode.trim()
       ) {
         setMessage("Please complete all required job info fields.");
         return false;
@@ -878,6 +886,8 @@ export default function PostJobPage() {
     setRoleCategories([]);
     setCity("");
     setStateVal("");
+    setCountry("United States");
+    setPostalCode("");
 
     setEmploymentType("");
     setScheduleTags([]);
@@ -965,7 +975,9 @@ export default function PostJobPage() {
       title: jobTitle.trim(),
       roleCategory: roleCategoryForDb,
       city: city.trim(),
-      state: stateVal.trim().toUpperCase(),
+      state: country === "United States" ? stateVal.trim().toUpperCase() : stateVal.trim(),
+      country,
+      postalCode: postalCode.trim(),
       applyEmail: workEmail.trim(),
       companyWebsite: companyWebsite.trim() || null,
       employmentType: employmentType || "",
@@ -1716,6 +1728,22 @@ export default function PostJobPage() {
 
               <div className="rn-two-col" style={{ marginTop: 18 }}>
                 <div>
+                  <label htmlFor="job-country" style={labelStyle}>Country *</label>
+                  <select
+                    id="job-country"
+                    required
+                    value={country}
+                    onChange={(event) => {
+                      setCountry(event.target.value as "United States" | "Canada");
+                      setStateVal("");
+                    }}
+                    className="rn-combobox__input"
+                    style={inputStyle}
+                  >
+                    {COUNTRY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                  </select>
+                </div>
+                <div>
                   <label htmlFor="job-city" style={labelStyle}>City *</label>
                   <input
                     id="job-city"
@@ -1731,7 +1759,7 @@ export default function PostJobPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="job-state" style={labelStyle}>State *</label>
+                  <label htmlFor="job-state" style={labelStyle}>{country === "Canada" ? "Province / Territory" : "State"} *</label>
                   <select
                     id="job-state"
                     required
@@ -1743,12 +1771,24 @@ export default function PostJobPage() {
                     style={inputStyle}
                   >
                     <option value="">Select…</option>
-                    {STATE_OPTIONS.map((state) => (
+                    {(country === "Canada" ? CANADIAN_PROVINCE_OPTIONS : STATE_OPTIONS).map((state) => (
                       <option key={state} value={state}>
                         {state}
                       </option>
                     ))}
                   </select>
+                </div>
+                <div>
+                  <label htmlFor="job-postal-code" style={labelStyle}>{country === "Canada" ? "Postal Code" : "ZIP Code"} *</label>
+                  <input
+                    id="job-postal-code"
+                    required
+                    value={postalCode}
+                    onChange={(event) => setPostalCode(event.target.value)}
+                    style={inputStyle}
+                    placeholder={country === "Canada" ? "M5V 3A8" : "21201"}
+                    autoComplete="postal-code"
+                  />
                 </div>
               </div>
             </>
@@ -2084,7 +2124,7 @@ export default function PostJobPage() {
                   <div><strong>Restaurant type:</strong> {restaurantType || "—"}</div>
                   <div><strong>Job title:</strong> {jobTitle || "—"}</div>
                   <div><strong>Role categories:</strong> {roleCategories.join(", ") || "—"}</div>
-                  <div><strong>Location:</strong> {city || "—"}, {stateVal || "—"}</div>
+                  <div><strong>Location:</strong> {city || "—"}, {stateVal || "—"}{country === "Canada" ? ", Canada" : ""}</div>
 
                   <div style={{ height: 6 }} />
 

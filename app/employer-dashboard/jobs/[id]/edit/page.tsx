@@ -5,6 +5,7 @@ import { FormEvent, Suspense, useEffect, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { formatCandidateNotificationEmails, parseCandidateNotificationEmails } from "../../../../../lib/candidateNotificationEmails";
 import { canUserAccessJob } from "../../../../../lib/employerJobAccess";
+import { CANADIAN_PROVINCE_OPTIONS, COUNTRY_OPTIONS, STATE_OPTIONS } from "../../../../../lib/jobFormOptions";
 import { supabase } from "../../../../../lib/supabase";
 import {
   homeCardStyle,
@@ -24,6 +25,8 @@ type JobRecord = {
   restaurant_name: string | null;
   city: string | null;
   state: string | null;
+  country: "United States" | "Canada" | null;
+  postal_code: string | null;
   role_category: string | null;
   employment_type: string | null;
   pay_range: string | null;
@@ -61,21 +64,8 @@ function parseDescriptionSections(rawDescription: string | null) {
   };
 }
 
-function parseLocationInput(location: string) {
-  const trimmed = location.trim();
-  if (!trimmed) {
-    return { city: null, state: null };
-  }
-
-  const [cityPart, ...rest] = trimmed.split(",");
-  const city = cityPart?.trim() || null;
-  const state = rest.join(",").trim() || null;
-
-  return { city, state };
-}
-
 async function loadOwnedJob(jobId: string, owner: EmployerOwner) {
-  const fields = "id,title,restaurant_name,city,state,role_category,employment_type,pay_range,description,active,created_at,candidate_notification_email,candidate_notification_emails,candidate_notification_routing,employer_store_id";
+  const fields = "id,title,restaurant_name,city,state,country,postal_code,role_category,employment_type,pay_range,description,active,created_at,candidate_notification_email,candidate_notification_emails,candidate_notification_routing,employer_store_id";
   const queries = [];
 
   if (owner.accountId) {
@@ -140,6 +130,8 @@ function EmployerJobEditForm() {
   const [notFound, setNotFound] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [editCountry, setEditCountry] = useState<"United States" | "Canada">("United States");
+  const [editRegion, setEditRegion] = useState("");
 
   useEffect(() => {
     let mounted = true;
@@ -199,6 +191,8 @@ function EmployerJobEditForm() {
 
       setOwner(currentOwner);
       setJob(result.job);
+      setEditCountry(result.job?.country === "Canada" ? "Canada" : "United States");
+      setEditRegion(result.job?.state ?? "");
       setNotFound(!!result.error || !result.job);
       setAuthStatus("allowed");
       setMessage(result.error?.message ?? null);
@@ -234,7 +228,10 @@ function EmployerJobEditForm() {
     const roleCategory = String(formData.get("role_category") ?? "").trim();
     const employmentType = String(formData.get("employment_type") ?? "").trim();
     const pay = String(formData.get("pay_range") ?? "").trim();
-    const location = String(formData.get("location") ?? "");
+    const city = String(formData.get("city") ?? "").trim();
+    const state = String(formData.get("state") ?? "").trim();
+    const country = String(formData.get("country") ?? "United States");
+    const postalCode = String(formData.get("postal_code") ?? "").trim();
     const schedule = String(formData.get("schedule") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const benefits = String(formData.get("benefits") ?? "").trim();
@@ -249,7 +246,10 @@ function EmployerJobEditForm() {
     const candidateNotificationEmails = parsedNotificationEmails.emails;
     const candidateNotificationEmail = parsedNotificationEmails.value;
 
-    const { city, state } = parseLocationInput(location);
+    if (!city || !state || !postalCode || !COUNTRY_OPTIONS.includes(country as (typeof COUNTRY_OPTIONS)[number])) {
+      setMessage("Complete all required location fields.");
+      return;
+    }
     const composedDescription = [
       description,
       schedule ? `Schedule: ${schedule}` : "",
@@ -266,6 +266,8 @@ function EmployerJobEditForm() {
       pay_range: pay || null,
       city,
       state,
+      country,
+      postal_code: postalCode,
       description: composedDescription || null,
       candidate_notification_email: candidateNotificationEmail || null,
       candidate_notification_emails: candidateNotificationEmails.length > 0 ? candidateNotificationEmails : null,
@@ -479,14 +481,34 @@ function EmployerJobEditForm() {
                     </label>
 
                     <label style={{ color: homeTheme.text, fontWeight: 700 }}>
-                      Location
+                      Country
+                      <select name="country" value={editCountry} onChange={(event) => { setEditCountry(event.target.value as "United States" | "Canada"); setEditRegion(""); }} className="rn-edit-field" style={editFieldStyle} required>
+                        {COUNTRY_OPTIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </label>
+
+                    <label style={{ color: homeTheme.text, fontWeight: 700 }}>
+                      City
                       <input
-                        name="location"
-                        defaultValue={[job.city, job.state].filter(Boolean).join(", ")}
-                        placeholder="City, State"
+                        name="city"
+                        defaultValue={job.city || ""}
                         className="rn-edit-field"
                         style={editFieldStyle}
+                        required
                       />
+                    </label>
+
+                    <label style={{ color: homeTheme.text, fontWeight: 700 }}>
+                      {editCountry === "Canada" ? "Province / Territory" : "State"}
+                      <select name="state" value={editRegion} onChange={(event) => setEditRegion(event.target.value)} className="rn-edit-field" style={editFieldStyle} required>
+                        <option value="">Select…</option>
+                        {(editCountry === "Canada" ? CANADIAN_PROVINCE_OPTIONS : STATE_OPTIONS).map((option) => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </label>
+
+                    <label style={{ color: homeTheme.text, fontWeight: 700 }}>
+                      {editCountry === "Canada" ? "Postal Code" : "ZIP Code"}
+                      <input name="postal_code" defaultValue={job.postal_code || ""} className="rn-edit-field" style={editFieldStyle} required />
                     </label>
 
                     <label style={{ color: homeTheme.text, fontWeight: 700 }}>

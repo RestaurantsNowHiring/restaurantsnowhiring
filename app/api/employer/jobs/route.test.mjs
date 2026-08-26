@@ -27,7 +27,12 @@ function loadRoute({ accountId = "mission-account", allowlisted = true } = {}) {
     };
     if (specifier.endsWith("/jobPersistence")) return {
       shouldAutoApproveJob: (id) => allowlisted && id === "mission-account",
-      buildCanonicalJobInsertPayload: (input) => ({ employer_account_id: input.employerAccountId, employer_user_id: input.employerUserId, posted_by_user_id: input.postedByUserId, active: allowlisted && input.employerAccountId === "mission-account", status: allowlisted && input.employerAccountId === "mission-account" ? "active" : "pending", ...(allowlisted && input.employerAccountId === "mission-account" ? { approved_at: "2026-08-12T00:00:00.000Z" } : {}) }),
+      buildCanonicalJobInsertPayload: (input) => ({ country: input.country, state: input.state, postal_code: input.postalCode, employer_account_id: input.employerAccountId, employer_user_id: input.employerUserId, posted_by_user_id: input.postedByUserId, active: allowlisted && input.employerAccountId === "mission-account", status: allowlisted && input.employerAccountId === "mission-account" ? "active" : "pending", ...(allowlisted && input.employerAccountId === "mission-account" ? { approved_at: "2026-08-12T00:00:00.000Z" } : {}) }),
+    };
+    if (specifier.endsWith("/jobFormOptions")) return {
+      STATE_OPTIONS: ["MD"],
+      CANADIAN_PROVINCE_OPTIONS: ["Ontario"],
+      normalizeJobCountry: (value) => value === undefined || value === "United States" || value === "US" ? "United States" : value === "Canada" || value === "CA" ? "Canada" : null,
     };
     if (specifier.endsWith("/employerVisibleJobs")) return { filterEmployerVisibleJobs: () => [], loadEmployerJobsForDashboard: async () => ({ jobs: [], includesViews: true }) };
     if (specifier.endsWith("/supabaseAdmin")) return { getSupabaseAdminClient: () => admin };
@@ -61,6 +66,20 @@ test("non-MISSION manual jobs remain pending", async () => {
   assert.equal(response.status, 200);
   assert.deepEqual({ status: route.inserts[0].status, active: route.inserts[0].active, approved: route.inserts[0].approved_at }, { status: "pending", active: false, approved: undefined });
   assert.deepEqual(route.syncs, []);
+});
+
+test("Canadian jobs preserve province and accept a Canadian postal code", async () => {
+  const route = loadRoute({ accountId: "ordinary-account", allowlisted: false });
+  const response = await route.POST(new Request("https://example.com/api/employer/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...validJob, country: "Canada", city: "Toronto", state: "Ontario", postalCode: "M5V 3A8" }) }));
+  assert.equal(response.status, 200);
+  assert.deepEqual({ country: route.inserts[0].country, state: route.inserts[0].state, postalCode: route.inserts[0].postal_code }, { country: "Canada", state: "Ontario", postalCode: "M5V 3A8" });
+});
+
+test("existing clients that omit country remain United States compatible", async () => {
+  const route = loadRoute({ accountId: "ordinary-account", allowlisted: false });
+  const response = await route.POST(new Request("https://example.com/api/employer/jobs", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(validJob) }));
+  assert.equal(response.status, 200);
+  assert.equal(route.inserts[0].country, "United States");
 });
 
 test("Post Job success copy is driven by the authoritative API result", () => {

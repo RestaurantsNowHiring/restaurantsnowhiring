@@ -41,6 +41,8 @@ export type CanonicalJobInsertInput = {
   roleCategory: string;
   city: string;
   state: string;
+  country?: "United States" | "Canada";
+  postalCode?: string | null;
   applyEmail: string;
   employmentType: string;
   description: string;
@@ -68,6 +70,8 @@ export function buildCanonicalJobInsertPayload(input: CanonicalJobInsertInput) {
     role_category: input.roleCategory,
     city: input.city,
     state: input.state,
+    country: input.country ?? "United States",
+    postal_code: input.postalCode ?? null,
     apply_email: input.applyEmail,
     company_website: input.companyWebsite ?? null,
     employment_type: input.employmentType,

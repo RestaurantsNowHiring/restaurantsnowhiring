@@ -3,6 +3,7 @@
 
 import Link from "next/link";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { formatJobLocation } from "../../lib/jobFormOptions";
 
 type Job = {
   id: string;
@@ -11,6 +12,7 @@ type Job = {
   restaurant_name: string;
   city: string;
   state: string;
+  country?: string | null;
   created_at: string;
   role_category?: string | null;
 
@@ -140,8 +142,8 @@ export default function JobsFilterPanel({
         !cutoff || (j.created_at ? new Date(j.created_at) >= cutoff : true);
 
       // Location text search (city or state or "City, ST")
-      const cityState = `${j.city}, ${j.state}`.toLowerCase();
-      const matchesLocationText = !loc || cityState.includes(loc) || j.city.toLowerCase().includes(loc) || j.state.toLowerCase().includes(loc);
+      const cityState = formatJobLocation(j).toLowerCase();
+      const matchesLocationText = !loc || cityState.includes(loc) || j.city.toLowerCase().includes(loc) || j.state.toLowerCase().includes(loc) || (j.country ?? "United States").toLowerCase().includes(loc);
 
       // Main search checks multiple fields
       const matchesSearch =
@@ -150,6 +152,7 @@ export default function JobsFilterPanel({
         j.restaurant_name.toLowerCase().includes(s) ||
         j.city.toLowerCase().includes(s) ||
         j.state.toLowerCase().includes(s) ||
+        (j.country ?? "United States").toLowerCase().includes(s) ||
         jobRole.toLowerCase().includes(s) ||
         jobType.toLowerCase().includes(s);
 
@@ -546,7 +549,7 @@ export default function JobsFilterPanel({
                   </Link>
 
                   <div style={{ opacity: 0.85, color: "rgba(0,0,0,.75)", marginTop: 4 }}>
-                    {job.restaurant_name} — {job.city}, {job.state}
+                    {job.restaurant_name} — {formatJobLocation(job)}
                   </div>
 
                   {/* Quick info chips */}
