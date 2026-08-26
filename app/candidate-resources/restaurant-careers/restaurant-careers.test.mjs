@@ -38,6 +38,23 @@ test("shared dynamic guide resolves roles and links the candidate journey", asyn
   assert.match(guide, /BreadcrumbList/);
 });
 
+test("every generated career guide uses the supported candidate tool destinations", async () => {
+  const [{ restaurantCareers }, guide] = await Promise.all([dataModule(), read("app/candidate-resources/restaurant-careers/[slug]/page.tsx")]);
+  assert.equal(restaurantCareers.length, 11);
+  assert.match(guide, /href="\/candidate-resources\/interview-practice"/);
+  assert.match(guide, /href="\/candidate-resources\/resume-builder"/);
+  assert.match(guide, /href="\/jobs"/);
+  assert.doesNotMatch(guide, /interview-practice\?role=|\/jobs\?role=/);
+});
+
+test("career guide panels use the light card treatment and green CTAs", async () => {
+  const styles = await read("app/candidate-resources/restaurant-careers/restaurantCareers.module.css");
+  assert.match(styles, /\.summary\{[^}]*background:#fff[^}]*border:1px solid #d4ded9/);
+  assert.match(styles, /\.jobsCta\{[^}]*background:#fff[^}]*border:1px solid #d4ded9/);
+  assert.match(styles, /\.jobsCta a\{background:#35806e;color:#fff\}/);
+  assert.doesNotMatch(styles, /\.jobsCta a\{background:#e87522/);
+});
+
 test("career content adds no salary figures, persistence, or legal claims", async () => {
   const files = await Promise.all([read("lib/restaurantCareers.ts"), read("app/candidate-resources/restaurant-careers/[slug]/page.tsx")]);
   const content = files.join("\n");
