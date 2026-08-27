@@ -931,26 +931,26 @@ export default async function JobDetailsPage({
                 )}
               </SectionCard>
 
-              <JobEngagement jobId={visibleJob.id} applyUrl={isSourced ? visibleJob.external_apply_url : null} />
-              {!isSourced ? <CandidateSubmissionForm jobId={visibleJob.id} /> : null}
-
-              {/* How to Apply */}
-              {!isSourced ? <SectionCard title="How to Apply">
-                <div
-                  style={{
-                    color: INK,
-                    lineHeight: 1.8,
-                    whiteSpace: "pre-wrap",
-                    fontWeight: 650,
-                    fontSize: 16,
-                  }}
-                >
-                  {visibleJob.how_to_apply || "Not listed yet."}
-                </div>
-              </SectionCard> : (
-                <div style={{marginTop:18,color:MUTED,fontSize:13,lineHeight:1.6,borderTop:"1px solid rgba(0,0,0,.09)",paddingTop:14}}>
-                  This opportunity was identified by Restaurants NOW HIRING from publicly available employer career information. Restaurants NOW HIRING is not representing the employer in the hiring process.
-                </div>
+              {isSourced ? (
+                <JobEngagement jobId={visibleJob.id} applyUrl={visibleJob.external_apply_url} companyName={visibleJob.restaurant_name} />
+              ) : (
+                <>
+                  <JobEngagement jobId={visibleJob.id} />
+                  <CandidateSubmissionForm jobId={visibleJob.id} />
+                  <SectionCard title="How to Apply">
+                    <div
+                      style={{
+                        color: INK,
+                        lineHeight: 1.8,
+                        whiteSpace: "pre-wrap",
+                        fontWeight: 650,
+                        fontSize: 16,
+                      }}
+                    >
+                      {visibleJob.how_to_apply || "Not listed yet."}
+                    </div>
+                  </SectionCard>
+                </>
               )}
             </>
           )}
