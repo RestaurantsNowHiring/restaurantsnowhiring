@@ -26,11 +26,16 @@ import {
   getJobPath,
   isUuidRouteParam,
 } from "../../../lib/jobSlugs";
+import {
+  PUBLIC_JOB_SOURCE_FIELDS,
+  getPublicJobApplicationMode,
+  mapPublicJobRecord,
+} from "../../../lib/publicJobData.mjs";
 
 type JobRouteParams = { id?: string };
 
 const JOB_DETAIL_FIELDS =
-  "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id";
+  `id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,${PUBLIC_JOB_SOURCE_FIELDS}`;
 
 const RESTAURANT_INDUSTRY = "Restaurants";
 
@@ -57,7 +62,9 @@ async function fetchPublicJobById(id?: string) {
       .limit(1);
 
     if (fallbackResult.error) return null;
-    const fallbackJob = fallbackResult.data?.[0] as unknown as Job | undefined;
+    const fallbackJob = fallbackResult.data?.[0]
+      ? (mapPublicJobRecord(fallbackResult.data[0] as unknown as Record<string, unknown>) as Job)
+      : undefined;
     return fallbackJob &&
       isPubliclyVisibleJob(fallbackJob.status, fallbackJob.active)
       ? fallbackJob
@@ -65,7 +72,9 @@ async function fetchPublicJobById(id?: string) {
   }
 
   if (result.error) return null;
-  const job = result.data?.[0] as Job | undefined;
+  const job = result.data?.[0]
+    ? (mapPublicJobRecord(result.data[0] as unknown as Record<string, unknown>) as Job)
+    : undefined;
   return job && isPubliclyVisibleJob(job.status, job.active) ? job : null;
 }
 
@@ -124,7 +133,7 @@ async function resolvePublicJobRouteParam(routeParam?: string) {
       .limit(2);
 
     if (!result.error) {
-      const job = ((result.data ?? []) as Job[]).find((entry) =>
+      const job = (result.data ?? []).map((entry) => mapPublicJobRecord(entry as unknown as Record<string, unknown>) as Job).find((entry) =>
         isPubliclyVisibleJob(entry.status, entry.active),
       );
 
@@ -450,7 +459,7 @@ type Job = {
   company_website?: string | null;
   role_category?: string | null;
   views?: number | null;
-  source_type?: "employer" | "rnh_sourced";
+  source_type: "employer" | "rnh_sourced";
   external_apply_url?: string | null;
   company_id?: string | null;
 };
@@ -475,110 +484,13 @@ export default async function JobDetailsPage({
         })
       : null;
 
-  const queryVariants: Array<{
-    fields: string;
-    includesStatus: boolean;
-    includesViews: boolean;
-    includesApprovedAt: boolean;
-  }> = [
-    {
-      fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id,views",
-      includesStatus: true,
-      includesViews: true,
-      includesApprovedAt: true,
-    },
-    {
-      fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id",
-      includesStatus: true,
-      includesViews: false,
-      includesApprovedAt: true,
-    },
-    {
-      fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id,views",
-      includesStatus: true,
-      includesViews: true,
-      includesApprovedAt: false,
-    },
-    {
-      fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id",
-      includesStatus: true,
-      includesViews: false,
-      includesApprovedAt: false,
-    },
-    {
-      fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id,views",
-      includesStatus: false,
-      includesViews: true,
-      includesApprovedAt: true,
-    },
-    {
-      fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id",
-      includesStatus: false,
-      includesViews: false,
-      includesApprovedAt: true,
-    },
-    {
-      fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id,views",
-      includesStatus: false,
-      includesViews: true,
-      includesApprovedAt: false,
-    },
-    {
-      fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id",
-      includesStatus: false,
-      includesViews: false,
-      includesApprovedAt: false,
-    },
-  ];
-
-  let data: Array<Record<string, unknown>> | null = null;
-  let error: { code?: string; message?: string } | null = null;
-  let missingStatus = false;
-  let missingViews = false;
-
-  if (id) {
-    for (const variant of queryVariants) {
-      const result = await supabase
-        .from("jobs")
-        .select(variant.fields)
-        .eq("id", id)
-        .limit(1);
-
-      if (!result.error) {
-        data = result.data as unknown as Array<Record<string, unknown>>;
-        error = null;
-        missingStatus = !variant.includesStatus;
-        missingViews = !variant.includesViews;
-        break;
-      }
-
-      const statusMissing = isMissingStatusColumnError(result.error);
-      const viewsMissing = isMissingViewsColumnError(result.error);
-      const approvedAtMissing = isMissingApprovedAtColumnError(result.error);
-      if (statusMissing || viewsMissing || approvedAtMissing) {
-        missingStatus = missingStatus || statusMissing;
-        missingViews = missingViews || viewsMissing;
-        error = result.error;
-        continue;
-      }
-
-      error = result.error;
-      break;
-    }
-  }
-
-  let job: Job | undefined = (data?.[0] as Job | undefined) ?? undefined;
+  // resolvePublicJobRouteParam already loaded and normalized the complete public
+  // record. Do not replace it with a legacy fallback DTO: source_type must stay
+  // attached to the exact object used for rendering.
+  let job: Job | undefined = resolvedRoute?.job;
 
   const notFound =
-    !id || !!error || !job || !isPubliclyVisibleJob(job.status, job.active);
+    !id || !job || !isPubliclyVisibleJob(job.status, job.active);
 
   if (
     !notFound &&
@@ -588,27 +500,27 @@ export default async function JobDetailsPage({
     redirect(resolvedRoute.canonicalPath);
   }
 
-  if (!notFound && !missingViews && job) {
-    const currentViews =
-      typeof job.views === "number" && Number.isFinite(job.views)
-        ? job.views
-        : 0;
+  if (!notFound && job) {
     const viewUpdateClient = serviceRoleClient ?? supabase;
-    const { data: updatedViewData, error: updateViewsError } =
-      await viewUpdateClient
+    const currentViewResult = await viewUpdateClient
+      .from("jobs")
+      .select("views")
+      .eq("id", job.id)
+      .limit(1);
+    const currentViews = currentViewResult.data?.[0]?.views;
+
+    if (!isMissingViewsColumnError(currentViewResult.error) && typeof currentViews === "number" && Number.isFinite(currentViews)) {
+      const { data: updatedViewData, error: updateViewsError } = await viewUpdateClient
         .from("jobs")
         .update({ views: currentViews + 1 })
         .eq("id", job.id)
         .select("views")
         .limit(1);
 
-    if (isMissingViewsColumnError(updateViewsError)) {
-      missingViews = true;
-    }
-
-    const updatedViews = updatedViewData?.[0]?.views;
-    if (typeof updatedViews === "number" && Number.isFinite(updatedViews)) {
-      job = { ...job, views: updatedViews };
+      const updatedViews = isMissingViewsColumnError(updateViewsError) ? undefined : updatedViewData?.[0]?.views;
+      if (typeof updatedViews === "number" && Number.isFinite(updatedViews)) {
+        job = { ...job, views: updatedViews };
+      }
     }
   }
 
@@ -713,7 +625,8 @@ export default async function JobDetailsPage({
   };
 
   const visibleJob = job as Job;
-  const isSourced = visibleJob?.source_type === "rnh_sourced";
+  const applicationMode = getPublicJobApplicationMode(visibleJob);
+  const isSourced = applicationMode.kind === "external";
   const canonicalPath =
     !notFound && job
       ? (resolvedRoute?.canonicalPath ?? getJobPath(visibleJob))
@@ -831,14 +744,6 @@ export default async function JobDetailsPage({
                 <span style={{ fontFamily: "monospace" }}>{String(id)}</span>
               </div>
 
-              {error ? (
-                <div style={{ marginTop: 10, color: MUTED, fontWeight: 700 }}>
-                  Supabase error:{" "}
-                  <span style={{ fontFamily: "monospace" }}>
-                    {error.message}
-                  </span>
-                </div>
-              ) : null}
             </div>
           ) : (
             <>
@@ -932,7 +837,7 @@ export default async function JobDetailsPage({
               </SectionCard>
 
               {isSourced ? (
-                <JobEngagement jobId={visibleJob.id} applyUrl={visibleJob.external_apply_url} companyName={visibleJob.restaurant_name} />
+                <JobEngagement jobId={visibleJob.id} applyUrl={applicationMode.applyUrl} companyName={visibleJob.restaurant_name} />
               ) : (
                 <>
                   <JobEngagement jobId={visibleJob.id} />
