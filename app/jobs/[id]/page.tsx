@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import CandidateSubmissionForm from "../../components/CandidateSubmissionForm";
+import JobEngagement from "../../components/JobEngagement";
 import { redirect } from "next/navigation";
 import { createClient } from "@supabase/supabase-js";
 import { supabase } from "../../../lib/supabase";
@@ -29,7 +30,7 @@ import {
 type JobRouteParams = { id?: string };
 
 const JOB_DETAIL_FIELDS =
-  "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category";
+  "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id";
 
 const RESTAURANT_INDUSTRY = "Restaurants";
 
@@ -449,6 +450,9 @@ type Job = {
   company_website?: string | null;
   role_category?: string | null;
   views?: number | null;
+  source_type?: "employer" | "rnh_sourced";
+  external_apply_url?: string | null;
+  company_id?: string | null;
 };
 
 export default async function JobDetailsPage({
@@ -479,56 +483,56 @@ export default async function JobDetailsPage({
   }> = [
     {
       fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id,views",
       includesStatus: true,
       includesViews: true,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id",
       includesStatus: true,
       includesViews: false,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id,views",
       includesStatus: true,
       includesViews: true,
       includesApprovedAt: false,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,status,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id",
       includesStatus: true,
       includesViews: false,
       includesApprovedAt: false,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id,views",
       includesStatus: false,
       includesViews: true,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,approved_at,expires_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id",
       includesStatus: false,
       includesViews: false,
       includesApprovedAt: true,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,views",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id,views",
       includesStatus: false,
       includesViews: true,
       includesApprovedAt: false,
     },
     {
       fields:
-        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category",
+        "id,title,restaurant_name,city,state,country,postal_code,description,created_at,active,pay_range,employment_type,address,how_to_apply,company_website,role_category,source_type,external_apply_url,company_id",
       includesStatus: false,
       includesViews: false,
       includesApprovedAt: false,
@@ -709,6 +713,7 @@ export default async function JobDetailsPage({
   };
 
   const visibleJob = job as Job;
+  const isSourced = visibleJob?.source_type === "rnh_sourced";
   const canonicalPath =
     !notFound && job
       ? (resolvedRoute?.canonicalPath ?? getJobPath(visibleJob))
@@ -926,10 +931,11 @@ export default async function JobDetailsPage({
                 )}
               </SectionCard>
 
-              <CandidateSubmissionForm jobId={visibleJob.id} />
+              <JobEngagement jobId={visibleJob.id} applyUrl={isSourced ? visibleJob.external_apply_url : null} />
+              {!isSourced ? <CandidateSubmissionForm jobId={visibleJob.id} /> : null}
 
               {/* How to Apply */}
-              <SectionCard title="How to Apply">
+              {!isSourced ? <SectionCard title="How to Apply">
                 <div
                   style={{
                     color: INK,
@@ -941,7 +947,11 @@ export default async function JobDetailsPage({
                 >
                   {visibleJob.how_to_apply || "Not listed yet."}
                 </div>
-              </SectionCard>
+              </SectionCard> : (
+                <div style={{marginTop:18,color:MUTED,fontSize:13,lineHeight:1.6,borderTop:"1px solid rgba(0,0,0,.09)",paddingTop:14}}>
+                  This opportunity was identified by Restaurants NOW HIRING from publicly available employer career information. Restaurants NOW HIRING is not representing the employer in the hiring process.
+                </div>
+              )}
             </>
           )}
         </div>

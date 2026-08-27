@@ -35,7 +35,7 @@ function defaultDatabase(): SyncDatabase | null {
   if (!client) return null;
   return {
     async getConnection(id) { return await client.from("employer_ats_connections").select("id,employer_account_id,provider_key,source_url,enabled,connection_status").eq("id", id).maybeSingle() as DbResult<Connection>; },
-    async getImportedJobs(accountId, providerKey, from, to) { return await client.from("jobs").select(JOB_FIELDS).eq("employer_account_id", accountId).eq("source_type", "ats").eq("ats_provider", providerKey).range(from, to) as DbResult<ExistingJob[]>; },
+    async getImportedJobs(accountId, providerKey, from, to) { return await client.from("jobs").select(JOB_FIELDS).eq("employer_account_id", accountId).eq("source_type", "employer").eq("ats_provider", providerKey).range(from, to) as DbResult<ExistingJob[]>; },
     async getLocationMappings(accountId, providerKey, keys) {
       if (!keys.length) return { data: [], error: null };
       return await client.from("employer_ats_location_mappings").select("ats_location_key,city,state,employer_stores!inner(employer_account_id,active,is_assignable_location,city,state)").eq("employer_account_id", accountId).eq("ats_provider", providerKey).in("ats_location_key", keys) as unknown as DbResult<LocationMapping[]>;
