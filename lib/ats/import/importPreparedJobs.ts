@@ -83,7 +83,7 @@ function defaultDatabase(): ImportDatabase | null {
       };
     },
     async findExisting(accountId, providerKey, externalIds) {
-      const result = await client.from("jobs").select("id,ats_provider,ats_external_job_id").eq("employer_account_id", accountId).eq("source_type", "ats").eq("ats_provider", providerKey).in("ats_external_job_id", externalIds);
+      const result = await client.from("jobs").select("id,ats_provider,ats_external_job_id").eq("employer_account_id", accountId).eq("source_type", "employer").eq("ats_provider", providerKey).in("ats_external_job_id", externalIds);
       return result as DbResult<ExistingJob[]>;
     },
     async insert(payload) {
