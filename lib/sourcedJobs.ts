@@ -14,7 +14,7 @@ export function isOfficialSourceUrl(value: string) {
   try {
     const url = new URL(value);
     const host = url.hostname.toLowerCase().replace(/^www\./, "");
-    return ["linkedin.com", "indeed.com", "glassdoor.com"].every(
+    return ["linkedin.com", "indeed.com", "glassdoor.com", "ziprecruiter.com", "monster.com", "careerbuilder.com"].every(
       (blocked) => host !== blocked && !host.endsWith(`.${blocked}`),
     ) && (url.protocol === "https:" || url.protocol === "http:");
   } catch { return false; }
