@@ -14,6 +14,21 @@ export type CompanyProfile = {
   company_cover_image_url: string | null;
 };
 
+export type PublicCompanyJob = {
+  id: string;
+  title: string;
+  restaurant_name: string;
+  city: string;
+  state: string;
+  active: boolean;
+  status?: string | null;
+  source_type?: string | null;
+  pay_range?: string | null;
+  role_category?: string | null;
+  created_at: string;
+  employment_type?: string | null;
+};
+
 export function getCompanyName(restaurantName: string | null | undefined) {
   const name = restaurantName?.trim() ?? "";
 
@@ -33,31 +48,35 @@ export function makeCompanySlug(name: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export async function getPublicJobs() {
+export async function getPublicCompanyInventory(): Promise<PublicCompanyJob[]> {
   const initial = await supabase
     .from("jobs")
     .select(
-      "id,title,restaurant_name,city,state,active,status,pay_range,role_category,created_at,employment_type"
+      "id,title,restaurant_name,city,state,active,status,source_type,pay_range,role_category,created_at,employment_type"
     )
     .order("created_at", { ascending: false })
-    .limit(5000);
+    .limit(5000)
+    .returns<PublicCompanyJob[]>();
 
   const result = isMissingStatusColumnError(initial.error)
     ? await supabase
         .from("jobs")
         .select(
-          "id,title,restaurant_name,city,state,active,pay_range,role_category,created_at,employment_type"
+          "id,title,restaurant_name,city,state,active,source_type,pay_range,role_category,created_at,employment_type"
         )
         .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(5000)
+        .returns<PublicCompanyJob[]>()
     : initial;
 
   if (result.error) return [];
 
-  return (result.data ?? []).filter((job: any) =>
+  const visibleJobs = (result.data ?? []).filter((job) =>
     isPubliclyVisibleJob(job.status, job.active)
   );
+
+  return visibleJobs.filter((job) => job.source_type === "employer");
 }
 
 export async function getCompanyProfile(companyName: string): Promise<CompanyProfile | null> {

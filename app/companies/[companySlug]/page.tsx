@@ -6,7 +6,7 @@ import JobsFilterPanel from "../../components/JobsFilterPanel";
 import {
   getCompanyName,
   getCompanyProfile,
-  getPublicJobs,
+  getPublicCompanyInventory,
   makeCompanySlug,
 } from "../../../lib/companyPages";
 import { buildUniqueJobSlugMap } from "../../../lib/jobSlugs";
@@ -32,11 +32,10 @@ export async function generateMetadata({
   const resolvedParams = await Promise.resolve(params);
   const companySlug = resolvedParams.companySlug;
 
-  const jobs = await getPublicJobs();
+  const jobs = await getPublicCompanyInventory();
 
   const companyJobs = jobs.filter(
-    (job: any) =>
-      makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
+    (job) => makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
   );
 
   if (companyJobs.length === 0) {
@@ -68,11 +67,10 @@ export default async function CompanyPage({
   const resolvedParams = await Promise.resolve(params);
   const companySlug = resolvedParams.companySlug;
 
-  const jobs = await getPublicJobs();
+  const jobs = await getPublicCompanyInventory();
 
   const companyJobs = jobs.filter(
-    (job: any) =>
-      makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
+    (job) => makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
   );
 
   if (companyJobs.length === 0) {
@@ -85,14 +83,14 @@ export default async function CompanyPage({
 
   const slugById = buildUniqueJobSlugMap(companyJobs);
 
-  const jobsWithSlugs = companyJobs.map((job: any) => ({
+  const jobsWithSlugs = companyJobs.map((job) => ({
     ...job,
     slug: slugById.get(job.id) ?? job.id,
   }));
 
   const uniqueLocations = new Set(
     companyJobs
-      .map((job: any) => [job.city, job.state].filter(Boolean).join(", "))
+      .map((job) => [job.city, job.state].filter(Boolean).join(", "))
       .filter(Boolean)
   );
 

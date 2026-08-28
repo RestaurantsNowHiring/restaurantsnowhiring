@@ -4,7 +4,7 @@ import Link from "next/link";
 import {
   getCompanyName,
   getCompanyProfile,
-  getPublicJobs,
+  getPublicCompanyInventory,
   makeCompanySlug,
 } from "../../lib/companyPages";
 import { buildPageMetadata } from "../../lib/seo";
@@ -17,11 +17,11 @@ export const metadata: Metadata = buildPageMetadata({
 });
 
 export default async function CompaniesPage() {
-  const jobs = await getPublicJobs();
+  const jobs = await getPublicCompanyInventory();
 
   const companies = new Map<string, { name: string; slug: string; count: number }>();
 
-  jobs.forEach((job: any) => {
+  jobs.forEach((job) => {
     const name = getCompanyName(job.restaurant_name);
     if (!name) return;
 
