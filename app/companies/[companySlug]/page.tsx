@@ -8,7 +8,6 @@ import {
   getCompanyProfile,
   getPublicCompanyInventory,
   makeCompanySlug,
-  type PublicCompanyJob,
 } from "../../../lib/companyPages";
 import { buildUniqueJobSlugMap } from "../../../lib/jobSlugs";
 import { buildPageMetadata } from "../../../lib/seo";
@@ -36,8 +35,7 @@ export async function generateMetadata({
   const jobs = await getPublicCompanyInventory();
 
   const companyJobs = jobs.filter(
-    (job: PublicCompanyJob) =>
-      makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
+    (job) => makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
   );
 
   if (companyJobs.length === 0) {
@@ -72,8 +70,7 @@ export default async function CompanyPage({
   const jobs = await getPublicCompanyInventory();
 
   const companyJobs = jobs.filter(
-    (job: PublicCompanyJob) =>
-      makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
+    (job) => makeCompanySlug(getCompanyName(job.restaurant_name)) === companySlug
   );
 
   if (companyJobs.length === 0) {
@@ -86,14 +83,14 @@ export default async function CompanyPage({
 
   const slugById = buildUniqueJobSlugMap(companyJobs);
 
-  const jobsWithSlugs = companyJobs.map((job: PublicCompanyJob) => ({
+  const jobsWithSlugs = companyJobs.map((job) => ({
     ...job,
     slug: slugById.get(job.id) ?? job.id,
   }));
 
   const uniqueLocations = new Set(
     companyJobs
-      .map((job: PublicCompanyJob) => [job.city, job.state].filter(Boolean).join(", "))
+      .map((job) => [job.city, job.state].filter(Boolean).join(", "))
       .filter(Boolean)
   );
 

@@ -18,15 +18,15 @@ export type CompanyProfile = {
 export type PublicCompanyJob = {
   id: string;
   title: string;
-  restaurant_name: string | null;
-  city: string | null;
-  state: string | null;
+  restaurant_name: string;
+  city: string;
+  state: string;
   active: boolean;
   status?: string | null;
   source_type?: string | null;
   pay_range?: string | null;
   role_category?: string | null;
-  created_at?: string | null;
+  created_at: string;
   employment_type?: string | null;
 };
 
@@ -49,14 +49,15 @@ export function makeCompanySlug(name: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export async function getPublicCompanyInventory() {
+export async function getPublicCompanyInventory(): Promise<PublicCompanyJob[]> {
   const initial = await supabase
     .from("jobs")
     .select(
       "id,title,restaurant_name,city,state,active,status,source_type,pay_range,role_category,created_at,employment_type"
     )
     .order("created_at", { ascending: false })
-    .limit(5000);
+    .limit(5000)
+    .returns<PublicCompanyJob[]>();
 
   const result = isMissingStatusColumnError(initial.error)
     ? await supabase
@@ -67,11 +68,12 @@ export async function getPublicCompanyInventory() {
         .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(5000)
+        .returns<PublicCompanyJob[]>()
     : initial;
 
   if (result.error) return [];
 
-  const visibleJobs = ((result.data ?? []) as PublicCompanyJob[]).filter((job) =>
+  const visibleJobs = (result.data ?? []).filter((job) =>
     isPubliclyVisibleJob(job.status, job.active)
   );
 
