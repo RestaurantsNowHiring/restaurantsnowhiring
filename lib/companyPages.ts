@@ -1,7 +1,6 @@
 import { supabase } from "./supabase";
 import { getSupabaseAdminClient } from "./supabaseAdmin";
 import { isMissingStatusColumnError, isPubliclyVisibleJob } from "./jobStatus";
-import { getPublicCompanyJobs } from "./publicCompanies.mjs";
 
 export type CompanyProfile = {
   company_short_description: string | null;
@@ -77,7 +76,7 @@ export async function getPublicCompanyInventory(): Promise<PublicCompanyJob[]> {
     isPubliclyVisibleJob(job.status, job.active)
   );
 
-  return getPublicCompanyJobs(visibleJobs);
+  return visibleJobs.filter((job) => job.source_type === "employer");
 }
 
 export async function getCompanyProfile(companyName: string): Promise<CompanyProfile | null> {
