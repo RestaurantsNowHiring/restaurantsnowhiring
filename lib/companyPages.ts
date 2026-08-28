@@ -1,6 +1,7 @@
 import { supabase } from "./supabase";
 import { getSupabaseAdminClient } from "./supabaseAdmin";
 import { isMissingStatusColumnError, isPubliclyVisibleJob } from "./jobStatus";
+import { getPublicCompanyJobs } from "./publicCompanies.mjs";
 
 export type CompanyProfile = {
   company_short_description: string | null;
@@ -12,6 +13,21 @@ export type CompanyProfile = {
   benefits_summary: string | null;
   benefits_list: string | null;
   company_cover_image_url: string | null;
+};
+
+export type PublicCompanyJob = {
+  id: string;
+  title: string;
+  restaurant_name: string | null;
+  city: string | null;
+  state: string | null;
+  active: boolean;
+  status?: string | null;
+  source_type?: string | null;
+  pay_range?: string | null;
+  role_category?: string | null;
+  created_at?: string | null;
+  employment_type?: string | null;
 };
 
 export function getCompanyName(restaurantName: string | null | undefined) {
@@ -33,11 +49,11 @@ export function makeCompanySlug(name: string) {
     .replace(/^-+|-+$/g, "");
 }
 
-export async function getPublicJobs() {
+export async function getPublicCompanyInventory() {
   const initial = await supabase
     .from("jobs")
     .select(
-      "id,title,restaurant_name,city,state,active,status,pay_range,role_category,created_at,employment_type"
+      "id,title,restaurant_name,city,state,active,status,source_type,pay_range,role_category,created_at,employment_type"
     )
     .order("created_at", { ascending: false })
     .limit(5000);
@@ -46,7 +62,7 @@ export async function getPublicJobs() {
     ? await supabase
         .from("jobs")
         .select(
-          "id,title,restaurant_name,city,state,active,pay_range,role_category,created_at,employment_type"
+          "id,title,restaurant_name,city,state,active,source_type,pay_range,role_category,created_at,employment_type"
         )
         .eq("active", true)
         .order("created_at", { ascending: false })
@@ -55,9 +71,11 @@ export async function getPublicJobs() {
 
   if (result.error) return [];
 
-  return (result.data ?? []).filter((job: any) =>
+  const visibleJobs = ((result.data ?? []) as PublicCompanyJob[]).filter((job) =>
     isPubliclyVisibleJob(job.status, job.active)
   );
+
+  return getPublicCompanyJobs(visibleJobs);
 }
 
 export async function getCompanyProfile(companyName: string): Promise<CompanyProfile | null> {

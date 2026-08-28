@@ -5,6 +5,7 @@ import { absoluteUrl } from "../lib/seo";
 import { buildUniqueJobSlugMap, getJobPath } from "../lib/jobSlugs";
 import { restaurantRolePages } from "../lib/restaurantRolePages";
 import { makeCompanySlug } from "../lib/companyPages";
+import { isEmployerOwnedCompanyJob } from "../lib/publicCompanies.mjs";
 import {
   getStateLandingPageByCode,
   MIN_JOBS_FOR_STATE_PAGE,
@@ -21,6 +22,7 @@ type SitemapJob = {
   created_at?: string | null;
   approved_at?: string | null;
   expires_at?: string | null;
+  source_type?: string | null;
 };
 
 const staticRoutes = [
@@ -61,14 +63,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 
   const initialResult = await supabase
     .from("jobs")
-    .select("id,title,restaurant_name,city,state,active,status,created_at,approved_at,expires_at")
+    .select("id,title,restaurant_name,city,state,active,status,source_type,created_at,approved_at,expires_at")
     .order("created_at", { ascending: false })
     .limit(5000);
 
   const result = isMissingStatusColumnError(initialResult.error)
     ? await supabase
         .from("jobs")
-        .select("id,title,restaurant_name,city,state,active,created_at")
+        .select("id,title,restaurant_name,city,state,active,source_type,created_at")
         .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(5000)
@@ -90,6 +92,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const companySlugs = new Set<string>();
 
   for (const job of visibleJobs) {
+    if (!isEmployerOwnedCompanyJob(job)) continue;
     const companyName = job.restaurant_name?.trim();
     if (!companyName) continue;
 
