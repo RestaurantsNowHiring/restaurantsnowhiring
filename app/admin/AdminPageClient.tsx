@@ -666,6 +666,7 @@ export default function AdminPageClient() {
               Candidate Resources
             </Link>
             <Link href="/admin/sourced-jobs" style={tabBtn(false)} className="rn-btn-secondary">Add Sourced Job</Link>
+            <Link href="/admin/promotional-invitations" style={tabBtn(false)} className="rn-btn-secondary">Promotional Invitations</Link>
           </div>
         </section>
 
