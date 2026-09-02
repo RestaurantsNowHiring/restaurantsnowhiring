@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { formatPromotionalOfferDate } from "../../../lib/promotionalInvitationDates";
 import styles from "./promotionalInvitations.module.css";
 
 type Company = { id: string; name: string };
@@ -59,6 +60,6 @@ export default function PromotionalInvitationsClient() {
         <label><span>Offer expiration date</span><input name="offer_expires_at" type="date" required defaultValue={defaultExpiration()} min={new Date().toISOString().slice(0, 10)} /></label>
       </div><button className={styles.primary} type="submit" disabled={saving}>{saving ? "Issuing…" : "Issue invitation"}</button>
     </form>
-    <section className={styles.card}><h2>Existing invitations</h2><div className={styles.tableWrap}><table><thead><tr>{["Company", "Contact", "Issued", "Expires", "Verified", "Redemption", "Revoked", "Associated job", "Action"].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead><tbody>{invitations.map((item) => <tr key={item.id}><td><strong>{companyName(item) ?? "Unknown"}</strong></td><td>{item.contact_email}</td><td>{date(item.issued_at)}</td><td>{date(item.offer_expires_at)}</td><td>{item.email_verified_at ? date(item.email_verified_at) : "Not verified"}</td><td>{item.redeemed_at ? date(item.redeemed_at) : "Unused"}</td><td>{item.revoked_at ? <><span>Revoked {date(item.revoked_at)}</span><small>{item.revoked_reason}</small></> : "No"}</td><td>{item.redeemed_job_id ?? "—"}</td><td>{!item.revoked_at && !item.redeemed_at ? <button type="button" onClick={() => void revoke(item.id)}>Revoke</button> : "—"}</td></tr>)}</tbody></table>{invitations.length === 0 && <p className={styles.empty}>No promotional invitations have been issued.</p>}</div></section>
+    <section className={styles.card}><h2>Existing invitations</h2><div className={styles.tableWrap}><table><thead><tr>{["Company", "Contact", "Issued", "Expires", "Verified", "Redemption", "Revoked", "Associated job", "Action"].map((heading) => <th key={heading}>{heading}</th>)}</tr></thead><tbody>{invitations.map((item) => <tr key={item.id}><td><strong>{companyName(item) ?? "Unknown"}</strong></td><td>{item.contact_email}</td><td>{date(item.issued_at)}</td><td>{formatPromotionalOfferDate(item.offer_expires_at)}</td><td>{item.email_verified_at ? date(item.email_verified_at) : "Not verified"}</td><td>{item.redeemed_at ? date(item.redeemed_at) : "Unused"}</td><td>{item.revoked_at ? <><span>Revoked {date(item.revoked_at)}</span><small>{item.revoked_reason}</small></> : "No"}</td><td>{item.redeemed_job_id ?? "—"}</td><td>{!item.revoked_at && !item.redeemed_at ? <button type="button" onClick={() => void revoke(item.id)}>Revoke</button> : "—"}</td></tr>)}</tbody></table>{invitations.length === 0 && <p className={styles.empty}>No promotional invitations have been issued.</p>}</div></section>
   </main>;
 }

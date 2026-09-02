@@ -19,6 +19,12 @@ new Function("exports", "require", "module", outputText)(loaded.exports, (name) 
 }, loaded);
 const { buildPromotionalUrl, createPromotionalBearerToken, normalizePromotionalContactEmail, parseFutureOfferExpiration } = loaded.exports;
 
+const dateSource = read("lib/promotionalInvitationDates.ts");
+const transpiledDate = ts.transpileModule(dateSource, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
+const loadedDate = { exports: {} };
+new Function("exports", "require", "module", transpiledDate.outputText)(loadedDate.exports, () => { throw new Error("Unexpected require"); }, loadedDate);
+const { formatPromotionalOfferDate } = loadedDate.exports;
+
 test("contact email is normalized and invalid email is rejected", () => {
   assert.equal(normalizePromotionalContactEmail("  Person@Example.COM "), "person@example.com");
   assert.equal(normalizePromotionalContactEmail("not-an-email"), null);
@@ -29,6 +35,11 @@ test("expiration must be valid and in the future", () => {
   assert.equal(parseFutureOfferExpiration("2026-09-01T12:00:00Z", now), null);
   assert.equal(parseFutureOfferExpiration("bad", now), null);
   assert.equal(parseFutureOfferExpiration("2026-10-02T12:00:00Z", now).toISOString(), "2026-10-02T12:00:00.000Z");
+});
+
+test("an October 2 Admin expiration displays as October 2 in every timezone", () => {
+  assert.equal(formatPromotionalOfferDate("2026-10-02T00:00:00.000Z"), "Oct 2, 2026");
+  assert.match(dateSource, /timeZone: "UTC"/);
 });
 
 test("server token uses 32 random bytes and stores a 32-byte SHA-256 digest", () => {
