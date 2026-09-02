@@ -16,6 +16,7 @@ import {
 import { normalizeRichTextForEditing, sanitizeRichText } from "../../lib/richText";
 import { supabase } from "../../lib/supabase";
 import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
+import { currentPagePath, trackEmployerEvent } from "../../lib/employerAnalytics";
 import {
   homePrimaryButton,
   homeSecondaryButton,
@@ -242,6 +243,8 @@ export default function PostJobPage() {
   const storeComboboxRef = useRef<HTMLDivElement>(null);
   const templateComboboxRef = useRef<HTMLDivElement>(null);
   const descriptionEditorRef = useRef<HTMLDivElement | null>(null);
+  const jobFormStartedRef = useRef(false);
+  const trackedPostedJobIdsRef = useRef(new Set<string>());
 
   // Step 1
   const [companyName, setCompanyName] = useState("");
@@ -854,6 +857,19 @@ export default function PostJobPage() {
     return true;
   }
 
+  function trackJobFormStartOnce() {
+    if (jobFormStartedRef.current) return;
+    jobFormStartedRef.current = true;
+    trackEmployerEvent({
+      name: "employer_job_form_start",
+      parameters: {
+        page_path: currentPagePath(),
+        country,
+        ...(employerAccess?.accountId ? { company_id: employerAccess.accountId } : {}),
+      },
+    });
+  }
+
   function nextStep() {
     if (!validateStep(step)) return;
     setStep((prev) => Math.min(4, prev + 1) as Step);
@@ -873,6 +889,7 @@ export default function PostJobPage() {
   }, [payMode, payMin, payMax, payRate]);
 
   function resetForm() {
+    jobFormStartedRef.current = false;
     setStep(1);
     setMessage(null);
 
@@ -999,7 +1016,7 @@ export default function PostJobPage() {
       headers: { "Content-Type": "application/json", ...employerAccountHeaders(token) },
       body: JSON.stringify(jobPayload),
     }) : null;
-    const responseBody = response ? await response.json().catch(() => null) as { autoApproved?: boolean; error?: string } | null : null;
+    const responseBody = response ? await response.json().catch(() => null) as { autoApproved?: boolean; error?: string; job?: { id?: string } } | null : null;
 
     setIsSubmitting(false);
 
@@ -1008,6 +1025,19 @@ export default function PostJobPage() {
       return;
     }
 
+    const postedJobId = responseBody?.job?.id;
+    if (!postedJobId || !trackedPostedJobIdsRef.current.has(postedJobId)) {
+      if (postedJobId) trackedPostedJobIdsRef.current.add(postedJobId);
+      trackEmployerEvent({
+        name: "employer_job_posted",
+        parameters: {
+          page_path: currentPagePath(),
+          ...(postedJobId ? { job_id: postedJobId } : {}),
+          ...(employerAccess?.accountId ? { company_id: employerAccess.accountId } : {}),
+          country,
+        },
+      });
+    }
     setSubmittedJobAutoApproved(responseBody?.autoApproved === true);
     setMessage(null);
     setShowSuccessModal(true);
@@ -1237,7 +1267,7 @@ export default function PostJobPage() {
   return (
     <main style={pageWrap}>
       <div style={container}>
-        <section style={mainCard}>
+        <section style={mainCard} onChangeCapture={trackJobFormStartOnce} onInputCapture={trackJobFormStartOnce}>
           <div
             style={{
               display: "flex",

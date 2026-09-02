@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { supabase } from "../../lib/supabase";
 import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
+import { currentPagePath, normalizeSignupError, safeAnalyticsErrorCode, trackEmployerEvent } from "../../lib/employerAnalytics";
 
 type Mode = "login" | "signup";
 type SignupStep = 1 | 2 | 3;
@@ -34,6 +35,7 @@ function EmployerLoginForm() {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const signupStartedRef = useRef(false);
 
   const GREEN = "#35806e";
   const BG = "#ffffff";
@@ -85,12 +87,23 @@ function EmployerLoginForm() {
     }
   }
 
+  function trackSignupStartOnce() {
+    if (signupStartedRef.current) return;
+    signupStartedRef.current = true;
+    trackEmployerEvent({ name: "employer_signup_start", parameters: { page_path: currentPagePath(), signup_method: "password" } });
+  }
+
+  function trackSignupFailure(errorType: "validation_error" | "account_exists" | "auth_error" | "network_error" | "unknown_error", errorCode?: string) {
+    trackEmployerEvent({ name: "employer_signup_error", parameters: { page_path: currentPagePath(), error_type: errorType, ...(errorCode ? { error_code: errorCode } : {}) } });
+  }
+
   function handleSignupEmailContinue(e: React.FormEvent) {
     e.preventDefault();
     resetMessages();
 
     if (!emailLooksValid) {
       setMessage("Please enter a valid work email.");
+      trackSignupFailure("validation_error");
       return;
     }
 
@@ -123,6 +136,7 @@ function EmployerLoginForm() {
         return;
       }
 
+      trackEmployerEvent({ name: "employer_login_success", parameters: { page_path: currentPagePath(), login_method: "password" } });
       await acceptPendingTeamInvitesForCurrentUser();
       router.replace(nextUrl);
     } finally {
@@ -145,6 +159,7 @@ function EmployerLoginForm() {
         !jobsOpen
       ) {
         setMessage("Please fill out all required fields.");
+        trackSignupFailure("validation_error");
         return;
       }
 
@@ -169,8 +184,17 @@ function EmployerLoginForm() {
 
       if (error) {
         setMessage(`Error: ${error.message}`);
+        trackSignupFailure(normalizeSignupError(error), safeAnalyticsErrorCode(error));
         return;
       }
+
+      // Supabase returns an empty identities array when signup obfuscates an existing account.
+      if (!data.user || (Array.isArray(data.user.identities) && data.user.identities.length === 0)) {
+        trackSignupFailure("account_exists");
+        return;
+      }
+
+      trackEmployerEvent({ name: "employer_signup_success", parameters: { page_path: currentPagePath(), signup_method: "password" } });
 
       if (data.user?.email_confirmed_at) {
         await acceptPendingTeamInvitesForCurrentUser();
@@ -183,6 +207,10 @@ function EmployerLoginForm() {
       }
 
       router.replace(`/check-email?email=${encodeURIComponent(signupEmail)}`);
+    } catch (error: unknown) {
+      const safeError = error instanceof Error ? { message: error.message } : {};
+      trackSignupFailure(normalizeSignupError(safeError));
+      throw error;
     } finally {
       setIsSubmitting(false);
     }
@@ -559,7 +587,7 @@ function EmployerLoginForm() {
               <>
                 {/* STEP 1 */}
                 {signupStep === 1 && (
-                  <form onSubmit={handleSignupEmailContinue} style={{ display: "grid", gap: 14 }}>
+                  <form onFocusCapture={trackSignupStartOnce} onSubmit={handleSignupEmailContinue} style={{ display: "grid", gap: 14 }}>
                     <div
                       className="rn-employer-signup-options"
                       style={{
@@ -666,6 +694,7 @@ function EmployerLoginForm() {
                 {/* STEP 2 */}
                 {signupStep === 2 && (
                   <form
+                    onFocusCapture={trackSignupStartOnce}
                     onSubmit={(e) => {
                       e.preventDefault();
                       resetMessages();
@@ -680,6 +709,7 @@ function EmployerLoginForm() {
                         setMessage(
                           "Password must be at least 8 characters and include uppercase, lowercase, and a number."
                         );
+                        trackSignupFailure("validation_error");
                         return;
                       }
 
@@ -755,7 +785,7 @@ function EmployerLoginForm() {
 
                 {/* STEP 3 */}
                 {signupStep === 3 && (
-                  <form onSubmit={handleSignupCreateAccount} style={{ display: "grid", gap: 16 }}>
+                  <form onFocusCapture={trackSignupStartOnce} onSubmit={handleSignupCreateAccount} style={{ display: "grid", gap: 16 }}>
                     <div
                       style={{
                         display: "grid",
