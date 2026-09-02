@@ -166,6 +166,7 @@ export async function countActiveBillableJobs(userId: string, email?: string | n
       .from("jobs")
       .select("id", { count: "exact", head: true })
       .eq("employer_account_id", accountId)
+      .eq("source_type", "employer")
       .eq("status", BILLABLE_JOB_FILTER.status)
       .eq("active", BILLABLE_JOB_FILTER.active);
 
@@ -183,6 +184,7 @@ export async function countActiveBillableJobs(userId: string, email?: string | n
     .from("jobs")
     .select("id", { count: "exact", head: true })
     .eq("employer_user_id", userId)
+    .eq("source_type", "employer")
     .eq("status", BILLABLE_JOB_FILTER.status)
     .eq("active", BILLABLE_JOB_FILTER.active);
 
@@ -195,6 +197,7 @@ export async function countActiveBillableJobs(userId: string, email?: string | n
       .select("id", { count: "exact", head: true })
       .is("employer_user_id", null)
       .eq("employer_email", email)
+      .eq("source_type", "employer")
       .eq("status", BILLABLE_JOB_FILTER.status)
       .eq("active", BILLABLE_JOB_FILTER.active);
 
