@@ -39,6 +39,12 @@ test("the same public-job mapper keeps employer jobs on candidate interest", () 
   assert.doesNotMatch(output, /APPLY ON COMPANY SITE/);
 });
 
+test("future external-only source types cannot use Candidate Interested", () => {
+  const output = renderApplicationTokens({ id: "promotional-job", source_type: "outreach_free", external_apply_url: "https://example.com/apply" });
+  assert.match(output, /APPLY ON COMPANY SITE/);
+  assert.doesNotMatch(output, /CANDIDATE INTEREST|Resume upload|Send My Information/);
+});
+
 test("sourced application branch renders only the external application card", () => {
   assert.match(detail, /isSourced \? \(\s*<JobEngagement[\s\S]*?applyUrl=\{applicationMode\.applyUrl\}/);
   assert.match(detail, /\) : \(\s*<>\s*<JobEngagement jobId=\{visibleJob\.id\} \/>\s*<CandidateSubmissionForm/);
