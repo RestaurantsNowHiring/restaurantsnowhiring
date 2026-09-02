@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabase";
 import { acceptPendingTeamInvitesForCurrentUser } from "../../lib/teamInviteAcceptance";
+import { currentPagePath, trackEmployerEvent } from "../../lib/employerAnalytics";
 import {
   homeCardStyle,
   homePrimaryButton,
@@ -350,6 +351,23 @@ export default function EmployerDashboardPage() {
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const deleteDialogRef = useRef<HTMLDivElement>(null);
   const selectAllJobsRef = useRef<HTMLInputElement>(null);
+  const trackedDashboardAccountIdsRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (authStatus !== "allowed" || !employerAccess) return;
+
+    const dashboardAccountKey = employerAccess.accountId ?? "authenticated-employer";
+    if (trackedDashboardAccountIdsRef.current.has(dashboardAccountKey)) return;
+
+    trackedDashboardAccountIdsRef.current.add(dashboardAccountKey);
+    trackEmployerEvent({
+      name: "employer_dashboard_view",
+      parameters: {
+        page_path: currentPagePath(),
+        ...(employerAccess.accountId ? { company_id: employerAccess.accountId } : {}),
+      },
+    });
+  }, [authStatus, employerAccess]);
 
   useEffect(() => {
     if (!deleteJob) return;
@@ -1685,7 +1703,7 @@ export default function EmployerDashboardPage() {
               </p>
             </div>
             {canManageJobs ? (
-              <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
+              <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary" onClick={() => trackEmployerEvent({ name: "employer_post_job_click", parameters: { page_path: currentPagePath(), cta_name: "Post New Job", ...(employerAccess?.accountId ? { company_id: employerAccess.accountId } : {}) } })}>
                 Post New Job
               </Link>
             ) : null}
@@ -1752,7 +1770,7 @@ export default function EmployerDashboardPage() {
                 {canManageJobs ? "You have not posted any jobs yet. Start your first listing to begin receiving applicants." : "This employer account does not have any jobs yet."}
               </p>
               {canManageJobs ? (
-                <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary">
+                <Link href="/post-job" style={homePrimaryButton} className="rn-btn-primary" onClick={() => trackEmployerEvent({ name: "employer_post_job_click", parameters: { page_path: currentPagePath(), cta_name: "Create Your First Job", ...(employerAccess?.accountId ? { company_id: employerAccess.accountId } : {}) } })}>
                   Create Your First Job
                 </Link>
               ) : null}
