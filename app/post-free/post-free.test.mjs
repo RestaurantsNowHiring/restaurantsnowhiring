@@ -50,15 +50,15 @@ test("IP digest is keyed, stable, and never contains the raw IP", () => {
 test("missing production pepper fails safely and development has a non-production fallback", () => {
   assert.equal(loadService({NODE_ENV:"production"}).getPromotionalEntryPepper({NODE_ENV:"production"}), null); assert.ok(loadService().getPromotionalEntryPepper({NODE_ENV:"development"}));
 });
-test("IP and normalized-email limits independently stop excess hourly requests", () => {
-  const service=loadService(); assert.equal(service.promotionalEntryIsRateLimited(4, 2), false); assert.equal(service.promotionalEntryIsRateLimited(5, 0), true); assert.equal(service.promotionalEntryIsRateLimited(0, 3), true);
-});
 test("server boundary owns identity, source, eligibility, tokens and rate limits", () => {
-  assert.match(route, /promotionalEntryIsRateLimited/); assert.match(route, /entry_source: "public_request"/);
-  assert.match(route, /identity_key/); assert.match(route, /verification_token_digest: createDigestOnlyToken\(\)/); assert.match(route, /token_digest: createDigestOnlyToken\(\)/);
+  assert.match(route, /admit_promotional_entry_attempt/); assert.match(route, /entry_source: "public_request"/);
+  assert.match(route, /resolve_promotional_company/); assert.match(route, /verification_token_digest: createDigestOnlyToken\(\)/); assert.match(route, /token_digest: createDigestOnlyToken\(\)/);
   assert.doesNotMatch(route, /body\.(company_id|source_type|approved|active|billing|stripe|verification_token)/i);
   assert.doesNotMatch(route, /from\("jobs"\)|stripe|syncSubscription|sendEmail|rawToken/);
   assert.match(route, /redeemed_job_id/); assert.match(route, /FRIENDLY_INELIGIBLE/); assert.match(route, /status: 429/);
+});
+test("page alone overrides the global dark background with an accessible light acquisition surface", () => {
+  assert.match(page, /background: "#f2f7f4"/); assert.match(page, /background: "#fff"/); assert.match(page, /color: "#263b35"/);
 });
 test("success response exposes no token, invitation, company, approval, or billing state", () => {
   const success = route.slice(route.lastIndexOf("return NextResponse.json")); assert.doesNotMatch(success, /token|invitation|company|eligibility|approval|billing|stripe/i); assert.match(success, /Verify your email to continue/);

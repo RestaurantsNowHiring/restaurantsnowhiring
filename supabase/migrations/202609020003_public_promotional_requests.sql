@@ -1,5 +1,14 @@
 alter table public.companies add column identity_key text;
 update public.companies set identity_key = lower(regexp_replace(btrim(name), '\s+', ' ', 'g')) where identity_key is null;
+do $$
+declare collisions text;
+begin
+  select string_agg(identity_key, ', ' order by identity_key) into collisions
+  from (select identity_key from public.companies group by identity_key having count(*) > 1) duplicates;
+  if collisions is not null then
+    raise exception 'Cannot add companies identity uniqueness: normalized duplicate identities require manual review: %', collisions;
+  end if;
+end $$;
 alter table public.companies alter column identity_key set not null;
 create unique index companies_identity_key_unique_idx on public.companies (identity_key);
 

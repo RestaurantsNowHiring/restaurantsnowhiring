@@ -31,10 +31,6 @@ export function normalizeHttpUrl(value: unknown) {
   } catch { return null; }
 }
 
-export function normalizeCompanyIdentity(value: unknown) {
-  return String(value ?? "").trim().replace(/\s+/g, " ").toLocaleLowerCase("en-US");
-}
-
 export function isDisposableEmail(email: string) {
   const domain = email.split("@")[1]?.toLowerCase();
   return Boolean(domain && DISPOSABLE_EMAIL_DOMAINS.has(domain));
@@ -67,10 +63,6 @@ export function digestClientIp(ip: string, pepper: string) {
 
 export function getClientIp(request: Request) {
   return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip")?.trim() || "unknown";
-}
-
-export function promotionalEntryIsRateLimited(ipAttempts: number, emailAttempts: number) {
-  return ipAttempts >= PROMOTIONAL_IP_LIMIT_PER_HOUR || emailAttempts >= PROMOTIONAL_EMAIL_LIMIT_PER_HOUR;
 }
 
 export function createDigestOnlyToken(random = randomBytes) {
