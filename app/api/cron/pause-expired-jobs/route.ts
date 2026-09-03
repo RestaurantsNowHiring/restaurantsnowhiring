@@ -41,6 +41,10 @@ async function renewExpiredJobs(request: Request) {
     const rpcResult = Array.isArray(data) ? (data[0] as RenewExpiredJobsRpcResult | undefined) : null;
     const renewedCount = typeof rpcResult?.renewed_count === "number" ? rpcResult.renewed_count : 0;
 
+    // Retention cleanup is best-effort and must never change renewal behavior.
+    const cleanup = await supabaseAdmin.rpc("cleanup_promotional_entry_attempts");
+    if (cleanup.error) console.error("Promotional entry attempt cleanup failed", { error: cleanup.error });
+
     return NextResponse.json({
       ok: true,
       jobs_auto_renewed: renewedCount,

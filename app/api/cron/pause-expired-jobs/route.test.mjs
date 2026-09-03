@@ -20,13 +20,21 @@ function loadRoute(rpc = async () => ({ data: [{ renewed_count: 0 }], error: nul
 }
 const request = (token = "secret") => new Request("https://example.com/api/cron/pause-expired-jobs", { headers: { authorization: `Bearer ${token}` } });
 
-test("cron invokes only the renewal RPC and returns its count", async () => {
+test("cron renews jobs and performs promotional attempt retention cleanup", async () => {
   process.env.CRON_SECRET = "secret";
   const calls = [];
   const { GET } = loadRoute(async (name) => { calls.push(name); return { data: [{ renewed_count: 3 }], error: null }; });
   const response = await GET(request());
   assert.deepEqual(await response.json(), { ok: true, jobs_auto_renewed: 3, renewed_count: 3 });
-  assert.deepEqual(calls, ["renew_expired_job_ads"]);
+  assert.deepEqual(calls, ["renew_expired_job_ads", "cleanup_promotional_entry_attempts"]);
+});
+
+test("cleanup failure does not disrupt existing renewal behavior", async () => {
+  process.env.CRON_SECRET = "secret";
+  const { GET } = loadRoute(async (name) => name === "renew_expired_job_ads" ? { data: [{ renewed_count: 2 }], error: null } : { data: null, error: { message: "cleanup failed" } });
+  const response = await GET(request());
+  assert.equal(response.status, 200);
+  assert.equal((await response.json()).renewed_count, 2);
 });
 
 test("old auto-pause emails and Stripe quantity synchronization are not called", () => {
