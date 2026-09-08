@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
-const sql = readFileSync(new URL("./202609030002_promotional_location_identity.sql", import.meta.url), "utf8").toLowerCase();
+const originalSql = readFileSync(new URL("./202609030002_promotional_location_identity.sql", import.meta.url), "utf8").toLowerCase();
+const correctionSql = readFileSync(new URL("./202609080001_correct_promotional_active_locations.sql", import.meta.url), "utf8").toLowerCase();
+const sql = `${originalSql}
+${correctionSql}`;
 const route = readFileSync(new URL("../../app/api/promotional-entry/route.ts", import.meta.url), "utf8");
 
 test("location identity is exact and normalizes harmless formatting", () => {
@@ -14,8 +17,8 @@ test("location identity is exact and normalizes harmless formatting", () => {
 test("email, company alone, and title do not define promotion uniqueness", () => {
   assert.match(sql, /drop index public\.promotional_redeemed_contact_unique_idx/);
   assert.match(sql, /drop index public\.promotional_redeemed_company_unique_idx/);
-  for (const index of ["promotional_active_location_unique_idx", "promotional_redeemed_location_unique_idx"])
-    assert.match(sql, new RegExp(`unique index ${index}[\\s\\S]*location_identity_key`));
+  assert.match(correctionSql, /constraint promotional_active_location_exclusion[\s\S]*location_identity_key with =[\s\S]*tstzrange\(issued_at, offer_expires_at, '\[\)'\) with &&/);
+  assert.match(sql, /unique index promotional_redeemed_location_unique_idx[\s\S]*location_identity_key/);
   const indexes = [...sql.matchAll(/create unique index[^;]+;/g)].map((match) => match[0]).join("\n");
   assert.doesNotMatch(indexes, /\(contact_email\)|\(company_id\)|requested_job_title/);
 });
@@ -28,6 +31,13 @@ test("public request admission is atomic and concurrency-safe per location", () 
   assert.match(sql.slice(functionStart), /then return null/);
   assert.match(route, /rpc\("create_public_promotional_request"/);
   assert.doesNotMatch(route, /redeemedEmail|redeemedCompany|\.from\("promotional_invitations"\)\.insert/);
+  assert.match(correctionSql, /exception when unique_violation or exclusion_violation/);
+});
+
+test("only unresolved intervals block a later request while redemption remains permanent", () => {
+  assert.match(correctionSql, /entry_source = 'public_request' and revoked_at is null[\s\S]*offer_expires_at > now\(\)/);
+  assert.match(correctionSql, /tstzrange\(issued_at, offer_expires_at, '\[\)'\) with &&/);
+  assert.match(sql, /promotional_redeemed_location_unique_idx[\s\S]*where redeemed_job_id is not null/);
 });
 
 test("redemption derives an admin invitation location and permanently checks redeemed locations", () => {
