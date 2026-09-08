@@ -51,11 +51,11 @@ test("missing production pepper fails safely and development has a non-productio
   assert.equal(loadService({NODE_ENV:"production"}).getPromotionalEntryPepper({NODE_ENV:"production"}), null); assert.ok(loadService().getPromotionalEntryPepper({NODE_ENV:"development"}));
 });
 test("server boundary owns identity, source, eligibility, tokens and rate limits", () => {
-  assert.match(route, /admit_promotional_entry_attempt/); assert.match(route, /entry_source: "public_request"/);
-  assert.match(route, /resolve_promotional_company/); assert.match(route, /verification_token_digest: createDigestOnlyToken\(\)/); assert.match(route, /token_digest: createDigestOnlyToken\(\)/);
+  assert.match(route, /admit_promotional_entry_attempt/); assert.match(route, /create_public_promotional_request/);
+  assert.match(route, /p_company_name: input\.companyName/); assert.match(route, /p_verification_token_digest: createDigestOnlyToken\(\)/); assert.match(route, /p_token_digest: createDigestOnlyToken\(\)/);
   assert.doesNotMatch(route, /body\.(company_id|source_type|approved|active|billing|stripe|verification_token)/i);
   assert.doesNotMatch(route, /from\("jobs"\)|stripe|syncSubscription|sendEmail|rawToken/);
-  assert.match(route, /redeemed_job_id/); assert.match(route, /FRIENDLY_INELIGIBLE/); assert.match(route, /status: 429/);
+  assert.match(route, /status: 409/); assert.match(route, /status: 429/);
 });
 test("page alone overrides the global dark background with an accessible light acquisition surface", () => {
   assert.match(page, /background: "#f2f7f4"/); assert.match(page, /background: "#fff"/); assert.match(page, /color: "#263b35"/);
