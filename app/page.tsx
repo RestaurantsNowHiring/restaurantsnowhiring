@@ -27,6 +27,8 @@ type Job = {
   state: string;
   active: boolean;
   status?: string | null;
+  source_type?: string | null;
+  expires_at?: string | null;
   created_at: string;
 
   // optional (pulled for chips / future use)
@@ -39,20 +41,20 @@ export default async function HomePage() {
   const initialResult = await supabase
     .from("jobs")
     .select(
-      "id,title,restaurant_name,city,state,active,status,created_at,pay_range,employment_type,role_category"
+      "id,title,restaurant_name,city,state,active,status,source_type,expires_at,created_at,pay_range,employment_type,role_category"
     )
     .order("created_at", { ascending: false });
 
   const { data: jobs } = isMissingStatusColumnError(initialResult.error)
     ? await supabase
         .from("jobs")
-        .select("id,title,restaurant_name,city,state,active,created_at,pay_range,employment_type,role_category")
+        .select("id,title,restaurant_name,city,state,active,source_type,expires_at,created_at,pay_range,employment_type,role_category")
         .eq("active", true)
         .order("created_at", { ascending: false })
     : initialResult;
 
   const visibleJobs: Job[] = ((jobs ?? []) as Job[]).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active)
+    isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at)
   );
   const slugById = buildUniqueJobSlugMap(visibleJobs);
   const latestJobs = visibleJobs.slice(0, 6).map((job) => ({

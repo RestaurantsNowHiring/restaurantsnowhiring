@@ -9,6 +9,7 @@ import {
 const detail = fs.readFileSync("app/jobs/[id]/page.tsx", "utf8");
 const engagement = fs.readFileSync("app/components/JobEngagement.tsx", "utf8");
 const candidateForm = fs.readFileSync("app/components/CandidateSubmissionForm.tsx", "utf8");
+const candidateRoute = fs.readFileSync("app/api/jobs/[id]/candidate-submissions/route.ts", "utf8");
 
 function renderApplicationTokens(databaseRecord) {
   const job = mapPublicJobRecord(databaseRecord);
@@ -43,6 +44,11 @@ test("future external-only source types cannot use Candidate Interested", () => 
   const output = renderApplicationTokens({ id: "promotional-job", source_type: "outreach_free", external_apply_url: "https://example.com/apply" });
   assert.match(output, /APPLY ON COMPANY SITE/);
   assert.doesNotMatch(output, /CANDIDATE INTEREST|Resume upload|Send My Information/);
+});
+
+test("candidate submission API independently rejects every non-employer source", () => {
+  assert.match(candidateRoute, /\.select\("[^"]*source_type[^"]*"\)/);
+  assert.match(candidateRoute, /job\.source_type !== "employer"/);
 });
 
 test("sourced application branch renders only the external application card", () => {

@@ -24,6 +24,8 @@ type JobRow = {
   state: string | null;
   active: boolean;
   status?: string | null;
+  source_type: string;
+  expires_at: string | null;
   employer_user_id: string | null;
   employer_email: string | null;
   employer_account_id?: string | null;
@@ -158,7 +160,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   const { data: jobData, error: jobError } = await supabaseAdmin
     .from("jobs")
-    .select("id,title,restaurant_name,city,state,active,status,employer_user_id,employer_email,employer_account_id,apply_email,candidate_notification_email,candidate_notification_emails,candidate_notification_routing,posted_by_email,employer_accounts(owner_email,support_email,default_candidate_notification_routing)")
+    .select("id,title,restaurant_name,city,state,active,status,source_type,expires_at,employer_user_id,employer_email,employer_account_id,apply_email,candidate_notification_email,candidate_notification_emails,candidate_notification_routing,posted_by_email,employer_accounts(owner_email,support_email,default_candidate_notification_routing)")
     .eq("id", jobId)
     .maybeSingle();
 
@@ -168,8 +170,11 @@ export async function POST(request: Request, context: RouteContext) {
   }
 
   const job = jobData as JobRow | null;
-  if (!job || !isPubliclyVisibleJob(job.status, job.active)) {
+  if (!job || !isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at)) {
     return NextResponse.json({ error: "This job is no longer accepting candidate submissions." }, { status: 404 });
+  }
+  if (job.source_type !== "employer") {
+    return NextResponse.json({ error: "This job accepts applications only on the company's official site." }, { status: 404 });
   }
 
   const employerEmails = resolveCandidateNotificationEmails(job);
