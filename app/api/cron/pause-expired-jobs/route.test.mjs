@@ -13,6 +13,7 @@ function loadRoute(rpc = async () => ({ data: [{ renewed_count: 0 }], error: nul
   const require = (name) => {
     if (name === "next/server") return { NextResponse: { json: (body, init = {}) => Response.json(body, init) } };
     if (name.endsWith("/lib/supabaseAdmin")) return { getSupabaseAdminClient: () => ({ rpc }) };
+    if (name.endsWith("/lib/promotionalVerification")) return { dispatchPromotionalVerificationEmail: async () => ({ ok: true, sent: false }) };
     throw new Error(`Unexpected require ${name}`);
   };
   new Function("exports", "require", "module", outputText)(mod.exports, require, mod);

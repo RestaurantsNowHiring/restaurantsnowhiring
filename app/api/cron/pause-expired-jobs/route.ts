@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "../../../../lib/supabaseAdmin";
+import { dispatchPromotionalVerificationEmail } from "../../../../lib/promotionalVerification";
 
 type RenewExpiredJobsRpcResult = {
   renewed_count?: number;
@@ -44,6 +45,10 @@ async function renewExpiredJobs(request: Request) {
     // Retention cleanup is best-effort and must never change renewal behavior.
     const cleanup = await supabaseAdmin.rpc("cleanup_promotional_entry_attempts");
     if (cleanup.error) console.error("Promotional entry attempt cleanup failed", { error: cleanup.error });
+    // Retry one due outbox delivery per invocation. Resend's stable idempotency key
+    // and the database lease make this safe when Vercel retries the cron request.
+    const verificationDelivery = await dispatchPromotionalVerificationEmail(supabaseAdmin);
+    if (!verificationDelivery.ok) console.error("Promotional verification delivery retry failed");
 
     return NextResponse.json({
       ok: true,
