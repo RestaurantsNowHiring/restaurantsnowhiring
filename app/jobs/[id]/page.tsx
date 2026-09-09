@@ -459,7 +459,7 @@ type Job = {
   company_website?: string | null;
   role_category?: string | null;
   views?: number | null;
-  source_type: "employer" | "rnh_sourced";
+  source_type: "employer" | "rnh_sourced" | "outreach_free";
   external_apply_url?: string | null;
   company_id?: string | null;
 };

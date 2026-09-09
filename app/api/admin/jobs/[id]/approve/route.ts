@@ -36,12 +36,71 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
 
   const { data: jobOwner, error: ownerError } = await supabaseAdmin
     .from("jobs")
-    .select("employer_user_id,employer_email")
+    .select("id,source_type,active,status,approved_at,expires_at,employer_user_id,employer_email")
     .eq("id", jobId)
     .maybeSingle();
 
   if (ownerError) {
     return NextResponse.json({ error: ownerError.message || "Could not verify job owner before approval." }, { status: 500 });
+  }
+
+  if (jobOwner?.source_type === "outreach_free") {
+    const alreadyApproved = jobOwner.active === true
+      && jobOwner.status === "active"
+      && typeof jobOwner.approved_at === "string"
+      && typeof jobOwner.expires_at === "string";
+
+    if (alreadyApproved) {
+      return NextResponse.json({ ok: true, job: jobOwner });
+    }
+
+    if (jobOwner.active !== false || jobOwner.status !== "pending" || jobOwner.approved_at !== null || jobOwner.expires_at !== null) {
+      return NextResponse.json({ error: "Only a valid pending Free First Job can be approved." }, { status: 409 });
+    }
+
+    const approvedAt = new Date();
+    const promotionalUpdate = await supabaseAdmin
+      .from("jobs")
+      .update({
+        active: true,
+        status: "active",
+        approved_at: approvedAt.toISOString(),
+        expires_at: getDefaultJobExpirationIso(approvedAt),
+      })
+      .eq("id", jobId)
+      .eq("source_type", "outreach_free")
+      .eq("active", false)
+      .eq("status", "pending")
+      .is("approved_at", null)
+      .is("expires_at", null)
+      .select("id,source_type,active,status,approved_at,expires_at")
+      .maybeSingle();
+
+    if (promotionalUpdate.error) {
+      return NextResponse.json({ error: promotionalUpdate.error.message || "Approval update failed." }, { status: 500 });
+    }
+    if (promotionalUpdate.data) {
+      return NextResponse.json({ ok: true, job: promotionalUpdate.data });
+    }
+
+    // A concurrent approval may have won the conditional update. Return its
+    // original approval window rather than creating or extending another one.
+    const concurrent = await supabaseAdmin
+      .from("jobs")
+      .select("id,source_type,active,status,approved_at,expires_at")
+      .eq("id", jobId)
+      .maybeSingle();
+    if (concurrent.error) {
+      return NextResponse.json({ error: concurrent.error.message || "Could not confirm approval state." }, { status: 500 });
+    }
+    if (concurrent.data?.source_type === "outreach_free"
+      && concurrent.data.active === true
+      && concurrent.data.status === "active"
+      && typeof concurrent.data.approved_at === "string"
+      && typeof concurrent.data.expires_at === "string") {
+      return NextResponse.json({ ok: true, job: concurrent.data });
+    }
+    return NextResponse.json({ error: "The Free First Job changed state before it could be approved." }, { status: 409 });
   }
 
   const employerUserId = typeof jobOwner?.employer_user_id === "string" ? jobOwner.employer_user_id : null;

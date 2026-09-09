@@ -64,7 +64,9 @@ export async function POST(_: Request, context: { params: Promise<{ id: string }
     }
   }
 
-  const employerUserId = typeof writeResult.data?.employer_user_id === "string" ? writeResult.data.employer_user_id : null;
+  const employerUserId = loadedJob.data.source_type === "outreach_free"
+    ? null
+    : typeof writeResult.data?.employer_user_id === "string" ? writeResult.data.employer_user_id : null;
   if (employerUserId) {
     await syncSubscriptionQuantityForEmployer(employerUserId).catch((syncError) => {
       console.error("Failed to sync Stripe quantity after rejection", { syncError, jobId, employerUserId });
