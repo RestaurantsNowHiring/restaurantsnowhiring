@@ -1,6 +1,7 @@
 import { canUserAccessJob } from "./employerJobAccess";
 import type { EmployerAccountContext } from "./employerAccounts";
 import { isMissingViewsColumnError } from "./jobStatus";
+import { applyCurrentPeriodEmployerViews } from "./currentPeriodJobViews";
 import type { getSupabaseAdminClient } from "./supabaseAdmin";
 
 type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
@@ -12,11 +13,11 @@ type JobsQueryVariant = {
 
 const JOB_QUERY_VARIANTS: JobsQueryVariant[] = [
   {
-    fields: "id,title,restaurant_name,city,state,active,status,created_at,expires_at,views,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails,employer_stores!jobs_employer_store_id_fkey(location_name)",
+    fields: "id,title,restaurant_name,city,state,active,status,source_type,ats_provider,created_at,approved_at,expires_at,views,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails,employer_stores!jobs_employer_store_id_fkey(location_name)",
     includesViews: true,
   },
   {
-    fields: "id,title,restaurant_name,city,state,active,status,created_at,expires_at,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails,employer_stores!jobs_employer_store_id_fkey(location_name)",
+    fields: "id,title,restaurant_name,city,state,active,status,source_type,ats_provider,created_at,approved_at,expires_at,employer_user_id,employer_email,employer_account_id,employer_store_id,candidate_notification_email,candidate_notification_emails,employer_stores!jobs_employer_store_id_fkey(location_name)",
     includesViews: false,
   },
 ];
@@ -82,7 +83,8 @@ export async function loadEmployerJobsForDashboard(supabaseAdmin: SupabaseAdminC
     throw new Error(lastError?.message || "Could not load employer job listings.");
   }
 
-  return { jobs: liveJobs, includesViews: selectedVariant.includesViews };
+  const jobs = await applyCurrentPeriodEmployerViews(supabaseAdmin, liveJobs);
+  return { jobs, includesViews: true };
 }
 
 export function filterEmployerVisibleJobs(user: { email: string }, context: EmployerAccountContext, jobs: Array<Record<string, unknown>>) {
