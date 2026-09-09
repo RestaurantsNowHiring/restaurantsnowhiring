@@ -6,6 +6,10 @@ type RenewExpiredJobsRpcResult = {
   renewed_count?: number;
 };
 
+type ExpirePromotionalJobsRpcResult = {
+  expired_count?: number;
+};
+
 function isAuthorized(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
 
@@ -42,6 +46,15 @@ async function renewExpiredJobs(request: Request) {
     const rpcResult = Array.isArray(data) ? (data[0] as RenewExpiredJobsRpcResult | undefined) : null;
     const renewedCount = typeof rpcResult?.renewed_count === "number" ? rpcResult.renewed_count : 0;
 
+    const promotionalExpiration = await supabaseAdmin.rpc("expire_outreach_free_job_ads");
+    if (promotionalExpiration.error) {
+      return NextResponse.json({ error: promotionalExpiration.error.message || "Promotional job expiration failed." }, { status: 500 });
+    }
+    const expirationResult = Array.isArray(promotionalExpiration.data)
+      ? (promotionalExpiration.data[0] as ExpirePromotionalJobsRpcResult | undefined)
+      : null;
+    const expiredPromotionalCount = typeof expirationResult?.expired_count === "number" ? expirationResult.expired_count : 0;
+
     // Retention cleanup is best-effort and must never change renewal behavior.
     const cleanup = await supabaseAdmin.rpc("cleanup_promotional_entry_attempts");
     if (cleanup.error) console.error("Promotional entry attempt cleanup failed", { error: cleanup.error });
@@ -54,6 +67,7 @@ async function renewExpiredJobs(request: Request) {
       ok: true,
       jobs_auto_renewed: renewedCount,
       renewed_count: renewedCount,
+      promotional_jobs_expired: expiredPromotionalCount,
     });
   } catch (error) {
     console.error("Expired job renewal cron failed", { error });

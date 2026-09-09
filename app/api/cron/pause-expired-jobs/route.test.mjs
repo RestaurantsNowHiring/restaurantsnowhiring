@@ -26,16 +26,24 @@ test("cron renews jobs and performs promotional attempt retention cleanup", asyn
   const calls = [];
   const { GET } = loadRoute(async (name) => { calls.push(name); return { data: [{ renewed_count: 3 }], error: null }; });
   const response = await GET(request());
-  assert.deepEqual(await response.json(), { ok: true, jobs_auto_renewed: 3, renewed_count: 3 });
-  assert.deepEqual(calls, ["renew_expired_job_ads", "cleanup_promotional_entry_attempts"]);
+  assert.deepEqual(await response.json(), { ok: true, jobs_auto_renewed: 3, renewed_count: 3, promotional_jobs_expired: 0 });
+  assert.deepEqual(calls, ["renew_expired_job_ads", "expire_outreach_free_job_ads", "cleanup_promotional_entry_attempts"]);
 });
 
 test("cleanup failure does not disrupt existing renewal behavior", async () => {
   process.env.CRON_SECRET = "secret";
-  const { GET } = loadRoute(async (name) => name === "renew_expired_job_ads" ? { data: [{ renewed_count: 2 }], error: null } : { data: null, error: { message: "cleanup failed" } });
+  const { GET } = loadRoute(async (name) => name === "renew_expired_job_ads" ? { data: [{ renewed_count: 2 }], error: null } : name === "expire_outreach_free_job_ads" ? { data: [{ expired_count: 1 }], error: null } : { data: null, error: { message: "cleanup failed" } });
   const response = await GET(request());
   assert.equal(response.status, 200);
   assert.equal((await response.json()).renewed_count, 2);
+});
+
+test("promotional expiration failure is surfaced without billing fallbacks", async () => {
+  process.env.CRON_SECRET = "secret";
+  const { GET } = loadRoute(async (name) => name === "renew_expired_job_ads"
+    ? { data: [{ renewed_count: 0 }], error: null }
+    : { data: null, error: { message: "expiration failed" } });
+  assert.equal((await GET(request())).status, 500);
 });
 
 test("old auto-pause emails and Stripe quantity synchronization are not called", () => {

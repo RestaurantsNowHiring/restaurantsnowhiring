@@ -32,13 +32,14 @@ type RoleJob = {
   expires_at?: string | null;
   active: boolean;
   status?: string | null;
+  source_type?: string | null;
   role_category: string | null;
   pay_range: string | null;
   employment_type: string | null;
 };
 
-const JOB_SELECT = "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,status,role_category,pay_range,employment_type";
-const JOB_SELECT_WITHOUT_STATUS = "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,role_category,pay_range,employment_type";
+const JOB_SELECT = "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,status,source_type,role_category,pay_range,employment_type";
+const JOB_SELECT_WITHOUT_STATUS = "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,source_type,role_category,pay_range,employment_type";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -109,7 +110,7 @@ async function fetchVisibleJobs() {
   return {
     error: result.error,
     jobs: ((result.data ?? []) as RoleJob[]).filter((job) =>
-      isPubliclyVisibleJob(job.status, job.active)
+      isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at)
     ),
   };
 }
@@ -133,7 +134,7 @@ function getLiveStateJobs(jobs: RoleJob[], state: StateLandingPage) {
   return jobs.filter(
     (job) =>
       job.state?.trim().toUpperCase() === state.code &&
-      isPubliclyVisibleJob(job.status, job.active),
+      isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at),
   );
 }
 

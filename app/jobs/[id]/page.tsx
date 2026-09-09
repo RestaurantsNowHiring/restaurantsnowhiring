@@ -66,7 +66,7 @@ async function fetchPublicJobById(id?: string) {
       ? (mapPublicJobRecord(fallbackResult.data[0] as unknown as Record<string, unknown>) as Job)
       : undefined;
     return fallbackJob &&
-      isPubliclyVisibleJob(fallbackJob.status, fallbackJob.active)
+      isPubliclyVisibleJob(fallbackJob.status, fallbackJob.active, fallbackJob.source_type, fallbackJob.expires_at)
       ? fallbackJob
       : null;
   }
@@ -75,25 +75,25 @@ async function fetchPublicJobById(id?: string) {
   const job = result.data?.[0]
     ? (mapPublicJobRecord(result.data[0] as unknown as Record<string, unknown>) as Job)
     : undefined;
-  return job && isPubliclyVisibleJob(job.status, job.active) ? job : null;
+  return job && isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at) ? job : null;
 }
 
 type SlugLookupJob = Pick<
   Job,
-  "id" | "title" | "city" | "state" | "active" | "status"
+  "id" | "title" | "city" | "state" | "active" | "status" | "source_type" | "expires_at"
 >;
 
 async function fetchVisibleSlugJobs() {
   const initialResult = await supabase
     .from("jobs")
-    .select("id,title,city,state,active,status")
+    .select("id,title,city,state,active,status,source_type,expires_at")
     .order("created_at", { ascending: false })
     .limit(5000);
 
   const result = isMissingStatusColumnError(initialResult.error)
     ? await supabase
         .from("jobs")
-        .select("id,title,city,state,active")
+        .select("id,title,city,state,active,source_type,expires_at")
         .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(5000)
@@ -101,7 +101,7 @@ async function fetchVisibleSlugJobs() {
 
   if (result.error) return [];
   return ((result.data ?? []) as SlugLookupJob[]).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active),
+    isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at),
   );
 }
 
@@ -134,7 +134,7 @@ async function resolvePublicJobRouteParam(routeParam?: string) {
 
     if (!result.error) {
       const job = (result.data ?? []).map((entry) => mapPublicJobRecord(entry as unknown as Record<string, unknown>) as Job).find((entry) =>
-        isPubliclyVisibleJob(entry.status, entry.active),
+        isPubliclyVisibleJob(entry.status, entry.active, entry.source_type, entry.expires_at),
       );
 
       if (job) return { job, canonicalPath: await getCanonicalJobPath(job) };
@@ -490,7 +490,7 @@ export default async function JobDetailsPage({
   let job: Job | undefined = resolvedRoute?.job;
 
   const notFound =
-    !id || !job || !isPubliclyVisibleJob(job.status, job.active);
+    !id || !job || !isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at);
 
   if (
     !notFound &&

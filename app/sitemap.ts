@@ -70,14 +70,14 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const result = isMissingStatusColumnError(initialResult.error)
     ? await supabase
         .from("jobs")
-        .select("id,title,restaurant_name,city,state,active,source_type,created_at")
+        .select("id,title,restaurant_name,city,state,active,source_type,expires_at,created_at")
         .eq("active", true)
         .order("created_at", { ascending: false })
         .limit(5000)
     : initialResult;
 
   const visibleJobs = ((result.data ?? []) as SitemapJob[]).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active),
+    isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at),
   );
 
   const slugById = buildUniqueJobSlugMap(visibleJobs);

@@ -23,6 +23,7 @@ export type PublicCompanyJob = {
   active: boolean;
   status?: string | null;
   source_type?: string | null;
+  expires_at?: string | null;
   pay_range?: string | null;
   role_category?: string | null;
   created_at: string;
@@ -52,7 +53,7 @@ export async function getPublicCompanyInventory(): Promise<PublicCompanyJob[]> {
   const initial = await supabase
     .from("jobs")
     .select(
-      "id,title,restaurant_name,city,state,active,status,source_type,pay_range,role_category,created_at,employment_type"
+      "id,title,restaurant_name,city,state,active,status,source_type,expires_at,pay_range,role_category,created_at,employment_type"
     )
     .order("created_at", { ascending: false })
     .limit(5000)
@@ -62,7 +63,7 @@ export async function getPublicCompanyInventory(): Promise<PublicCompanyJob[]> {
     ? await supabase
         .from("jobs")
         .select(
-          "id,title,restaurant_name,city,state,active,source_type,pay_range,role_category,created_at,employment_type"
+          "id,title,restaurant_name,city,state,active,source_type,expires_at,pay_range,role_category,created_at,employment_type"
         )
         .eq("active", true)
         .order("created_at", { ascending: false })
@@ -73,7 +74,7 @@ export async function getPublicCompanyInventory(): Promise<PublicCompanyJob[]> {
   if (result.error) return [];
 
   const visibleJobs = (result.data ?? []).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active)
+    isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at)
   );
 
   return visibleJobs.filter((job) => job.source_type === "employer");

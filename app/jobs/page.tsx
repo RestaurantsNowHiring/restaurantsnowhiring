@@ -56,6 +56,7 @@ type Job = {
   expires_at?: string | null;
   active: boolean;
   status?: string | null;
+  source_type?: string | null;
   role_category: string | null;
 
   // ✅ Added for quick info chips
@@ -94,7 +95,7 @@ export default async function JobsPage({
   let query = supabase
     .from("jobs")
     .select(
-      "id,title,restaurant_name,city,state,country,created_at,approved_at,expires_at,active,status,role_category,pay_range,employment_type"
+      "id,title,restaurant_name,city,state,country,created_at,approved_at,expires_at,active,status,source_type,role_category,pay_range,employment_type"
     )
     .order("created_at", { ascending: false });
 
@@ -109,7 +110,7 @@ export default async function JobsPage({
         ? supabase
             .from("jobs")
             .select(
-              "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,role_category,pay_range,employment_type"
+              "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,source_type,role_category,pay_range,employment_type"
             )
             .eq("active", true)
             .in("role_category", rolesArray)
@@ -117,33 +118,33 @@ export default async function JobsPage({
         : supabase
             .from("jobs")
             .select(
-              "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,role_category,pay_range,employment_type"
+              "id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,source_type,role_category,pay_range,employment_type"
             )
             .eq("active", true)
             .order("created_at", { ascending: false }))
     : initialResult;
 
   const activeJobs: Job[] = ((jobs ?? []) as Job[]).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active)
+    isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at)
   );
 
   const allJobsForSlugsResult = rolesArray.length
     ? await supabase
         .from("jobs")
-        .select("id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,status,role_category,pay_range,employment_type")
+        .select("id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,status,source_type,role_category,pay_range,employment_type")
         .order("created_at", { ascending: false })
     : { data: activeJobs, error: null };
 
   const allJobsForSlugsFallback = isMissingStatusColumnError(allJobsForSlugsResult.error)
     ? await supabase
         .from("jobs")
-        .select("id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,role_category,pay_range,employment_type")
+        .select("id,title,restaurant_name,city,state,created_at,approved_at,expires_at,active,source_type,role_category,pay_range,employment_type")
         .eq("active", true)
         .order("created_at", { ascending: false })
     : allJobsForSlugsResult;
 
   const visibleJobsForSlugs = ((allJobsForSlugsFallback.data ?? []) as Job[]).filter((job) =>
-    isPubliclyVisibleJob(job.status, job.active)
+    isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at)
   );
   const slugById = buildUniqueJobSlugMap(visibleJobsForSlugs);
   const jobsWithSlugs = activeJobs.map((job) => ({
@@ -153,7 +154,7 @@ export default async function JobsPage({
 
   const stateCounts = new Map<string, number>();
   for (const job of visibleJobsForSlugs) {
-    if (!isPubliclyVisibleJob(job.status, job.active)) continue;
+    if (!isPubliclyVisibleJob(job.status, job.active, job.source_type, job.expires_at)) continue;
 
     const code = job.state?.trim().toUpperCase();
     if (!code || !getStateLandingPageByCode(code)) continue;

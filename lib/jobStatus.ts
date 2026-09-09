@@ -20,8 +20,19 @@ export function normalizePersistedStatus(status: string | null | undefined): Per
   return null;
 }
 
-export function isPubliclyVisibleJob(status: string | null | undefined, active: boolean): boolean {
+export function isPubliclyVisibleJob(
+  status: string | null | undefined,
+  active: boolean,
+  sourceType?: string | null,
+  expiresAt?: string | null,
+  now = new Date(),
+): boolean {
   const normalized = normalizePersistedStatus(status);
+
+  if (sourceType === "outreach_free" && expiresAt) {
+    const expirationTime = new Date(expiresAt).getTime();
+    if (Number.isFinite(expirationTime) && expirationTime <= now.getTime()) return false;
+  }
 
   // Canonical model:
   // - public only when approved + active (status=active and active=true)
