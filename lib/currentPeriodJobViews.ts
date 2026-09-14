@@ -3,6 +3,7 @@ import type { getSupabaseAdminClient } from "./supabaseAdmin";
 type SupabaseAdminClient = NonNullable<ReturnType<typeof getSupabaseAdminClient>>;
 
 const PAID_PERIOD_MILLISECONDS = 30 * 24 * 60 * 60 * 1000;
+const JOB_EVENT_QUERY_BATCH_SIZE = 100;
 
 type AnalyticsJob = Record<string, unknown> & {
   id?: unknown;
@@ -42,18 +43,26 @@ export async function applyCurrentPeriodEmployerViews(
   if (periodStarts.size === 0) return jobs;
 
   const earliestStart = new Date(Math.min(...Array.from(periodStarts.values(), (date) => date.getTime()))).toISOString();
-  const { data, error } = await supabaseAdmin
-    .from("job_events")
-    .select("job_id,created_at")
-    .in("job_id", Array.from(periodStarts.keys()))
-    .eq("source_type", "employer")
-    .eq("event_type", "job_view")
-    .gte("created_at", earliestStart);
+  const jobIds = Array.from(periodStarts.keys());
+  const queries = [];
+  for (let index = 0; index < jobIds.length; index += JOB_EVENT_QUERY_BATCH_SIZE) {
+    queries.push(
+      supabaseAdmin
+        .from("job_events")
+        .select("job_id,created_at")
+        .in("job_id", jobIds.slice(index, index + JOB_EVENT_QUERY_BATCH_SIZE))
+        .eq("source_type", "employer")
+        .eq("event_type", "job_view")
+        .gte("created_at", earliestStart),
+    );
+  }
 
-  if (error) throw new Error(error.message || "Could not load current-period job views.");
+  const results = await Promise.all(queries);
+  const queryError = results.find((result) => result.error)?.error;
+  if (queryError) throw new Error(queryError.message || "Could not load current-period job views.");
 
   const counts = new Map<string, number>();
-  for (const event of data ?? []) {
+  for (const event of results.flatMap((result) => result.data ?? [])) {
     const start = periodStarts.get(event.job_id);
     const createdAt = new Date(event.created_at);
     if (start && Number.isFinite(createdAt.getTime()) && createdAt >= start) {
